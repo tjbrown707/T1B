@@ -3622,6 +3622,10 @@ export default function App() {
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [cart, setCart] = useState([]);
+  const location = useLocation();
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, [location.pathname]);
 
   function addToCart(product) {
     setCart(prev => {
@@ -3719,12 +3723,6 @@ export default function App() {
       }} />
     );
   }
-
-  // Scroll to top on route change
-  const location = useLocation();
-  useEffect(() => {
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  }, [location.pathname]);
 
   // Home page content as a component
   const HomePage = () => {
