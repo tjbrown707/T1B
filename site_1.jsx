@@ -901,6 +901,154 @@ document.head.appendChild(style);
 
 // ─── Components ──────────────────────────────────────────────────────────────
 
+function CartPopup({ cart, visible, onClose }) {
+  const navigate = useNavigate();
+  if (!visible || cart.length === 0) return null;
+
+  const subtotal = cart.reduce((sum, item) => {
+    const price = item.qty >= 5 ? item.bulk : item.price;
+    return sum + price * item.qty;
+  }, 0);
+  const totalItems = cart.reduce((sum, i) => sum + i.qty, 0);
+
+  return (
+    <div style={{
+      position: "fixed",
+      top: 70,
+      right: 20,
+      width: 320,
+      maxHeight: 420,
+      background: "var(--bg-secondary, #141414)",
+      border: "1px solid rgba(196,30,42,0.4)",
+      borderRadius: 4,
+      zIndex: 10000,
+      boxShadow: "0 8px 32px rgba(0,0,0,0.6)",
+      animation: "fadeUp 0.3s ease-out",
+      display: "flex",
+      flexDirection: "column",
+    }}>
+      {/* Header */}
+      <div style={{
+        padding: "14px 16px",
+        borderBottom: "1px solid rgba(196,30,42,0.2)",
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+      }}>
+        <span style={{
+          fontFamily: "'Orbitron', sans-serif",
+          fontSize: 12,
+          fontWeight: 700,
+          letterSpacing: "0.1em",
+          color: "var(--red-primary)",
+          textTransform: "uppercase",
+        }}>Item Added to Cart</span>
+        <span onClick={onClose} style={{
+          cursor: "pointer",
+          color: "var(--text-dim)",
+          fontSize: 18,
+          lineHeight: 1,
+        }}>&times;</span>
+      </div>
+
+      {/* Items */}
+      <div style={{
+        flex: 1,
+        overflowY: "auto",
+        padding: "8px 16px",
+      }}>
+        {cart.map(item => (
+          <div key={item.id} style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            padding: "10px 0",
+            borderBottom: "1px solid rgba(255,255,255,0.05)",
+          }}>
+            <div style={{
+              width: 44,
+              height: 44,
+              borderRadius: 4,
+              overflow: "hidden",
+              flexShrink: 0,
+              border: "1px solid rgba(196,30,42,0.2)",
+            }}>
+              <img src={item.image} alt={item.name} style={{
+                width: "100%",
+                height: "100%",
+                objectFit: "cover",
+              }} />
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{
+                fontFamily: "'Orbitron', sans-serif",
+                fontSize: 11,
+                fontWeight: 600,
+                color: "var(--text-primary)",
+                letterSpacing: "0.04em",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}>{item.name} {item.dose}</div>
+              <div style={{
+                fontFamily: "'Rajdhani', sans-serif",
+                fontSize: 13,
+                color: "var(--text-dim)",
+              }}>Qty: {item.qty}</div>
+            </div>
+            <div style={{
+              fontFamily: "'Rajdhani', sans-serif",
+              fontSize: 14,
+              fontWeight: 600,
+              color: "var(--text-secondary)",
+              whiteSpace: "nowrap",
+            }}>${((item.qty >= 5 ? item.bulk : item.price) * item.qty).toFixed(2)}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Footer */}
+      <div style={{
+        padding: "12px 16px",
+        borderTop: "1px solid rgba(196,30,42,0.2)",
+      }}>
+        <div style={{
+          display: "flex",
+          justifyContent: "space-between",
+          marginBottom: 12,
+        }}>
+          <span style={{
+            fontFamily: "'Rajdhani', sans-serif",
+            fontSize: 14,
+            color: "var(--text-dim)",
+          }}>{totalItems} item{totalItems !== 1 ? "s" : ""}</span>
+          <span style={{
+            fontFamily: "'Orbitron', sans-serif",
+            fontSize: 13,
+            fontWeight: 700,
+            color: "var(--text-primary)",
+            letterSpacing: "0.04em",
+          }}>${subtotal.toFixed(2)}</span>
+        </div>
+        <button onClick={() => { onClose(); navigate("/cart"); }} style={{
+          width: "100%",
+          fontFamily: "'Orbitron', sans-serif",
+          fontSize: 12,
+          fontWeight: 700,
+          letterSpacing: "0.12em",
+          padding: "12px 0",
+          background: "var(--red-primary)",
+          border: "none",
+          color: "var(--text-primary)",
+          cursor: "pointer",
+          textTransform: "uppercase",
+          transition: "opacity 0.2s",
+        }}>View Cart</button>
+      </div>
+    </div>
+  );
+}
+
 function Header({ cartCount = 0 }) {
   const navigate = useNavigate();
   const [isMobile, setIsMobile] = useState(window.innerWidth < 640);
@@ -3622,10 +3770,13 @@ export default function App() {
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [cart, setCart] = useState([]);
+  const [cartPopupVisible, setCartPopupVisible] = useState(false);
+  const cartPopupTimer = useRef(null);
   const location = useLocation();
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, [location.pathname]);
+  useEffect(() => () => { if (cartPopupTimer.current) clearTimeout(cartPopupTimer.current); }, []);
 
   function addToCart(product) {
     setCart(prev => {
@@ -3635,6 +3786,9 @@ export default function App() {
       }
       return [...prev, { ...product, qty: 1 }];
     });
+    setCartPopupVisible(true);
+    if (cartPopupTimer.current) clearTimeout(cartPopupTimer.current);
+    cartPopupTimer.current = setTimeout(() => setCartPopupVisible(false), 4000);
   }
 
   useEffect(() => {
@@ -3826,6 +3980,7 @@ export default function App() {
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg-primary)" }}>
       <Header cartCount={cart.reduce((sum, i) => sum + i.qty, 0)} />
+      <CartPopup cart={cart} visible={cartPopupVisible} onClose={() => setCartPopupVisible(false)} />
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/calculator" element={<PeptideCalculator />} />
