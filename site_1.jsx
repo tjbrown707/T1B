@@ -3855,7 +3855,7 @@ export default function App() {
 
   // Home page content as a component
   // Featured product IDs
-  const FEATURED_IDS = ["glp3rt-10", "tesamorelin", "bpc157-10", "klow", "motsc"];
+  const FEATURED_IDS = ["glp3rt-10", "tesamorelin", "bpc157-10", "tb500", "klow", "motsc"];
   const featuredProducts = FEATURED_IDS.map(id => PRODUCTS.find(p => p.id === id)).filter(Boolean);
 
   const HomePage = () => {
