@@ -4009,9 +4009,12 @@ export default function App() {
   const ProductPage = () => {
     const { id } = useParams();
     const product = PRODUCTS.find(p => p.id === id);
-    if (!product) return <NotFoundPage />;
-    usePageMeta(`${product.name} ${product.dose}`, `${product.name} ${product.dose} — ${product.research?.slice(0, 150)}`);
+    usePageMeta(
+      product ? `${product.name} ${product.dose}` : "Product Not Found",
+      product ? `${product.name} ${product.dose} — ${product.research?.slice(0, 150)}` : ""
+    );
     const isMobile = window.innerWidth < 700;
+    if (!product) return <NotFoundPage />;
     return (<>
       <section style={{ maxWidth: 1000, margin: "0 auto", padding: "120px 24px 80px" }}>
         <div style={{
