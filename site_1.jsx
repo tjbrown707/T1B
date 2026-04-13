@@ -3769,7 +3769,11 @@ export default function App() {
   const [category, setCategory] = useState("All");
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [cart, setCart] = useState([]);
+  const [cart, setCart] = useState(() => {
+    try { const saved = localStorage.getItem("t1b-cart"); return saved ? JSON.parse(saved) : []; }
+    catch { return []; }
+  });
+  useEffect(() => { localStorage.setItem("t1b-cart", JSON.stringify(cart)); }, [cart]);
   const [cartPopupVisible, setCartPopupVisible] = useState(false);
   const cartPopupTimer = useRef(null);
   const location = useLocation();
