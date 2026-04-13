@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body, table, td, div, p, h1, span, pre, a, strong { -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
+    table { border-collapse: collapse; mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
+    img { border: 0; outline: none; text-decoration: none; -ms-interpolation-mode: bicubic; }
+  </style>
+</head>
+<body style="margin:0;padding:0;background-color:#0a0a0a;font-family:Arial,Helvetica,sans-serif;width:100%;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#0a0a0a;margin:0;padding:0;">
+    <tr>
+      <td align="center" valign="top" style="padding:24px 8px;">
+
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:560px;width:100%;">
+
+          <!-- Header -->
+          <tr>
+            <td align="center" style="padding:32px 0 24px;">
+              <img src="https://www.tierone.bio/logo_transparent.png" alt="Tier One BioSystems" width="140" style="display:block;width:140px;max-width:140px;height:auto;" />
+            </td>
+          </tr>
+
+          <!-- Red divider -->
+          <tr>
+            <td style="padding:0 20px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr><td style="height:1px;background-color:#c41e2a;font-size:1px;line-height:1px;">&nbsp;</td></tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Order Confirmed Banner -->
+          <tr>
+            <td align="center" style="padding:28px 20px 12px;">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td style="background-color:#0d1f0d;border:1px solid #22c55e;padding:8px 20px;">
+                    <span style="font-family:Arial,sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;color:#22c55e;text-transform:uppercase;">ORDER CONFIRMED</span>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Greeting -->
+          <tr>
+            <td style="padding:12px 20px 6px;">
+              <h1 style="margin:0;font-family:Arial,sans-serif;font-size:22px;font-weight:700;color:#ffffff;text-align:center;">Thank you, {{customerName}}!</h1>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:0 20px 28px;">
+              <p style="margin:0;font-family:Arial,sans-serif;font-size:14px;color:#999999;text-align:center;line-height:1.6;">
+                Your order has been received and is awaiting payment confirmation. Please allow up to 24 hours for processing once payment is received.
+              </p>
+            </td>
+          </tr>
+
+          <!-- Order Number Box -->
+          <tr>
+            <td style="padding:0 20px 20px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid #222222;background-color:#111111;">
+                <tr>
+                  <td style="padding:16px;text-align:center;">
+                    <div style="font-family:Arial,sans-serif;font-size:10px;font-weight:700;letter-spacing:2px;color:#666666;text-transform:uppercase;margin-bottom:6px;">ORDER NUMBER</div>
+                    <div style="font-family:Arial,sans-serif;font-size:22px;font-weight:700;color:#c41e2a;letter-spacing:1px;">{{orderNumber}}</div>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Order Items -->
+          <tr>
+            <td style="padding:0 20px 6px;">
+              <div style="font-family:Arial,sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;color:#c41e2a;text-transform:uppercase;margin-bottom:10px;">ORDER DETAILS</div>
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid #222222;background-color:#111111;">
+                <tr>
+                  <td style="padding:16px;">
+                    <div style="margin:0;font-family:Arial,sans-serif;font-size:13px;color:#cccccc;line-height:1.8;word-wrap:break-word;overflow-wrap:break-word;">{{orderItems}}</div>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:0 16px;">
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                      <tr><td style="height:1px;background-color:#222222;font-size:1px;line-height:1px;">&nbsp;</td></tr>
+                    </table>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:14px 16px;">
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td style="font-family:Arial,sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;color:#666666;text-transform:uppercase;">TOTAL</td>
+                        <td align="right" style="font-family:Arial,sans-serif;font-size:18px;font-weight:700;color:#ffffff;">{{orderTotal}}</td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Shipping Info -->
+          <tr>
+            <td style="padding:20px 20px 6px;">
+              <div style="font-family:Arial,sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;color:#c41e2a;text-transform:uppercase;margin-bottom:10px;">SHIPPING TO</div>
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid #222222;background-color:#111111;">
+                <tr>
+                  <td style="padding:16px;">
+                    <div style="font-family:Arial,sans-serif;font-size:14px;color:#cccccc;line-height:1.8;word-wrap:break-word;">
+                      {{customerName}}<br>
+                      {{shippingAddress}}<br>
+                      {{shippingCity}}, {{shippingState}} {{shippingZip}}<br>
+                      {{customerPhone}}
+                    </div>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Payment Reminder -->
+          <tr>
+            <td style="padding:20px 20px 6px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid #22c55e;background-color:#0d1f0d;">
+                <tr>
+                  <td style="padding:16px;">
+                    <div style="font-family:Arial,sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;color:#22c55e;text-transform:uppercase;margin-bottom:8px;">PAYMENT REMINDER</div>
+                    <div style="font-family:Arial,sans-serif;font-size:13px;color:#999999;line-height:1.7;word-wrap:break-word;">
+                      Send <strong style="color:#ffffff;">{{orderTotal}}</strong> via Cash App to <strong style="color:#22c55e;">$TierOneBio</strong><br>
+                      Include your order number <strong style="color:#c41e2a;">{{orderNumber}}</strong> in the note.
+                    </div>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Red divider -->
+          <tr>
+            <td style="padding:28px 20px 0;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr><td style="height:1px;background-color:#c41e2a;font-size:1px;line-height:1px;">&nbsp;</td></tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td align="center" style="padding:20px 20px 12px;">
+              <div style="font-family:Arial,sans-serif;font-size:12px;font-weight:700;letter-spacing:2px;color:#ffffff;text-transform:uppercase;">TIER ONE BIOSYSTEMS</div>
+            </td>
+          </tr>
+          <tr>
+            <td align="center" style="padding:0 20px 8px;">
+              <div style="font-family:Arial,sans-serif;font-size:12px;color:#666666;line-height:1.6;">
+                Questions about your order? Contact us at<br>
+                <a href="mailto:info@tierone.bio" style="color:#c41e2a;text-decoration:none;">info@tierone.bio</a>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td align="center" style="padding:12px 20px 28px;">
+              <div style="font-family:Arial,sans-serif;font-size:11px;color:#444444;line-height:1.6;">
+                All products are sold for research and laboratory use only.<br>
+                Not for human consumption. Not a drug, food, or cosmetic.<br>
+                &copy; 2026 Tier One BioSystems. All rights reserved.
+              </div>
+            </td>
+          </tr>
+
+        </table>
+
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
