@@ -2511,6 +2511,11 @@ function CartPage({ cart, setCart }) {
 
     const num = generateOrderNumber();
     setOrderNumber(num);
+    setStep("payment");
+  }
+
+  function handlePaymentConfirmed() {
+    const { name, email, phone, address, city, state, zip } = customerInfo;
 
     // Build order items text
     const itemsText = cart.map(item => {
@@ -2522,7 +2527,7 @@ function CartPage({ cart, setCart }) {
     // Submit to Netlify Forms
     const formData = new URLSearchParams();
     formData.append("form-name", "order");
-    formData.append("orderNumber", num);
+    formData.append("orderNumber", orderNumber);
     formData.append("customerName", name);
     formData.append("customerEmail", email);
     formData.append("customerPhone", phone);
@@ -2533,7 +2538,6 @@ function CartPage({ cart, setCart }) {
     formData.append("orderItems", itemsText);
     formData.append("orderTotal", `$${subtotal.toFixed(2)}`);
 
-    // Submit to Netlify Forms
     fetch("/", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -2547,7 +2551,7 @@ function CartPage({ cart, setCart }) {
       customerName: name,
       customerEmail: email,
       customerPhone: phone,
-      orderNumber: num,
+      orderNumber: orderNumber,
       orderItems: itemsText,
       orderTotal: `$${subtotal.toFixed(2)}`,
       shippingAddress: address,
@@ -2558,10 +2562,6 @@ function CartPage({ cart, setCart }) {
       console.log("Confirmation email sent");
     }).catch((err) => console.error("Email error:", err));
 
-    setStep("payment");
-  }
-
-  function handlePaymentConfirmed() {
     setStep("confirmed");
     setCart([]);
   }
