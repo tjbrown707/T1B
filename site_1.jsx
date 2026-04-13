@@ -2927,7 +2927,18 @@ function CartPage({ cart, setCart }) {
               const isBulk = item.qty >= 5;
               return (
                 <div key={item.id} style={rowStyle}>
-                  <div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                    <div style={{
+                      width: 56,
+                      height: 56,
+                      flexShrink: 0,
+                      border: "1px solid var(--border)",
+                      background: "#080808",
+                      overflow: "hidden",
+                    }}>
+                      <img src={item.image} alt={item.name} style={{ width: "100%", height: "100%", objectFit: "contain", padding: 4 }} />
+                    </div>
+                    <div>
                     <div style={{
                       fontFamily: "'Orbitron', sans-serif",
                       fontSize: 14,
@@ -2952,6 +2963,7 @@ function CartPage({ cart, setCart }) {
                         marginTop: 2,
                       }}>Add {5 - item.qty} more for ${item.bulk}/vial</div>
                     )}
+                    </div>
                   </div>
 
                   <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
