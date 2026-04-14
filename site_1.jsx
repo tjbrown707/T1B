@@ -331,8 +331,6 @@ const PRODUCTS = [
   },
 ];
 
-const CATEGORIES = ["All", "Weight Management", "Growth Hormone", "Recovery", "Longevity", "Cognitive", "Hormonal", "Immune", "Tanning", "Blends", "Supplies"];
-
 // ─── Lab Results (Certificate of Analysis) ───────────────────────────────────
 const LAB_RESULTS = {
   "GLP-3RT 5 mg": {
@@ -1403,51 +1401,6 @@ function Hero() {
         background: "linear-gradient(to right, transparent, rgba(196,30,42,0.2), transparent)",
       }} />
     </section>
-  );
-}
-
-function CategoryFilter({ selected, onSelect }) {
-  return (
-    <div style={{
-      display: "flex",
-      gap: 8,
-      flexWrap: "wrap",
-      justifyContent: "center",
-      padding: "0 24px",
-      marginBottom: 48,
-    }}>
-      {CATEGORIES.map(cat => (
-        <button
-          key={cat}
-          onClick={() => onSelect(cat)}
-          style={{
-            fontFamily: "'Rajdhani', sans-serif",
-            fontWeight: 600,
-            fontSize: 12,
-            letterSpacing: "0.1em",
-            textTransform: "uppercase",
-            padding: "8px 18px",
-            border: selected === cat ? "1px solid var(--red-primary)" : "1px solid var(--border)",
-            background: selected === cat ? "rgba(196,30,42,0.1)" : "transparent",
-            color: selected === cat ? "var(--red-primary)" : "var(--text-secondary)",
-            cursor: "pointer",
-            transition: "all 0.25s ease",
-          }}
-          onMouseEnter={e => {
-            if (selected !== cat) {
-              e.target.style.borderColor = "var(--border-hover)";
-              e.target.style.color = "var(--text-primary)";
-            }
-          }}
-          onMouseLeave={e => {
-            if (selected !== cat) {
-              e.target.style.borderColor = "var(--border)";
-              e.target.style.color = "var(--text-secondary)";
-            }
-          }}
-        >{cat}</button>
-      ))}
-    </div>
   );
 }
 
