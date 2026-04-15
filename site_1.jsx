@@ -2209,6 +2209,14 @@ function ContactPage() {
 
 // ─── Cart Page ────────────────────────────────────────────────────────────────
 
+// Discount codes: "percent" = % off, "fixed" = $ off
+const DISCOUNT_CODES = {
+  WELCOME10: { type: "percent", value: 10, label: "10% off" },
+  SAVE15: { type: "percent", value: 15, label: "15% off" },
+  RESEARCH20: { type: "percent", value: 20, label: "20% off" },
+  T1B25: { type: "fixed", value: 25, label: "$25 off" },
+};
+
 function CartPage({ cart, setCart }) {
   usePageMeta("Your Cart", "Review your order and checkout at Tier One BioSystems.");
   const navigate = useNavigate();
@@ -2218,6 +2226,9 @@ function CartPage({ cart, setCart }) {
   });
   const [orderNumber, setOrderNumber] = useState("");
   const [isMobile, setIsMobile] = useState(window.innerWidth < 700);
+  const [discountInput, setDiscountInput] = useState("");
+  const [appliedDiscount, setAppliedDiscount] = useState(null); // { code, type, value, label }
+  const [discountError, setDiscountError] = useState("");
 
   useEffect(() => {
     const handler = () => setIsMobile(window.innerWidth < 700);
@@ -2238,6 +2249,36 @@ function CartPage({ cart, setCart }) {
   }
 
   const subtotal = cart.reduce((sum, item) => sum + getItemPrice(item) * item.qty, 0);
+
+  // Calculate discount amount based on applied code
+  const discountAmount = appliedDiscount
+    ? appliedDiscount.type === "percent"
+      ? Math.min(subtotal, subtotal * (appliedDiscount.value / 100))
+      : Math.min(subtotal, appliedDiscount.value)
+    : 0;
+  const total = Math.max(0, subtotal - discountAmount);
+
+  function applyDiscountCode() {
+    const code = discountInput.trim().toUpperCase();
+    if (!code) {
+      setDiscountError("Enter a discount code.");
+      return;
+    }
+    const match = DISCOUNT_CODES[code];
+    if (!match) {
+      setAppliedDiscount(null);
+      setDiscountError("Invalid discount code.");
+      return;
+    }
+    setAppliedDiscount({ code, ...match });
+    setDiscountError("");
+  }
+
+  function removeDiscountCode() {
+    setAppliedDiscount(null);
+    setDiscountInput("");
+    setDiscountError("");
+  }
 
   function generateOrderNumber() {
     const date = new Date();
@@ -2280,7 +2321,10 @@ function CartPage({ cart, setCart }) {
     formData.append("shippingState", state);
     formData.append("shippingZip", zip);
     formData.append("orderItems", itemsText);
-    formData.append("orderTotal", `$${subtotal.toFixed(2)}`);
+    formData.append("orderSubtotal", `$${subtotal.toFixed(2)}`);
+    formData.append("discountCode", appliedDiscount ? appliedDiscount.code : "");
+    formData.append("discountAmount", appliedDiscount ? `-$${discountAmount.toFixed(2)}` : "");
+    formData.append("orderTotal", `$${total.toFixed(2)}`);
 
     fetch("/", {
       method: "POST",
@@ -2297,7 +2341,10 @@ function CartPage({ cart, setCart }) {
       customerPhone: phone,
       orderNumber: orderNumber,
       orderItems: itemsText,
-      orderTotal: `$${subtotal.toFixed(2)}`,
+      orderSubtotal: `$${subtotal.toFixed(2)}`,
+      discountCode: appliedDiscount ? appliedDiscount.code : "",
+      discountAmount: appliedDiscount ? `-$${discountAmount.toFixed(2)}` : "",
+      orderTotal: `$${total.toFixed(2)}`,
       shippingAddress: address,
       shippingCity: city,
       shippingState: state,
@@ -2473,6 +2520,34 @@ function CartPage({ cart, setCart }) {
             <span style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 10, letterSpacing: "0.1em", color: "var(--text-dim)" }}>ORDER NUMBER</span>
             <span style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 14, fontWeight: 700, color: "var(--red-primary)" }}>{orderNumber}</span>
           </div>
+          {appliedDiscount && (
+            <>
+              <div style={{
+                padding: "12px 16px",
+                border: "1px solid var(--border)",
+                background: "rgba(17,17,17,0.5)",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: 8,
+              }}>
+                <span style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 10, letterSpacing: "0.1em", color: "var(--text-dim)" }}>SUBTOTAL</span>
+                <span style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 14, fontWeight: 700, color: "var(--text-secondary)" }}>${subtotal.toFixed(2)}</span>
+              </div>
+              <div style={{
+                padding: "12px 16px",
+                border: "1px solid var(--border)",
+                background: "rgba(17,17,17,0.5)",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: 8,
+              }}>
+                <span style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 10, letterSpacing: "0.1em", color: "#22c55e" }}>DISCOUNT ({appliedDiscount.code})</span>
+                <span style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 14, fontWeight: 700, color: "#22c55e" }}>−${discountAmount.toFixed(2)}</span>
+              </div>
+            </>
+          )}
           <div style={{
             padding: "12px 16px",
             border: "1px solid var(--border)",
@@ -2482,7 +2557,7 @@ function CartPage({ cart, setCart }) {
             alignItems: "center",
           }}>
             <span style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 10, letterSpacing: "0.1em", color: "var(--text-dim)" }}>TOTAL DUE</span>
-            <span style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 20, fontWeight: 800, color: "var(--text-primary)" }}>${subtotal.toFixed(2)}</span>
+            <span style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 20, fontWeight: 800, color: "var(--text-primary)" }}>${total.toFixed(2)}</span>
           </div>
         </div>
 
@@ -2559,11 +2634,11 @@ function CartPage({ cart, setCart }) {
             </div>
 
             <p style={{ margin: "0 0 12px", fontWeight: 600, color: "var(--text-primary)", fontSize: 17 }}>Step 2: Send payment via Cash App</p>
-            <p style={{ margin: "0 0 8px" }}>Send <strong style={{ color: "var(--text-primary)" }}>${subtotal.toFixed(2)}</strong> to <strong style={{ color: "#22c55e" }}>$TierOneBio</strong></p>
+            <p style={{ margin: "0 0 8px" }}>Send <strong style={{ color: "var(--text-primary)" }}>${total.toFixed(2)}</strong> to <strong style={{ color: "#22c55e" }}>$TierOneBio</strong></p>
             <p style={{ margin: "0 0 20px", color: "var(--text-dim)", fontSize: 14 }}>Paste the order number in the Cash App note so we can match your payment.</p>
 
             <a
-              href={`https://cash.app/$TierOneBio/${subtotal.toFixed(2)}`}
+              href={`https://cash.app/$TierOneBio/${total.toFixed(2)}`}
               target="_blank"
               rel="noopener noreferrer"
               style={{
@@ -2778,6 +2853,35 @@ function CartPage({ cart, setCart }) {
                 </div>
               );
             })}
+            {appliedDiscount && (
+              <>
+                <div style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  fontFamily: "'Rajdhani', sans-serif",
+                  fontSize: 15,
+                  color: "var(--text-secondary)",
+                  padding: "4px 0",
+                  borderTop: "1px solid var(--border)",
+                  marginTop: 8,
+                  paddingTop: 10,
+                }}>
+                  <span>Subtotal</span>
+                  <span style={{ color: "var(--text-primary)", fontWeight: 600 }}>${subtotal.toFixed(2)}</span>
+                </div>
+                <div style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  fontFamily: "'Rajdhani', sans-serif",
+                  fontSize: 15,
+                  color: "#22c55e",
+                  padding: "4px 0",
+                }}>
+                  <span>Discount ({appliedDiscount.code})</span>
+                  <span style={{ fontWeight: 600 }}>−${discountAmount.toFixed(2)}</span>
+                </div>
+              </>
+            )}
             <div style={{
               display: "flex",
               justifyContent: "space-between",
@@ -2786,7 +2890,7 @@ function CartPage({ cart, setCart }) {
               paddingTop: 12,
             }}>
               <span style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 12, letterSpacing: "0.1em", color: "var(--text-secondary)" }}>TOTAL</span>
-              <span style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 18, fontWeight: 800, color: "var(--text-primary)" }}>${subtotal.toFixed(2)}</span>
+              <span style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 18, fontWeight: 800, color: "var(--text-primary)" }}>${total.toFixed(2)}</span>
             </div>
           </div>
 
@@ -2959,11 +3063,155 @@ function CartPage({ cart, setCart }) {
             })}
           </div>
 
+          {/* Discount code section */}
+          <div style={{
+            padding: "24px 0 8px",
+            borderBottom: "1px solid var(--border)",
+          }}>
+            <div style={{
+              fontFamily: "'Orbitron', sans-serif",
+              fontSize: 11,
+              fontWeight: 600,
+              letterSpacing: "0.15em",
+              color: "var(--text-secondary)",
+              textTransform: "uppercase",
+              marginBottom: 10,
+            }}>Discount Code</div>
+            {appliedDiscount ? (
+              <div style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "12px 16px",
+                border: "1px solid rgba(34,197,94,0.3)",
+                background: "rgba(34,197,94,0.05)",
+                marginBottom: 16,
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <span style={{
+                    fontFamily: "'Orbitron', sans-serif",
+                    fontSize: 13,
+                    fontWeight: 700,
+                    color: "#22c55e",
+                    letterSpacing: "0.1em",
+                  }}>{appliedDiscount.code}</span>
+                  <span style={{
+                    fontFamily: "'Rajdhani', sans-serif",
+                    fontSize: 14,
+                    color: "var(--text-secondary)",
+                  }}>— {appliedDiscount.label} applied</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={removeDiscountCode}
+                  style={{
+                    background: "transparent",
+                    border: "1px solid var(--border)",
+                    color: "var(--text-secondary)",
+                    fontFamily: "'Orbitron', sans-serif",
+                    fontSize: 10,
+                    fontWeight: 700,
+                    letterSpacing: "0.1em",
+                    padding: "6px 12px",
+                    cursor: "pointer",
+                    transition: "all 0.2s",
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--red-primary)"; e.currentTarget.style.color = "var(--red-primary)"; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.color = "var(--text-secondary)"; }}
+                >Remove</button>
+              </div>
+            ) : (
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ display: "flex", gap: 10 }}>
+                  <input
+                    type="text"
+                    value={discountInput}
+                    onChange={e => { setDiscountInput(e.target.value); if (discountError) setDiscountError(""); }}
+                    onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); applyDiscountCode(); } }}
+                    placeholder="Enter code"
+                    style={{
+                      flex: 1,
+                      padding: "12px 16px",
+                      background: "rgba(17,17,17,0.8)",
+                      border: "1px solid var(--border)",
+                      color: "var(--text-primary)",
+                      fontFamily: "'Rajdhani', sans-serif",
+                      fontSize: 15,
+                      outline: "none",
+                      letterSpacing: "0.05em",
+                      textTransform: "uppercase",
+                      boxSizing: "border-box",
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={applyDiscountCode}
+                    style={{
+                      padding: "0 22px",
+                      background: "transparent",
+                      border: "1px solid var(--red-primary)",
+                      color: "var(--red-primary)",
+                      fontFamily: "'Orbitron', sans-serif",
+                      fontSize: 12,
+                      fontWeight: 700,
+                      letterSpacing: "0.15em",
+                      textTransform: "uppercase",
+                      cursor: "pointer",
+                      transition: "all 0.2s",
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.background = "var(--red-primary)"; e.currentTarget.style.color = "#fff"; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--red-primary)"; }}
+                  >Apply</button>
+                </div>
+                {discountError && (
+                  <div style={{
+                    fontFamily: "'Rajdhani', sans-serif",
+                    fontSize: 13,
+                    color: "var(--red-primary)",
+                    marginTop: 8,
+                  }}>{discountError}</div>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div style={{
+            padding: "20px 0 8px",
+          }}>
+            <div style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              fontFamily: "'Rajdhani', sans-serif",
+              fontSize: 15,
+              color: "var(--text-secondary)",
+              paddingBottom: 8,
+            }}>
+              <span>Subtotal</span>
+              <span style={{ color: "var(--text-primary)", fontWeight: 600 }}>${subtotal.toFixed(2)}</span>
+            </div>
+            {appliedDiscount && (
+              <div style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                fontFamily: "'Rajdhani', sans-serif",
+                fontSize: 15,
+                color: "#22c55e",
+                paddingBottom: 8,
+              }}>
+                <span>Discount ({appliedDiscount.code})</span>
+                <span style={{ fontWeight: 600 }}>−${discountAmount.toFixed(2)}</span>
+              </div>
+            )}
+          </div>
+
           <div style={{
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
-            padding: "24px 0",
+            padding: "16px 0 24px",
+            borderTop: "1px solid var(--border)",
             borderBottom: "1px solid var(--border)",
             marginBottom: 32,
           }}>
@@ -2973,13 +3221,13 @@ function CartPage({ cart, setCart }) {
               letterSpacing: "0.1em",
               color: "var(--text-secondary)",
               textTransform: "uppercase",
-            }}>Subtotal</span>
+            }}>Total</span>
             <span style={{
               fontFamily: "'Orbitron', sans-serif",
               fontSize: 24,
               fontWeight: 700,
               color: "var(--text-primary)",
-            }}>${subtotal.toFixed(2)}</span>
+            }}>${total.toFixed(2)}</span>
           </div>
 
           <button onClick={() => setStep("info")} style={{
