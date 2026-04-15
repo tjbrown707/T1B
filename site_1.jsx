@@ -2209,13 +2209,9 @@ function ContactPage() {
 
 // ─── Cart Page ────────────────────────────────────────────────────────────────
 
-// Discount codes: "percent" = % off, "fixed" = $ off
-const DISCOUNT_CODES = {
-  WELCOME10: { type: "percent", value: 10, label: "10% off" },
-  SAVE15: { type: "percent", value: 15, label: "15% off" },
-  RESEARCH20: { type: "percent", value: 20, label: "20% off" },
-  T1B25: { type: "fixed", value: 25, label: "$25 off" },
-};
+// Discount codes are validated server-side via a Netlify Function that reads
+// them from environment variables. Codes are never included in the client
+// bundle. See netlify/functions/validate-discount.js.
 
 function CartPage({ cart, setCart }) {
   usePageMeta("Your Cart", "Review your order and checkout at Tier One BioSystems.");
@@ -2229,6 +2225,7 @@ function CartPage({ cart, setCart }) {
   const [discountInput, setDiscountInput] = useState("");
   const [appliedDiscount, setAppliedDiscount] = useState(null); // { code, type, value, label }
   const [discountError, setDiscountError] = useState("");
+  const [discountLoading, setDiscountLoading] = useState(false);
 
   useEffect(() => {
     const handler = () => setIsMobile(window.innerWidth < 700);
@@ -2258,20 +2255,40 @@ function CartPage({ cart, setCart }) {
     : 0;
   const total = Math.max(0, subtotal - discountAmount);
 
-  function applyDiscountCode() {
+  async function applyDiscountCode() {
     const code = discountInput.trim().toUpperCase();
     if (!code) {
       setDiscountError("Enter a discount code.");
       return;
     }
-    const match = DISCOUNT_CODES[code];
-    if (!match) {
-      setAppliedDiscount(null);
-      setDiscountError("Invalid discount code.");
-      return;
-    }
-    setAppliedDiscount({ code, ...match });
+    setDiscountLoading(true);
     setDiscountError("");
+    try {
+      const res = await fetch("/.netlify/functions/validate-discount", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code }),
+      });
+      const data = await res.json().catch(() => ({ valid: false, error: "Could not reach discount service." }));
+      if (!res.ok || !data.valid) {
+        setAppliedDiscount(null);
+        setDiscountError(data.error || "Invalid discount code.");
+        return;
+      }
+      setAppliedDiscount({
+        code: data.code,
+        type: data.type,
+        value: data.value,
+        label: data.label,
+      });
+      setDiscountError("");
+    } catch (err) {
+      console.error("Discount validation error:", err);
+      setAppliedDiscount(null);
+      setDiscountError("Could not reach discount service. Try again.");
+    } finally {
+      setDiscountLoading(false);
+    }
   }
 
   function removeDiscountCode() {
@@ -3126,6 +3143,7 @@ function CartPage({ cart, setCart }) {
                   <input
                     type="text"
                     value={discountInput}
+                    disabled={discountLoading}
                     onChange={e => { setDiscountInput(e.target.value); if (discountError) setDiscountError(""); }}
                     onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); applyDiscountCode(); } }}
                     placeholder="Enter code"
@@ -3141,11 +3159,13 @@ function CartPage({ cart, setCart }) {
                       letterSpacing: "0.05em",
                       textTransform: "uppercase",
                       boxSizing: "border-box",
+                      opacity: discountLoading ? 0.6 : 1,
                     }}
                   />
                   <button
                     type="button"
                     onClick={applyDiscountCode}
+                    disabled={discountLoading}
                     style={{
                       padding: "0 22px",
                       background: "transparent",
@@ -3156,12 +3176,13 @@ function CartPage({ cart, setCart }) {
                       fontWeight: 700,
                       letterSpacing: "0.15em",
                       textTransform: "uppercase",
-                      cursor: "pointer",
+                      cursor: discountLoading ? "not-allowed" : "pointer",
                       transition: "all 0.2s",
+                      opacity: discountLoading ? 0.6 : 1,
                     }}
-                    onMouseEnter={e => { e.currentTarget.style.background = "var(--red-primary)"; e.currentTarget.style.color = "#fff"; }}
+                    onMouseEnter={e => { if (!discountLoading) { e.currentTarget.style.background = "var(--red-primary)"; e.currentTarget.style.color = "#fff"; } }}
                     onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--red-primary)"; }}
-                  >Apply</button>
+                  >{discountLoading ? "Checking…" : "Apply"}</button>
                 </div>
                 {discountError && (
                   <div style={{
