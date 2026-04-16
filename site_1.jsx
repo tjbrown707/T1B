@@ -2399,7 +2399,7 @@ function CartPage({ cart, setCart }) {
 
   const rowStyle = {
     display: "grid",
-    gridTemplateColumns: "1fr auto auto",
+    gridTemplateColumns: isMobile ? "1fr 120px 80px" : "1fr auto auto",
     alignItems: "center",
     gap: isMobile ? 12 : 24,
     padding: "20px 0",
@@ -3001,7 +3001,7 @@ function CartPage({ cart, setCart }) {
               const isBulk = item.qty >= 5;
               return (
                 <div key={item.id} style={rowStyle}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 14, minWidth: 0 }}>
                     <div style={{
                       width: 56,
                       height: 56,
@@ -3012,7 +3012,7 @@ function CartPage({ cart, setCart }) {
                     }}>
                       <img src={item.image} alt={item.name} style={{ width: "100%", height: "100%", objectFit: "contain", padding: 4 }} />
                     </div>
-                    <div>
+                    <div style={{ minWidth: 0, flex: 1 }}>
                     <div style={{
                       fontFamily: "'Orbitron', sans-serif",
                       fontSize: 14,
@@ -3040,7 +3040,7 @@ function CartPage({ cart, setCart }) {
                     </div>
                   </div>
 
-                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 12, justifySelf: "center" }}>
                     {[[-1,"−"],[1,"+"]].map(([delta, label]) => (
                       <button key={delta} onClick={() => updateQty(item.id, delta)} style={{
                         width: 32, height: 32,
@@ -3073,7 +3073,6 @@ function CartPage({ cart, setCart }) {
                     fontWeight: 700,
                     color: "var(--text-primary)",
                     textAlign: "right",
-                    minWidth: 80,
                   }}>${(unitPrice * item.qty).toFixed(2)}</div>
                 </div>
               );
