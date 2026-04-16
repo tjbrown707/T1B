@@ -4,7 +4,6 @@ logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-<<<<<<< HEAD
 pnpm-debug.log*
 lerna-debug.log*
 
@@ -23,7 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
-=======
 lerna-debug.log*
 
 # Diagnostic reports (https://nodejs.org/api/report.html)
@@ -157,7 +155,6 @@ dist
 # Vite logs files
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
->>>>>>> 6449534e7b5ae4f2856e17e5d280707ab83d0a2e
 
 # Claude Code local settings
 .claude/
