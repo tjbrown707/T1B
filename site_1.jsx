@@ -514,7 +514,7 @@ const LAB_RESULTS = {
     tests: [
       { test: "Appearance", method: "Visual", specification: "Blue lyophilized powder", result: "Blue lyophilized powder", pass: true },
       { test: "Labeled Peptide Content", method: "Gravimetric", specification: "50.00 mg/vial", result: "50.00 mg/vial", pass: true },
-      { test: "Actual Peptide Content", method: "RP-HPLC Quantitation", specification: "45.00–55.00 mg/vial", result: "Within specification", pass: true },
+      { test: "Actual Peptide Content", method: "RP-HPLC Quantitation", specification: "45.00–55.00 mg/vial", result: "51.57 mg/vial", pass: true },
       { test: "Purity (HPLC)", method: "RP-HPLC", specification: "≥ 99.0%", result: "99.68%", pass: true },
       { test: "Mass Confirmation", method: "ESI-MS", specification: "403.9 ± 0.5 Da", result: "Within specification", pass: true },
       { test: "Copper Content", method: "ICP-MS", specification: "15.0–16.5%", result: "Within specification", pass: true },
