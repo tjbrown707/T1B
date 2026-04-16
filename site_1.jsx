@@ -507,7 +507,25 @@ const LAB_RESULTS = {
       { test: "Residual Solvents", method: "GC-HS", specification: "Meets USP <467>", result: "Within limits", pass: true },
     ],
   },
-  "GHK-Cu": {
+  "GHK-Cu 50 mg": {
+    lotNumber: "T1B-GHK50-2026-0416",
+    dateAnalyzed: "2026-03-25",
+    molecularWeight: "403.9 Da",
+    tests: [
+      { test: "Appearance", method: "Visual", specification: "Blue lyophilized powder", result: "Blue lyophilized powder", pass: true },
+      { test: "Labeled Peptide Content", method: "Gravimetric", specification: "50.00 mg/vial", result: "50.00 mg/vial", pass: true },
+      { test: "Actual Peptide Content", method: "RP-HPLC Quantitation", specification: "45.00–55.00 mg/vial", result: "Within specification", pass: true },
+      { test: "Purity (HPLC)", method: "RP-HPLC", specification: "≥ 99.0%", result: "99.68%", pass: true },
+      { test: "Mass Confirmation", method: "ESI-MS", specification: "403.9 ± 0.5 Da", result: "Within specification", pass: true },
+      { test: "Copper Content", method: "ICP-MS", specification: "15.0–16.5%", result: "Within specification", pass: true },
+      { test: "Amino Acid Analysis", method: "AAA", specification: "Consistent with structure", result: "Consistent", pass: true },
+      { test: "Peptide Content", method: "Nitrogen Analysis", specification: "≥ 80%", result: "Passed", pass: true },
+      { test: "Water Content", method: "Karl Fischer", specification: "≤ 8.0%", result: "Within specification", pass: true },
+      { test: "Bacterial Endotoxins", method: "LAL", specification: "< 5 EU/mg", result: "< 1 EU/mg", pass: true },
+      { test: "Residual Solvents", method: "GC-HS", specification: "Meets USP <467>", result: "Within limits", pass: true },
+    ],
+  },
+  "GHK-Cu 100 mg": {
     lotNumber: "T1B-GHK-2026-0415",
     dateAnalyzed: "2026-03-25",
     molecularWeight: "403.9 Da",
