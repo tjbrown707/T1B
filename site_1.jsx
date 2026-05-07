@@ -838,7 +838,7 @@ function useScrollReveal() {
     );
     document.querySelectorAll(".scroll-reveal").forEach((el) => observer.observe(el));
     return () => observer.disconnect();
-  });
+  }, []);
 }
 
 // ─── Animated Count-Up Component ─────────────────────────────────────────────
