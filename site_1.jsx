@@ -822,6 +822,54 @@ function getLabResults(productName, dose) {
   return null;
 }
 
+// ─── Scroll Reveal Hook ──────────────────────────────────────────────────────
+function useScrollReveal() {
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add("revealed");
+            observer.unobserve(entry.target);
+          }
+        });
+      },
+      { threshold: 0.1, rootMargin: "0px 0px -50px 0px" }
+    );
+    document.querySelectorAll(".scroll-reveal").forEach((el) => observer.observe(el));
+    return () => observer.disconnect();
+  });
+}
+
+// ─── Animated Count-Up Component ─────────────────────────────────────────────
+function CountUp({ end, duration = 1500, suffix = "", prefix = "" }) {
+  const [count, setCount] = useState(0);
+  const ref = useRef(null);
+  const started = useRef(false);
+  useEffect(() => {
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting && !started.current) {
+          started.current = true;
+          const startTime = performance.now();
+          const animate = (now) => {
+            const elapsed = now - startTime;
+            const progress = Math.min(elapsed / duration, 1);
+            const eased = 1 - Math.pow(1 - progress, 3);
+            setCount(Math.floor(end * eased));
+            if (progress < 1) requestAnimationFrame(animate);
+            else setCount(end);
+          };
+          requestAnimationFrame(animate);
+        }
+      });
+    }, { threshold: 0.3 });
+    if (ref.current) observer.observe(ref.current);
+    return () => observer.disconnect();
+  }, [end, duration]);
+  return <span ref={ref}>{prefix}{count}{suffix}</span>;
+}
+
 // ─── Page Title & Meta Helper ─────────────────────────────────────────────────
 function usePageMeta(title, description) {
   useEffect(() => {
@@ -903,6 +951,42 @@ style.textContent = `
   @keyframes borderGlow {
     0%, 100% { border-color: rgba(196, 30, 42, 0.2); }
     50% { border-color: rgba(196, 30, 42, 0.5); }
+  }
+
+  @keyframes heroZoom {
+    0% { transform: scale(1.0); }
+    100% { transform: scale(1.08); }
+  }
+
+  @keyframes redGlowBreathe {
+    0%, 100% { opacity: 0.6; transform: translate(-50%, -50%) scale(1); }
+    50% { opacity: 1; transform: translate(-50%, -50%) scale(1.15); }
+  }
+
+  /* Scroll reveal — hidden initially, revealed when .revealed is added */
+  .scroll-reveal {
+    opacity: 0;
+    transform: translateY(40px);
+    transition: opacity 0.8s ease-out, transform 0.8s ease-out;
+  }
+  .scroll-reveal.revealed {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* Enhanced product card hover */
+  .product-card-inner {
+    transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .product-card:hover .product-card-inner {
+    transform: scale(1.06);
+  }
+  .product-card {
+    transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.4s ease, border-color 0.4s ease;
+  }
+  .product-card:hover {
+    transform: translateY(-6px);
+    box-shadow: 0 16px 40px rgba(196, 30, 42, 0.15);
   }
 
   .hero-grid-line {
@@ -1251,6 +1335,13 @@ function Header({ cartCount = 0 }) {
 
 function Hero() {
   const navigate = useNavigate();
+  const [scrollY, setScrollY] = useState(0);
+  useEffect(() => {
+    const onScroll = () => setScrollY(window.scrollY);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
   return (
     <section style={{
       position: "relative",
@@ -1263,16 +1354,17 @@ function Hero() {
       alignItems: "center",
       justifyContent: "center",
     }}>
-      {/* Background vial image */}
+      {/* Background vial image with zoom + parallax */}
       <div style={{
         position: "absolute",
         inset: 0,
         backgroundImage: `url('/herobackground.jpg')`,
         backgroundSize: "125% auto",
-        backgroundPosition: "center 40%",
+        backgroundPosition: `center calc(40% + ${scrollY * 0.3}px)`,
         backgroundRepeat: "no-repeat",
         opacity: 0.6,
         pointerEvents: "none",
+        animation: "heroZoom 20s ease-in-out infinite alternate",
       }} />
 
       {/* Dark overlay for text readability */}
@@ -1283,7 +1375,7 @@ function Hero() {
         pointerEvents: "none",
       }} />
 
-      {/* Red glow behind text */}
+      {/* Red glow behind text — breathes */}
       <div style={{
         position: "absolute",
         top: "40%",
@@ -1291,8 +1383,9 @@ function Hero() {
         transform: "translate(-50%, -50%)",
         width: 700,
         height: 500,
-        background: "radial-gradient(ellipse, rgba(196,30,42,0.1) 0%, transparent 65%)",
+        background: "radial-gradient(ellipse, rgba(196,30,42,0.15) 0%, transparent 65%)",
         pointerEvents: "none",
+        animation: "redGlowBreathe 6s ease-in-out infinite",
       }} />
 
       <div style={{
@@ -1374,7 +1467,7 @@ function Hero() {
           flexWrap: "wrap",
           marginBottom: 36,
         }}>
-          {["99%+ PURITY", "THIRD-PARTY TESTED", "RESEARCH USE ONLY", "US-BASED"].map((badge, i) => (
+          {["99%+ PURITY", "THIRD-PARTY TESTED", "RESEARCH USE ONLY", "FREE SHIPPING $200+"].map((badge, i) => (
             <span key={i} style={{
               fontFamily: "'Orbitron', sans-serif",
               fontSize: 11,
@@ -1420,6 +1513,47 @@ function Hero() {
             transition: "all 0.2s",
           }}>VIEW LAB RESULTS</button>
         </div>
+
+        {/* Animated stats */}
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+          gap: 24,
+          marginTop: 56,
+          maxWidth: 720,
+        }}>
+          {[
+            { value: 99, suffix: "%+", label: "Purity Verified" },
+            { value: 25, suffix: "+", label: "Compounds" },
+            { value: 200, prefix: "$", suffix: "+", label: "Free Shipping" },
+            { value: 24, suffix: "h", label: "Order Processing" },
+          ].map((stat, i) => (
+            <div key={i} style={{
+              padding: "18px 16px",
+              border: "1px solid rgba(196,30,42,0.2)",
+              background: "rgba(10,10,10,0.5)",
+              backdropFilter: "blur(8px)",
+              textAlign: "center",
+            }}>
+              <div style={{
+                fontFamily: "'Orbitron', sans-serif",
+                fontWeight: 800,
+                fontSize: 32,
+                color: "var(--red-primary)",
+                letterSpacing: "0.02em",
+                marginBottom: 4,
+              }}><CountUp end={stat.value} prefix={stat.prefix || ""} suffix={stat.suffix} duration={1800} /></div>
+              <div style={{
+                fontFamily: "'Rajdhani', sans-serif",
+                fontSize: 12,
+                fontWeight: 600,
+                color: "var(--text-secondary)",
+                letterSpacing: "0.1em",
+                textTransform: "uppercase",
+              }}>{stat.label}</div>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Bottom line */}
@@ -1440,6 +1574,7 @@ function ProductCard({ product, index, onClick, onAddToCart }) {
 
   return (
     <div
+      className="product-card"
       onClick={() => onClick(product)}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
@@ -1448,7 +1583,6 @@ function ProductCard({ product, index, onClick, onAddToCart }) {
         background: hovered ? "var(--bg-card-hover)" : "var(--bg-card)",
         border: `1px solid ${hovered ? "rgba(196,30,42,0.3)" : "var(--border)"}`,
         cursor: "pointer",
-        transition: "all 0.35s ease",
         animation: `fadeUp ${0.4 + index * 0.05}s ease-out`,
         overflow: "hidden",
         display: "flex",
@@ -1477,22 +1611,18 @@ function ProductCard({ product, index, onClick, onAddToCart }) {
         overflow: "hidden",
         background: "#080808",
       }}>
-        <img
-          src={product.image}
-          alt={product.name}
-          loading="lazy"
-          style={{
-            position: "absolute",
-            top: 0,
-            left: 0,
-            width: "100%",
-            height: "100%",
-            objectFit: "cover",
-            transition: "transform 0.6s ease",
-            transform: hovered ? "scale(1.05)" : "scale(1)",
-          }}
-        />
-
+        <div className="product-card-inner" style={{ position: "absolute", inset: 0 }}>
+          <img
+            src={product.image}
+            alt={product.name}
+            loading="lazy"
+            style={{
+              width: "100%",
+              height: "100%",
+              objectFit: "cover",
+            }}
+          />
+        </div>
       </div>
 
       {/* Info */}
@@ -2284,7 +2414,11 @@ function CartPage({ cart, setCart }) {
       ? Math.min(subtotal, subtotal * (appliedDiscount.value / 100))
       : Math.min(subtotal, appliedDiscount.value)
     : 0;
-  const total = Math.max(0, subtotal - discountAmount);
+  const subtotalAfterDiscount = Math.max(0, subtotal - discountAmount);
+
+  // Shipping: $10 flat, free at $200+ (calculated against post-discount subtotal)
+  const shipping = subtotalAfterDiscount >= 200 ? 0 : (cart.length > 0 ? 10 : 0);
+  const total = subtotalAfterDiscount + shipping;
 
   async function applyDiscountCode() {
     const code = discountInput.trim().toUpperCase();
@@ -2372,6 +2506,7 @@ function CartPage({ cart, setCart }) {
     formData.append("orderSubtotal", `$${subtotal.toFixed(2)}`);
     formData.append("discountCode", appliedDiscount ? appliedDiscount.code : "");
     formData.append("discountAmount", appliedDiscount ? `-$${discountAmount.toFixed(2)}` : "");
+    formData.append("shipping", shipping === 0 ? "FREE" : `$${shipping.toFixed(2)}`);
     formData.append("orderTotal", `$${total.toFixed(2)}`);
 
     fetch("/", {
@@ -2392,6 +2527,7 @@ function CartPage({ cart, setCart }) {
       orderSubtotal: `$${subtotal.toFixed(2)}`,
       discountCode: appliedDiscount ? appliedDiscount.code : "",
       discountAmount: appliedDiscount ? `-$${discountAmount.toFixed(2)}` : "",
+      shipping: shipping === 0 ? "FREE" : `$${shipping.toFixed(2)}`,
       orderTotal: `$${total.toFixed(2)}`,
       shippingAddress: address,
       shippingCity: city,
@@ -2596,6 +2732,20 @@ function CartPage({ cart, setCart }) {
               </div>
             </>
           )}
+          <div style={{
+            padding: "12px 16px",
+            border: "1px solid var(--border)",
+            background: "rgba(17,17,17,0.5)",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: 8,
+          }}>
+            <span style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 10, letterSpacing: "0.1em", color: "var(--text-dim)" }}>SHIPPING</span>
+            <span style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 14, fontWeight: 700, color: shipping === 0 ? "#22c55e" : "var(--text-secondary)" }}>
+              {shipping === 0 ? "FREE" : `$${shipping.toFixed(2)}`}
+            </span>
+          </div>
           <div style={{
             padding: "12px 16px",
             border: "1px solid var(--border)",
@@ -2933,6 +3083,22 @@ function CartPage({ cart, setCart }) {
             <div style={{
               display: "flex",
               justifyContent: "space-between",
+              fontFamily: "'Rajdhani', sans-serif",
+              fontSize: 15,
+              color: "var(--text-secondary)",
+              padding: "4px 0",
+              borderTop: appliedDiscount ? "none" : "1px solid var(--border)",
+              marginTop: appliedDiscount ? 0 : 8,
+              paddingTop: appliedDiscount ? 4 : 10,
+            }}>
+              <span>Shipping</span>
+              <span style={{ color: shipping === 0 ? "#22c55e" : "var(--text-primary)", fontWeight: 600 }}>
+                {shipping === 0 ? "FREE" : `$${shipping.toFixed(2)}`}
+              </span>
+            </div>
+            <div style={{
+              display: "flex",
+              justifyContent: "space-between",
               borderTop: "1px solid var(--border)",
               marginTop: 12,
               paddingTop: 12,
@@ -3254,6 +3420,28 @@ function CartPage({ cart, setCart }) {
                 <span>Discount ({appliedDiscount.code})</span>
                 <span style={{ fontWeight: 600 }}>−${discountAmount.toFixed(2)}</span>
               </div>
+            )}
+            <div style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              fontFamily: "'Rajdhani', sans-serif",
+              fontSize: 15,
+              color: "var(--text-secondary)",
+              paddingBottom: 8,
+            }}>
+              <span>Shipping</span>
+              <span style={{ color: shipping === 0 ? "#22c55e" : "var(--text-primary)", fontWeight: 600 }}>
+                {shipping === 0 ? "FREE" : `$${shipping.toFixed(2)}`}
+              </span>
+            </div>
+            {shipping > 0 && subtotalAfterDiscount < 200 && (
+              <div style={{
+                fontFamily: "'Rajdhani', sans-serif",
+                fontSize: 13,
+                color: "var(--text-dim)",
+                fontStyle: "italic",
+              }}>Add ${(200 - subtotalAfterDiscount).toFixed(2)} more for free shipping</div>
             )}
           </div>
 
@@ -3956,11 +4144,12 @@ export default function App() {
 
   const HomePage = () => {
     usePageMeta(null, "Premium research grade peptides with 99%+ purity. Third-party tested. BPC-157, GLP-3RT, Tesamorelin, and more. US-based supplier.");
+    useScrollReveal();
     return (<>
       <Hero />
 
       {/* Featured Products */}
-      <section style={{ maxWidth: 1400, margin: "0 auto", padding: "0 24px 60px" }}>
+      <section className="scroll-reveal" style={{ maxWidth: 1400, margin: "0 auto", padding: "0 24px 60px" }}>
         <div style={{ textAlign: "center", marginBottom: 40 }}>
           <div style={{
             fontFamily: "'Orbitron', sans-serif",
@@ -4021,6 +4210,7 @@ export default function App() {
   // Full Products Page
   const ProductsPage = () => {
     usePageMeta("All Products", "Browse our full catalog of research grade peptides. 99%+ purity, third-party tested.");
+    useScrollReveal();
     return (<>
       <section style={{ maxWidth: 1400, margin: "0 auto", padding: "120px 24px 80px" }}>
         <div style={{ textAlign: "center", marginBottom: 40 }}>
