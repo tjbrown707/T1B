@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Routes, Route, useNavigate, useLocation, useParams, useSearchParams } from "react-router-dom";
+import { Routes, Route, Navigate, useNavigate, useLocation, useParams, useSearchParams } from "react-router-dom";
 import emailjs from "@emailjs/browser";
 
 // ─── Data ────────────────────────────────────────────────────────────────────
@@ -874,9 +874,19 @@ function CountUp({ end, duration = 1500, suffix = "", prefix = "" }) {
 function usePageMeta(title, description) {
   useEffect(() => {
     const suffix = " | Tier One BioSystems";
-    document.title = title ? title + suffix : "Tier One BioSystems — Research Grade Peptides";
-    const metaDesc = document.querySelector('meta[name="description"]');
-    if (metaDesc && description) metaDesc.setAttribute("content", description);
+    const fullTitle = title ? title + suffix : "Tier One BioSystems — Research Grade Peptides";
+    document.title = fullTitle;
+    const setMeta = (selector, value) => {
+      if (!value) return;
+      const el = document.querySelector(selector);
+      if (el) el.setAttribute("content", value);
+    };
+    setMeta('meta[name="description"]', description);
+    setMeta('meta[property="og:title"]', fullTitle);
+    setMeta('meta[property="og:description"]', description);
+    setMeta('meta[property="og:url"]', window.location.href);
+    setMeta('meta[name="twitter:title"]', fullTitle);
+    setMeta('meta[name="twitter:description"]', description);
     return () => {
       document.title = "Tier One BioSystems — Research Grade Peptides";
     };
@@ -1005,10 +1015,13 @@ function CartPopup({ cart, visible, onClose }) {
   const navigate = useNavigate();
   if (!visible || cart.length === 0) return null;
 
-  const subtotal = cart.reduce((sum, item) => {
-    const price = item.qty >= 5 ? item.bulk : item.price;
-    return sum + price * item.qty;
-  }, 0);
+  const tieredPrice = (item) => {
+    if (item.qty >= 25) return Math.round(item.bulk * 0.90 * 100) / 100;
+    if (item.qty >= 10) return Math.round(item.bulk * 0.95 * 100) / 100;
+    if (item.qty >= 5) return item.bulk;
+    return item.price;
+  };
+  const subtotal = cart.reduce((sum, item) => sum + tieredPrice(item) * item.qty, 0);
   const totalItems = cart.reduce((sum, i) => sum + i.qty, 0);
 
   return (
@@ -1102,7 +1115,7 @@ function CartPopup({ cart, visible, onClose }) {
               fontWeight: 600,
               color: "var(--text-secondary)",
               whiteSpace: "nowrap",
-            }}>${((item.qty >= 5 ? item.bulk : item.price) * item.qty).toFixed(2)}</div>
+            }}>${(tieredPrice(item) * item.qty).toFixed(2)}</div>
           </div>
         ))}
       </div>
@@ -1844,35 +1857,105 @@ function ProductQuickView({ product, onClose, onAddToCart, onViewDetails }) {
 }
 
 function Footer() {
+  const navigate = useNavigate();
+  const linkStyle = {
+    fontFamily: "'Rajdhani', sans-serif",
+    fontSize: 13,
+    color: "var(--text-secondary)",
+    cursor: "pointer",
+    textDecoration: "none",
+    transition: "color 0.2s",
+    display: "block",
+    padding: "4px 0",
+  };
+  const headingStyle = {
+    fontFamily: "'Orbitron', sans-serif",
+    fontSize: 11,
+    fontWeight: 700,
+    letterSpacing: "0.15em",
+    color: "var(--red-primary)",
+    textTransform: "uppercase",
+    marginBottom: 14,
+  };
   return (
     <footer style={{
       borderTop: "1px solid var(--border)",
-      padding: "60px 24px 40px",
-      textAlign: "center",
+      paddingTop: 60,
     }}>
       <div style={{
-        fontFamily: "'Orbitron', sans-serif",
-        fontWeight: 800,
-        fontSize: 14,
-        letterSpacing: "0.15em",
-        marginBottom: 6,
-      }}>TIER ONE BIOSYSTEMS</div>
-      <div style={{
-        fontFamily: "'Rajdhani', sans-serif",
-        fontSize: 12,
-        color: "var(--text-dim)",
-        marginBottom: 24,
-        lineHeight: 1.6,
+        maxWidth: 1200,
+        margin: "0 auto",
+        padding: "0 24px",
+        display: "grid",
+        gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+        gap: 40,
+        marginBottom: 40,
       }}>
-        All products are sold for research and laboratory use only.
-        <br />Not for human consumption. Not a drug, food, or cosmetic.
+        <div>
+          <div style={headingStyle}>Tier One Bio</div>
+          <div style={{
+            fontFamily: "'Rajdhani', sans-serif",
+            fontSize: 13,
+            color: "var(--text-secondary)",
+            lineHeight: 1.7,
+          }}>
+            Research-grade peptides with 99%+ purity. Lot-tested and US-based.
+          </div>
+        </div>
+
+        <div>
+          <div style={headingStyle}>Shop</div>
+          <a onClick={() => navigate("/products")} style={linkStyle} onMouseEnter={e => e.target.style.color = "var(--red-primary)"} onMouseLeave={e => e.target.style.color = "var(--text-secondary)"}>All Products</a>
+          <a onClick={() => navigate("/lab-results")} style={linkStyle} onMouseEnter={e => e.target.style.color = "var(--red-primary)"} onMouseLeave={e => e.target.style.color = "var(--text-secondary)"}>Lab Results</a>
+          <a onClick={() => navigate("/calculator")} style={linkStyle} onMouseEnter={e => e.target.style.color = "var(--red-primary)"} onMouseLeave={e => e.target.style.color = "var(--text-secondary)"}>Reconstitution Calculator</a>
+        </div>
+
+        <div>
+          <div style={headingStyle}>Info</div>
+          <a onClick={() => navigate("/about")} style={linkStyle} onMouseEnter={e => e.target.style.color = "var(--red-primary)"} onMouseLeave={e => e.target.style.color = "var(--text-secondary)"}>About</a>
+          <a onClick={() => navigate("/faq")} style={linkStyle} onMouseEnter={e => e.target.style.color = "var(--red-primary)"} onMouseLeave={e => e.target.style.color = "var(--text-secondary)"}>FAQ</a>
+          <a onClick={() => navigate("/testing-standards")} style={linkStyle} onMouseEnter={e => e.target.style.color = "var(--red-primary)"} onMouseLeave={e => e.target.style.color = "var(--text-secondary)"}>Testing Standards</a>
+          <a onClick={() => navigate("/contact")} style={linkStyle} onMouseEnter={e => e.target.style.color = "var(--red-primary)"} onMouseLeave={e => e.target.style.color = "var(--text-secondary)"}>Contact</a>
+        </div>
+
+        <div>
+          <div style={headingStyle}>Policies</div>
+          <a onClick={() => navigate("/shipping")} style={linkStyle} onMouseEnter={e => e.target.style.color = "var(--red-primary)"} onMouseLeave={e => e.target.style.color = "var(--text-secondary)"}>Shipping</a>
+          <a onClick={() => navigate("/returns")} style={linkStyle} onMouseEnter={e => e.target.style.color = "var(--red-primary)"} onMouseLeave={e => e.target.style.color = "var(--text-secondary)"}>Returns</a>
+          <a onClick={() => navigate("/terms")} style={linkStyle} onMouseEnter={e => e.target.style.color = "var(--red-primary)"} onMouseLeave={e => e.target.style.color = "var(--text-secondary)"}>Terms of Service</a>
+          <a onClick={() => navigate("/privacy")} style={linkStyle} onMouseEnter={e => e.target.style.color = "var(--red-primary)"} onMouseLeave={e => e.target.style.color = "var(--text-secondary)"}>Privacy Policy</a>
+        </div>
       </div>
+
       <div style={{
-        fontFamily: "'Rajdhani', sans-serif",
-        fontSize: 12,
-        color: "var(--text-secondary)",
-        letterSpacing: "0.05em",
-      }}>© 2025 Tier One BioSystems. All rights reserved.</div>
+        borderTop: "1px solid var(--border)",
+        padding: "28px 24px",
+        textAlign: "center",
+      }}>
+        <div style={{
+          fontFamily: "'Orbitron', sans-serif",
+          fontWeight: 800,
+          fontSize: 14,
+          letterSpacing: "0.15em",
+          marginBottom: 6,
+        }}>TIER ONE BIOSYSTEMS</div>
+        <div style={{
+          fontFamily: "'Rajdhani', sans-serif",
+          fontSize: 12,
+          color: "var(--text-dim)",
+          marginBottom: 16,
+          lineHeight: 1.6,
+        }}>
+          All products are sold for research and laboratory use only.
+          <br />Not for human consumption. Not a drug, food, or cosmetic.
+        </div>
+        <div style={{
+          fontFamily: "'Rajdhani', sans-serif",
+          fontSize: 12,
+          color: "var(--text-secondary)",
+          letterSpacing: "0.05em",
+        }}>© 2026 Tier One BioSystems. All rights reserved.</div>
+      </div>
     </footer>
   );
 }
@@ -2402,9 +2485,13 @@ function CartPage({ cart, setCart }) {
     );
   }
 
-  // Calculate price per item with bulk discount (5+ = bulk price)
+  // Calculate price per item with tiered bulk discounts
+  // 1-4: regular price | 5-9: bulk | 10-24: bulk -5% | 25+: bulk -10%
   function getItemPrice(item) {
-    return item.qty >= 5 ? item.bulk : item.price;
+    if (item.qty >= 25) return Math.round(item.bulk * 0.90 * 100) / 100;
+    if (item.qty >= 10) return Math.round(item.bulk * 0.95 * 100) / 100;
+    if (item.qty >= 5) return item.bulk;
+    return item.price;
   }
 
   const subtotal = cart.reduce((sum, item) => sum + getItemPrice(item) * item.qty, 0);
@@ -3276,6 +3363,7 @@ function CartPage({ cart, setCart }) {
             {cart.map(item => {
               const unitPrice = getItemPrice(item);
               const isBulk = item.qty >= 5;
+              const tierLabel = item.qty >= 25 ? "25+ TIER" : item.qty >= 10 ? "10+ TIER" : item.qty >= 5 ? "5+ TIER" : null;
               return (
                 <div key={item.id} style={rowStyle}>
                   <div style={{ display: "flex", alignItems: "center", gap: 14, minWidth: 0 }}>
@@ -3304,7 +3392,7 @@ function CartPage({ cart, setCart }) {
                       fontWeight: isBulk ? 700 : 400,
                     }}>
                       ${unitPrice.toFixed(2)} /vial
-                      {isBulk && <span style={{ fontSize: 13, marginLeft: 8, color: "#22c55e" }}>BULK DISCOUNT</span>}
+                      {tierLabel && <span style={{ fontSize: 12, marginLeft: 8, color: "#22c55e", fontWeight: 700, letterSpacing: "0.05em" }}>{tierLabel}</span>}
                     </div>
                     {!isBulk && item.qty >= 3 && (
                       <div style={{
@@ -3313,6 +3401,22 @@ function CartPage({ cart, setCart }) {
                         color: "var(--text-dim)",
                         marginTop: 2,
                       }}>Add {5 - item.qty} more for ${item.bulk}/vial</div>
+                    )}
+                    {item.qty >= 5 && item.qty < 10 && (
+                      <div style={{
+                        fontFamily: "'Rajdhani', sans-serif",
+                        fontSize: 13,
+                        color: "var(--text-dim)",
+                        marginTop: 2,
+                      }}>Add {10 - item.qty} more for an extra 5% off</div>
+                    )}
+                    {item.qty >= 10 && item.qty < 25 && (
+                      <div style={{
+                        fontFamily: "'Rajdhani', sans-serif",
+                        fontSize: 13,
+                        color: "var(--text-dim)",
+                        marginTop: 2,
+                      }}>Add {25 - item.qty} more for an extra 10% off</div>
                     )}
                     </div>
                   </div>
@@ -3959,6 +4063,334 @@ function NotFoundPage() {
   );
 }
 
+// ─── Policy / Info Pages ─────────────────────────────────────────────────────
+
+function PolicyShell({ title, kicker, children }) {
+  return (
+    <div style={{ maxWidth: 850, margin: "0 auto", padding: "120px 24px 80px" }}>
+      <div style={{ textAlign: "center", marginBottom: 48 }}>
+        <div style={{
+          fontFamily: "'Orbitron', sans-serif",
+          fontSize: 11,
+          fontWeight: 600,
+          letterSpacing: "0.2em",
+          color: "var(--red-primary)",
+          marginBottom: 10,
+        }}>{kicker}</div>
+        <h1 style={{
+          fontFamily: "'Orbitron', sans-serif",
+          fontWeight: 800,
+          fontSize: "clamp(24px, 5vw, 36px)",
+          letterSpacing: "0.04em",
+          textTransform: "uppercase",
+        }}>{title}</h1>
+      </div>
+      <div style={{
+        fontFamily: "'Rajdhani', sans-serif",
+        fontSize: 17,
+        lineHeight: 1.8,
+        color: "var(--text-secondary)",
+      }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+const policyHeadingStyle = {
+  fontFamily: "'Orbitron', sans-serif",
+  fontWeight: 700,
+  fontSize: 16,
+  letterSpacing: "0.08em",
+  textTransform: "uppercase",
+  color: "var(--text-primary)",
+  marginTop: 32,
+  marginBottom: 12,
+};
+
+function ShippingPage() {
+  usePageMeta("Shipping Policy", "How Tier One BioSystems ships research peptides — domestic shipping rates, processing time, free shipping over $200.");
+  return (
+    <>
+      <PolicyShell kicker="POLICY" title="Shipping">
+        <p>All orders are shipped from our facility in Phoenix, Arizona via UPS or FedEx in protective bubble mailers. Lyophilized research peptides are shelf-stable at room temperature for short transit periods, so cold-pack shipping is generally unnecessary for standard ground shipping windows.</p>
+
+        <h2 style={policyHeadingStyle}>Shipping Rates</h2>
+        <p><strong style={{ color: "var(--text-primary)" }}>$10 flat rate</strong> on orders under $200. <strong style={{ color: "#22c55e" }}>FREE shipping</strong> on all orders $200 and over (after any discounts applied).</p>
+
+        <h2 style={policyHeadingStyle}>Processing Time</h2>
+        <p>Orders placed and paid before <strong style={{ color: "var(--text-primary)" }}>2:00 PM Arizona time</strong> ship the same business day. Orders placed after 2:00 PM, on weekends, or on US holidays ship the next business day. Payment must be received and confirmed before an order is processed.</p>
+
+        <h2 style={policyHeadingStyle}>Delivery Time</h2>
+        <p>Standard ground delivery within the continental US is typically 2–5 business days from ship date. You will receive a tracking number by email once your order ships.</p>
+
+        <h2 style={policyHeadingStyle}>Domestic Only</h2>
+        <p>We currently ship to the United States only. We do not ship internationally.</p>
+
+        <h2 style={policyHeadingStyle}>Lost or Damaged Shipments</h2>
+        <p>If your package arrives damaged or fails to arrive within 10 business days of shipment, contact us at <a href="mailto:sales@tierone.bio" style={{ color: "var(--red-primary)" }}>sales@tierone.bio</a> with your order number. We will work with the carrier to resolve the issue.</p>
+      </PolicyShell>
+      <Footer />
+    </>
+  );
+}
+
+function ReturnsPage() {
+  usePageMeta("Returns Policy", "Tier One BioSystems returns and refunds policy for research peptides.");
+  return (
+    <>
+      <PolicyShell kicker="POLICY" title="Returns & Refunds">
+        <p>Because every product we sell is a research-use-only laboratory compound, returns are accepted only in specific circumstances described below. By placing an order, you confirm that you are a qualified researcher purchasing for laboratory use only.</p>
+
+        <h2 style={policyHeadingStyle}>Eligible Returns</h2>
+        <p>We will replace or refund any product that:</p>
+        <ul style={{ paddingLeft: 24 }}>
+          <li>Arrives damaged or with broken seals</li>
+          <li>Was shipped incorrectly (wrong product, wrong dose)</li>
+          <li>Fails to arrive within 10 business days of the ship date</li>
+        </ul>
+
+        <h2 style={policyHeadingStyle}>Non-Returnable Items</h2>
+        <p>Once a product has been opened, reconstituted, used, or otherwise altered, it cannot be returned. Change-of-mind returns are not accepted on lyophilized research compounds due to chain-of-custody and lot-integrity requirements.</p>
+
+        <h2 style={policyHeadingStyle}>How to Request a Return</h2>
+        <p>Contact <a href="mailto:sales@tierone.bio" style={{ color: "var(--red-primary)" }}>sales@tierone.bio</a> within 7 days of delivery with your order number, a description of the issue, and photos if applicable. We will respond within 1 business day with next steps.</p>
+
+        <h2 style={policyHeadingStyle}>Refund Method</h2>
+        <p>Approved refunds are issued via the original payment method (Cash App or Venmo) within 3 business days of resolution.</p>
+      </PolicyShell>
+      <Footer />
+    </>
+  );
+}
+
+function TermsPage() {
+  usePageMeta("Terms of Service", "Terms of service for Tier One BioSystems research peptide supply.");
+  return (
+    <>
+      <PolicyShell kicker="LEGAL" title="Terms of Service">
+        <p>By accessing or purchasing from Tier One BioSystems, you agree to the following terms.</p>
+
+        <h2 style={policyHeadingStyle}>Eligibility</h2>
+        <p>You must be at least 18 years of age and a qualified researcher, laboratory professional, or scientific institution. Products are not for human or animal consumption and are sold solely for in-vitro laboratory research use.</p>
+
+        <h2 style={policyHeadingStyle}>Product Use</h2>
+        <p>All products are research-use-only (RUO) chemicals. They are not drugs, foods, cosmetics, or dietary supplements. They have not been evaluated by the FDA. They are not intended to diagnose, treat, cure, or prevent any disease in humans or animals.</p>
+
+        <h2 style={policyHeadingStyle}>Customer Responsibility</h2>
+        <p>You are solely responsible for handling, storing, and using research compounds in accordance with applicable federal, state, and local laws and accepted laboratory safety protocols. Tier One BioSystems is not responsible for any misuse, off-label use, or violation of applicable regulations by the purchaser.</p>
+
+        <h2 style={policyHeadingStyle}>Pricing & Availability</h2>
+        <p>Prices are subject to change without notice. Inventory is subject to availability. We reserve the right to refuse, cancel, or limit orders at our sole discretion.</p>
+
+        <h2 style={policyHeadingStyle}>Limitation of Liability</h2>
+        <p>To the maximum extent permitted by law, Tier One BioSystems' liability for any claim arising from the sale or use of our products is limited to the amount paid for the product in question.</p>
+
+        <h2 style={policyHeadingStyle}>Governing Law</h2>
+        <p>These terms are governed by the laws of the State of Arizona, USA.</p>
+      </PolicyShell>
+      <Footer />
+    </>
+  );
+}
+
+function PrivacyPage() {
+  usePageMeta("Privacy Policy", "How Tier One BioSystems collects and handles personal data.");
+  return (
+    <>
+      <PolicyShell kicker="LEGAL" title="Privacy Policy">
+        <p>Tier One BioSystems respects your privacy. This policy describes what information we collect and how we use it.</p>
+
+        <h2 style={policyHeadingStyle}>Information We Collect</h2>
+        <p>When you place an order, we collect the following information: name, email, phone number, shipping address, items ordered, and order total. This information is used solely to fulfill your order and communicate with you about it.</p>
+
+        <h2 style={policyHeadingStyle}>How We Use Your Information</h2>
+        <ul style={{ paddingLeft: 24 }}>
+          <li>To process and ship your order</li>
+          <li>To send order confirmations and shipping notifications</li>
+          <li>To respond to support inquiries</li>
+          <li>To comply with legal obligations</li>
+        </ul>
+
+        <h2 style={policyHeadingStyle}>Information Sharing</h2>
+        <p>We do not sell, trade, or rent your personal information to third parties. We share information only with service providers required to fulfill your order (shipping carriers, email service, payment platforms) and only the information necessary for that purpose.</p>
+
+        <h2 style={policyHeadingStyle}>Cookies & Analytics</h2>
+        <p>We use Google Analytics to understand site traffic. This service may set cookies. We use localStorage in your browser to remember your cart between visits. You can clear this at any time through your browser settings.</p>
+
+        <h2 style={policyHeadingStyle}>Data Security</h2>
+        <p>Order data is transmitted over HTTPS and stored on secure third-party services (Netlify Forms, EmailJS). Payments occur outside our site through Cash App or Venmo and we never see or store payment credentials.</p>
+
+        <h2 style={policyHeadingStyle}>Contact</h2>
+        <p>For privacy questions or data deletion requests, contact <a href="mailto:sales@tierone.bio" style={{ color: "var(--red-primary)" }}>sales@tierone.bio</a>.</p>
+      </PolicyShell>
+      <Footer />
+    </>
+  );
+}
+
+function AboutPage() {
+  usePageMeta("About", "Tier One BioSystems — research-grade peptides with lot-level transparency, 99%+ purity, and US-based fulfillment.");
+  return (
+    <>
+      <PolicyShell kicker="WHO WE ARE" title="About Tier One">
+        <p>Tier One BioSystems was built around a simple idea: research peptide buyers deserve total transparency. Every product we sell is documented at the lot level — purity, peptide content, mass confirmation, and sterility — so qualified researchers can make sourcing decisions with confidence.</p>
+
+        <h2 style={policyHeadingStyle}>What We Do</h2>
+        <p>We supply research-use-only peptides and compounds for laboratory use. Our catalog focuses on the most commonly studied compounds in academic and independent research settings, sourced from US and verified international synthesis partners.</p>
+
+        <h2 style={policyHeadingStyle}>How We're Different</h2>
+        <ul style={{ paddingLeft: 24 }}>
+          <li><strong style={{ color: "var(--text-primary)" }}>Lot-level COAs.</strong> Every batch is tested by independent labs, and the results are published on this site before you order.</li>
+          <li><strong style={{ color: "var(--text-primary)" }}>99%+ purity standard.</strong> Released lots meet or exceed 99% purity by RP-HPLC.</li>
+          <li><strong style={{ color: "var(--text-primary)" }}>US-based fulfillment.</strong> Orders ship from Phoenix, Arizona — no overseas waiting.</li>
+          <li><strong style={{ color: "var(--text-primary)" }}>Direct support.</strong> Questions go straight to a real person, not a ticket queue.</li>
+        </ul>
+
+        <h2 style={policyHeadingStyle}>Research Use Only</h2>
+        <p>All products are sold for in-vitro laboratory research use only. They are not drugs, supplements, or food, and they are not intended for human or animal consumption. By purchasing, you acknowledge that you are a qualified researcher and accept responsibility for proper handling and use.</p>
+      </PolicyShell>
+      <Footer />
+    </>
+  );
+}
+
+function FAQPage() {
+  usePageMeta("FAQ", "Frequently asked questions about Tier One BioSystems research peptide products, ordering, shipping, and quality.");
+  const [openIdx, setOpenIdx] = useState(null);
+  const items = [
+    { q: "Are your products for human use?", a: "No. All Tier One BioSystems products are sold strictly for in-vitro laboratory research use only. They are not drugs, supplements, food, or cosmetics. They are not intended for human or animal consumption." },
+    { q: "What is your purity standard?", a: "Released lots meet or exceed 99% purity by reverse-phase HPLC. Each lot is tested for appearance, purity, peptide content, mass confirmation (ESI-MS or MALDI-TOF), water content, residual solvents, and bacterial endotoxins. Results are published on the Lab Results page." },
+    { q: "How do I view a Certificate of Analysis (COA)?", a: "Every product page has a green VIEW CERTIFICATE OF ANALYSIS button. Clicking it opens that product's most recent lot data with all test results, methods, specifications, and pass/fail status." },
+    { q: "How long does shipping take?", a: "Orders paid before 2:00 PM Arizona time ship the same business day from Phoenix, AZ via UPS or FedEx. Standard ground delivery within the continental US is typically 2–5 business days." },
+    { q: "Do you offer free shipping?", a: "Yes. Orders of $200 or more (after any discounts applied) ship free. Orders under $200 are charged a flat $10 shipping fee." },
+    { q: "What payment methods do you accept?", a: "Currently Cash App ($TierOneBio) and Venmo (@TierOneBio). At checkout you'll select your preferred method and follow the on-screen instructions to complete payment." },
+    { q: "Why don't you accept credit cards?", a: "Most major card processors restrict research peptide sales due to category-level policy. Cash App and Venmo allow us to keep the catalog accessible and prices low without surprise account terminations or held funds." },
+    { q: "How should I store the products?", a: "Lyophilized vials should be stored in a standard home freezer (0°F / -18°C) for long-term storage. Once reconstituted with bacteriostatic water, store refrigerated (35–46°F / 2–8°C) and use within the storage window listed on the product page." },
+    { q: "Do you offer bulk discounts?", a: "Yes. Each product has a discounted per-vial price when you order 5 or more of the same compound and dose. The bulk price is shown on every product card and product page." },
+    { q: "Do you ship internationally?", a: "Not at this time. We currently ship to the United States only." },
+    { q: "What if my order arrives damaged?", a: "Contact us at sales@tierone.bio within 7 days of delivery with your order number and photos. We will replace or refund eligible damaged shipments." },
+    { q: "How do I reach customer support?", a: "Email sales@tierone.bio or use the Contact form. Most replies arrive within one business day." },
+  ];
+
+  return (
+    <>
+      <div style={{ maxWidth: 850, margin: "0 auto", padding: "120px 24px 80px" }}>
+        <div style={{ textAlign: "center", marginBottom: 48 }}>
+          <div style={{
+            fontFamily: "'Orbitron', sans-serif",
+            fontSize: 11,
+            fontWeight: 600,
+            letterSpacing: "0.2em",
+            color: "var(--red-primary)",
+            marginBottom: 10,
+          }}>HELP CENTER</div>
+          <h1 style={{
+            fontFamily: "'Orbitron', sans-serif",
+            fontWeight: 800,
+            fontSize: "clamp(24px, 5vw, 36px)",
+            letterSpacing: "0.04em",
+            textTransform: "uppercase",
+          }}>Frequently Asked Questions</h1>
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {items.map((item, i) => {
+            const isOpen = openIdx === i;
+            return (
+              <div key={i} style={{
+                border: isOpen ? "1px solid rgba(196,30,42,0.4)" : "1px solid var(--border)",
+                background: "var(--bg-card)",
+                transition: "all 0.3s ease",
+              }}>
+                <div onClick={() => setOpenIdx(isOpen ? null : i)} style={{
+                  padding: "18px 24px",
+                  cursor: "pointer",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  gap: 16,
+                }}>
+                  <span style={{
+                    fontFamily: "'Rajdhani', sans-serif",
+                    fontWeight: 600,
+                    fontSize: 17,
+                    color: "var(--text-primary)",
+                  }}>{item.q}</span>
+                  <span style={{
+                    fontFamily: "'Rajdhani', sans-serif",
+                    fontSize: 20,
+                    color: "var(--text-secondary)",
+                    transform: isOpen ? "rotate(180deg)" : "rotate(0deg)",
+                    transition: "transform 0.3s",
+                    flexShrink: 0,
+                  }}>&#9660;</span>
+                </div>
+                {isOpen && (
+                  <div style={{
+                    padding: "0 24px 22px",
+                    fontFamily: "'Rajdhani', sans-serif",
+                    fontSize: 16,
+                    color: "var(--text-secondary)",
+                    lineHeight: 1.7,
+                    animation: "fadeIn 0.25s ease-out",
+                  }}>{item.a}</div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      <Footer />
+    </>
+  );
+}
+
+function TestingStandardsPage() {
+  usePageMeta("Testing Standards", "How Tier One BioSystems verifies research peptide purity, identity, and safety. HPLC, ESI-MS, AAA, peptide content, and endotoxin testing explained.");
+  return (
+    <>
+      <PolicyShell kicker="QUALITY ASSURANCE" title="Testing Standards">
+        <p>Every lot Tier One BioSystems releases is independently tested against a defined acceptance specification. Below is what we test, why we test it, and the methods used. The current Certificate of Analysis for each product is published on the <a onClick={(e) => { e.preventDefault(); window.location.href = "/lab-results"; }} style={{ color: "var(--red-primary)", cursor: "pointer" }}>Lab Results</a> page.</p>
+
+        <h2 style={policyHeadingStyle}>Appearance</h2>
+        <p><strong style={{ color: "var(--text-primary)" }}>Method: Visual.</strong> Lyophilized peptides are inspected for color, form, and visible particulates. Released lots are clean white-to-off-white powders unless otherwise noted (GHK-Cu, for example, is naturally blue).</p>
+
+        <h2 style={policyHeadingStyle}>Purity (RP-HPLC)</h2>
+        <p><strong style={{ color: "var(--text-primary)" }}>Method: Reverse-phase High-Performance Liquid Chromatography.</strong> The gold-standard purity test for synthetic peptides. RP-HPLC separates a peptide from its synthesis byproducts and measures the proportion of target peptide. Tier One spec: <strong>≥ 99.0%</strong>.</p>
+
+        <h2 style={policyHeadingStyle}>Mass Confirmation (ESI-MS / MALDI-TOF)</h2>
+        <p><strong style={{ color: "var(--text-primary)" }}>Method: Mass spectrometry.</strong> Confirms that the molecular weight of the synthesized peptide matches the theoretical molecular weight of the target sequence. This catches truncations, deletions, and modifications that purity alone might not flag.</p>
+
+        <h2 style={policyHeadingStyle}>Amino Acid Analysis (AAA)</h2>
+        <p><strong style={{ color: "var(--text-primary)" }}>Method: Hydrolysis followed by quantitation.</strong> Verifies that the amino acid composition of the peptide matches the expected sequence. A second-line confirmation of identity.</p>
+
+        <h2 style={policyHeadingStyle}>Peptide Content</h2>
+        <p><strong style={{ color: "var(--text-primary)" }}>Method: Nitrogen analysis.</strong> Measures how much of the lyophilized powder is actual peptide vs. trapped water, salts, and counter-ions. Tier One spec: <strong>≥ 80%</strong>. Higher peptide content means a more concentrated product per labeled mass.</p>
+
+        <h2 style={policyHeadingStyle}>Labeled vs. Actual Peptide Content</h2>
+        <p>We also publish the actual measured peptide content per vial alongside the labeled amount. Real-world lots are rarely exactly the labeled mass; we target slight overfill so researchers receive at least the labeled amount, never less.</p>
+
+        <h2 style={policyHeadingStyle}>Water Content</h2>
+        <p><strong style={{ color: "var(--text-primary)" }}>Method: Karl Fischer titration.</strong> Excess water reduces stability and active peptide content. Tier One spec: <strong>≤ 8.0%</strong>.</p>
+
+        <h2 style={policyHeadingStyle}>Bacterial Endotoxins</h2>
+        <p><strong style={{ color: "var(--text-primary)" }}>Method: Limulus Amebocyte Lysate (LAL).</strong> Detects bacterial-derived contaminants. Tier One spec: <strong>&lt; 5 EU/mg</strong> (well below USP injectable thresholds for human use, even though our products are not for human use).</p>
+
+        <h2 style={policyHeadingStyle}>Residual Solvents</h2>
+        <p><strong style={{ color: "var(--text-primary)" }}>Method: Gas Chromatography Headspace (GC-HS).</strong> Confirms that residual synthesis solvents (TFA, acetonitrile, etc.) are within USP &lt;467&gt; limits.</p>
+
+        <h2 style={policyHeadingStyle}>Acetate Content</h2>
+        <p><strong style={{ color: "var(--text-primary)" }}>Method: Ion Chromatography.</strong> Many peptides are isolated as acetate salts. We measure the acetate fraction so that peptide content calculations remain accurate. Spec: <strong>≤ 15.0%</strong>.</p>
+
+        <h2 style={policyHeadingStyle}>Lot Release</h2>
+        <p>A lot is released for sale only when every test in the specification passes. Lots that fail any criterion are rejected and never sold. The COA shown on the Lab Results page reflects the current released lot for each product.</p>
+      </PolicyShell>
+      <Footer />
+    </>
+  );
+}
+
 function AgeGate({ onConfirm }) {
   return (
     <div style={{
@@ -4139,20 +4571,21 @@ export default function App() {
       "@context": "https://schema.org",
       "@graph": PRODUCTS.map(p => ({
         "@type": "Product",
-        "@id": `${DOMAIN}/#product-${p.id}`,
+        "@id": `${DOMAIN}/product/${p.id}`,
         "name": `${p.name} ${p.dose}`,
         "description": p.research,
         "sku": p.id,
         "mpn": p.id,
         "brand": { "@type": "Brand", "name": "Tier One Bio" },
-        "category": p.category,
+        "image": [`${DOMAIN}/${p.id}.jpg`, `${DOMAIN}/logo.png`],
+        "url": `${DOMAIN}/product/${p.id}`,
         "offers": {
           "@type": "Offer",
-          "url": `${DOMAIN}/`,
+          "url": `${DOMAIN}/product/${p.id}`,
           "price": p.price,
           "priceCurrency": "USD",
           "availability": "https://schema.org/InStock",
-          "priceValidUntil": "2026-12-31",
+          "priceValidUntil": "2027-12-31",
           "seller": { "@type": "Organization", "name": "Tier One Bio" }
         }
       }))
@@ -4439,6 +4872,7 @@ export default function App() {
                 <span style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 18, color: "var(--text-secondary)" }}>/vial</span>
               </div>
               <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 18, color: "var(--red-primary)", fontWeight: 700 }}>5+ Vials: ${product.bulk} each</div>
+              <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 13, color: "var(--text-dim)", marginTop: 4 }}>10+ extra 5% off · 25+ extra 10% off</div>
             </div>
 
             <button onClick={() => addToCart(product)} style={{
@@ -4459,6 +4893,31 @@ export default function App() {
               onMouseEnter={e => { e.target.style.background = "transparent"; e.target.style.color = "var(--red-primary)"; }}
               onMouseLeave={e => { e.target.style.background = "var(--red-primary)"; e.target.style.color = "#fff"; }}
             >ADD TO CART</button>
+
+            {/* Trust bar */}
+            <div style={{
+              display: "flex",
+              gap: 8,
+              flexWrap: "wrap",
+              marginBottom: 20,
+            }}>
+              {[
+                { label: "LOT-TESTED", color: "#22c55e" },
+                { label: "SHIPS FROM US", color: "var(--red-primary)" },
+                { label: "FREE OVER $200", color: "#22c55e" },
+              ].map((b, i) => (
+                <span key={i} style={{
+                  fontFamily: "'Orbitron', sans-serif",
+                  fontSize: 9,
+                  fontWeight: 700,
+                  letterSpacing: "0.1em",
+                  padding: "5px 10px",
+                  border: `1px solid ${b.color === "#22c55e" ? "rgba(34,197,94,0.3)" : "rgba(196,30,42,0.4)"}`,
+                  background: b.color === "#22c55e" ? "rgba(34,197,94,0.05)" : "rgba(196,30,42,0.05)",
+                  color: b.color,
+                }}>{b.label}</span>
+              ))}
+            </div>
 
             {/* Quick specs */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
@@ -4547,6 +5006,14 @@ export default function App() {
         <Route path="/contact" element={<ContactPage />} />
         <Route path="/lab-results" element={<LabResultsPage />} />
         <Route path="/cart" element={<CartPage cart={cart} setCart={setCart} />} />
+        <Route path="/checkout" element={<Navigate to="/cart" replace />} />
+        <Route path="/about" element={<AboutPage />} />
+        <Route path="/faq" element={<FAQPage />} />
+        <Route path="/testing-standards" element={<TestingStandardsPage />} />
+        <Route path="/shipping" element={<ShippingPage />} />
+        <Route path="/returns" element={<ReturnsPage />} />
+        <Route path="/terms" element={<TermsPage />} />
+        <Route path="/privacy" element={<PrivacyPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </div>
