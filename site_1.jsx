@@ -2383,6 +2383,7 @@ function CartPage({ cart, setCart }) {
   });
   const [orderNumber, setOrderNumber] = useState("");
   const [isMobile, setIsMobile] = useState(window.innerWidth < 700);
+  const [paymentMethod, setPaymentMethod] = useState("cashapp"); // cashapp | venmo
   const [discountInput, setDiscountInput] = useState("");
   const [appliedDiscount, setAppliedDiscount] = useState(null); // { code, type, value, label }
   const [discountError, setDiscountError] = useState("");
@@ -2507,6 +2508,7 @@ function CartPage({ cart, setCart }) {
     formData.append("discountCode", appliedDiscount ? appliedDiscount.code : "");
     formData.append("discountAmount", appliedDiscount ? `-$${discountAmount.toFixed(2)}` : "");
     formData.append("shipping", shipping === 0 ? "FREE" : `$${shipping.toFixed(2)}`);
+    formData.append("paymentMethod", paymentMethod === "venmo" ? "Venmo" : "Cash App");
     formData.append("orderTotal", `$${total.toFixed(2)}`);
 
     fetch("/", {
@@ -2528,6 +2530,7 @@ function CartPage({ cart, setCart }) {
       discountCode: appliedDiscount ? appliedDiscount.code : "",
       discountAmount: appliedDiscount ? `-$${discountAmount.toFixed(2)}` : "",
       shipping: shipping === 0 ? "FREE" : `$${shipping.toFixed(2)}`,
+      paymentMethod: paymentMethod === "venmo" ? "Venmo" : "Cash App",
       orderTotal: `$${total.toFixed(2)}`,
       shippingAddress: address,
       shippingCity: city,
@@ -2831,40 +2834,117 @@ function CartPage({ cart, setCart }) {
               </button>
             </div>
 
-            <p style={{ margin: "0 0 12px", fontWeight: 600, color: "var(--text-primary)", fontSize: 17 }}>Step 2: Send payment via Cash App</p>
-            <p style={{ margin: "0 0 8px" }}>Send <strong style={{ color: "var(--text-primary)" }}>${total.toFixed(2)}</strong> to <strong style={{ color: "#22c55e" }}>$TierOneBio</strong></p>
-            <p style={{ margin: "0 0 20px", color: "var(--text-dim)", fontSize: 14 }}>Paste the order number in the Cash App note so we can match your payment.</p>
+            <p style={{ margin: "0 0 12px", fontWeight: 600, color: "var(--text-primary)", fontSize: 17 }}>Step 2: Choose payment method</p>
 
-            <a
-              href={`https://cash.app/$TierOneBio/${total.toFixed(2)}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 10,
-                width: "100%",
-                padding: "16px 0",
-                background: "#00D632",
-                border: "none",
-                color: "#fff",
-                fontFamily: "'Orbitron', sans-serif",
-                fontWeight: 700,
-                fontSize: 14,
-                letterSpacing: "0.15em",
-                textTransform: "uppercase",
-                textDecoration: "none",
-                cursor: "pointer",
-                transition: "all 0.2s",
-                boxSizing: "border-box",
-              }}
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="#fff">
-                <path d="M23.59 3.47A5.1 5.1 0 0 0 20.55.42 5.07 5.07 0 0 0 17.13 0H6.87a5.07 5.07 0 0 0-3.42.42A5.1 5.1 0 0 0 .42 3.47 5.07 5.07 0 0 0 0 6.87v10.26a5.07 5.07 0 0 0 .42 3.42 5.1 5.1 0 0 0 3.05 3.05 5.07 5.07 0 0 0 3.42.42h10.26a5.07 5.07 0 0 0 3.42-.42 5.1 5.1 0 0 0 3.05-3.05 5.07 5.07 0 0 0 .42-3.42V6.87a5.1 5.1 0 0 0-.45-3.4zM17.4 10.29l-.87.87a.46.46 0 0 1-.36.15.48.48 0 0 1-.36-.15c-.87-.87-1.32-.87-1.56-.87-.42 0-.78.36-.78.78 0 .18.06.36.18.48.12.12.24.18.42.24l.84.3c1.38.48 2.22 1.38 2.22 2.94a3.09 3.09 0 0 1-2.1 3v.84a.48.48 0 0 1-.48.48h-.96a.48.48 0 0 1-.48-.48v-.78a4.03 4.03 0 0 1-2.1-1.14.48.48 0 0 1 0-.66l.84-.84a.48.48 0 0 1 .66 0c.72.66 1.32.84 1.8.84a1.2 1.2 0 0 0 1.2-1.2c0-.42-.24-.78-1.08-1.08l-.78-.3c-.96-.36-2.28-1.08-2.28-2.88a2.79 2.79 0 0 1 1.98-2.64v-.78a.48.48 0 0 1 .48-.48h.96a.48.48 0 0 1 .48.48v.72a3.3 3.3 0 0 1 1.68.9.48.48 0 0 1 .06.66z" />
-              </svg>
-              OPEN CASH APP
-            </a>
+            {/* Payment method tabs */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 20 }}>
+              <button
+                onClick={() => setPaymentMethod("cashapp")}
+                style={{
+                  padding: "12px 0",
+                  background: paymentMethod === "cashapp" ? "rgba(0,214,50,0.1)" : "transparent",
+                  border: paymentMethod === "cashapp" ? "1px solid #00D632" : "1px solid var(--border)",
+                  color: paymentMethod === "cashapp" ? "#00D632" : "var(--text-secondary)",
+                  fontFamily: "'Orbitron', sans-serif",
+                  fontWeight: 700,
+                  fontSize: 12,
+                  letterSpacing: "0.15em",
+                  textTransform: "uppercase",
+                  cursor: "pointer",
+                  transition: "all 0.2s",
+                }}
+              >Cash App</button>
+              <button
+                onClick={() => setPaymentMethod("venmo")}
+                style={{
+                  padding: "12px 0",
+                  background: paymentMethod === "venmo" ? "rgba(0,143,227,0.1)" : "transparent",
+                  border: paymentMethod === "venmo" ? "1px solid #008CFF" : "1px solid var(--border)",
+                  color: paymentMethod === "venmo" ? "#008CFF" : "var(--text-secondary)",
+                  fontFamily: "'Orbitron', sans-serif",
+                  fontWeight: 700,
+                  fontSize: 12,
+                  letterSpacing: "0.15em",
+                  textTransform: "uppercase",
+                  cursor: "pointer",
+                  transition: "all 0.2s",
+                }}
+              >Venmo</button>
+            </div>
+
+            {paymentMethod === "cashapp" ? (
+              <>
+                <p style={{ margin: "0 0 8px" }}>Send <strong style={{ color: "var(--text-primary)" }}>${total.toFixed(2)}</strong> to <strong style={{ color: "#00D632" }}>$TierOneBio</strong></p>
+                <p style={{ margin: "0 0 20px", color: "var(--text-dim)", fontSize: 14 }}>Paste the order number in the Cash App note so we can match your payment.</p>
+
+                <a
+                  href={`https://cash.app/$TierOneBio/${total.toFixed(2)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 10,
+                    width: "100%",
+                    padding: "16px 0",
+                    background: "#00D632",
+                    border: "none",
+                    color: "#fff",
+                    fontFamily: "'Orbitron', sans-serif",
+                    fontWeight: 700,
+                    fontSize: 14,
+                    letterSpacing: "0.15em",
+                    textTransform: "uppercase",
+                    textDecoration: "none",
+                    cursor: "pointer",
+                    transition: "all 0.2s",
+                    boxSizing: "border-box",
+                  }}
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="#fff">
+                    <path d="M23.59 3.47A5.1 5.1 0 0 0 20.55.42 5.07 5.07 0 0 0 17.13 0H6.87a5.07 5.07 0 0 0-3.42.42A5.1 5.1 0 0 0 .42 3.47 5.07 5.07 0 0 0 0 6.87v10.26a5.07 5.07 0 0 0 .42 3.42 5.1 5.1 0 0 0 3.05 3.05 5.07 5.07 0 0 0 3.42.42h10.26a5.07 5.07 0 0 0 3.42-.42 5.1 5.1 0 0 0 3.05-3.05 5.07 5.07 0 0 0 .42-3.42V6.87a5.1 5.1 0 0 0-.45-3.4zM17.4 10.29l-.87.87a.46.46 0 0 1-.36.15.48.48 0 0 1-.36-.15c-.87-.87-1.32-.87-1.56-.87-.42 0-.78.36-.78.78 0 .18.06.36.18.48.12.12.24.18.42.24l.84.3c1.38.48 2.22 1.38 2.22 2.94a3.09 3.09 0 0 1-2.1 3v.84a.48.48 0 0 1-.48.48h-.96a.48.48 0 0 1-.48-.48v-.78a4.03 4.03 0 0 1-2.1-1.14.48.48 0 0 1 0-.66l.84-.84a.48.48 0 0 1 .66 0c.72.66 1.32.84 1.8.84a1.2 1.2 0 0 0 1.2-1.2c0-.42-.24-.78-1.08-1.08l-.78-.3c-.96-.36-2.28-1.08-2.28-2.88a2.79 2.79 0 0 1 1.98-2.64v-.78a.48.48 0 0 1 .48-.48h.96a.48.48 0 0 1 .48.48v.72a3.3 3.3 0 0 1 1.68.9.48.48 0 0 1 .06.66z" />
+                  </svg>
+                  OPEN CASH APP
+                </a>
+              </>
+            ) : (
+              <>
+                <p style={{ margin: "0 0 8px" }}>Send <strong style={{ color: "var(--text-primary)" }}>${total.toFixed(2)}</strong> to <strong style={{ color: "#008CFF" }}>@TierOneBio</strong></p>
+                <p style={{ margin: "0 0 20px", color: "var(--text-dim)", fontSize: 14 }}>Paste the order number in the Venmo note so we can match your payment.</p>
+
+                <a
+                  href={`https://venmo.com/u/TierOneBio?txn=pay&amount=${total.toFixed(2)}&note=${encodeURIComponent(orderNumber)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 10,
+                    width: "100%",
+                    padding: "16px 0",
+                    background: "#008CFF",
+                    border: "none",
+                    color: "#fff",
+                    fontFamily: "'Orbitron', sans-serif",
+                    fontWeight: 700,
+                    fontSize: 14,
+                    letterSpacing: "0.15em",
+                    textTransform: "uppercase",
+                    textDecoration: "none",
+                    cursor: "pointer",
+                    transition: "all 0.2s",
+                    boxSizing: "border-box",
+                  }}
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="#fff">
+                    <path d="M19.59 0H4.41A4.41 4.41 0 0 0 0 4.41v15.18A4.41 4.41 0 0 0 4.41 24h15.18A4.41 4.41 0 0 0 24 19.59V4.41A4.41 4.41 0 0 0 19.59 0zm-3.34 18.7H8.13L4.93 5.16h3.94l1.74 9.13c.46-.74 1.03-1.92 1.03-2.72 0-2.21-1.94-3.7-1.94-3.7l3.05-2.71c1.55 1.74 2.4 3.61 2.4 6.02 0 3.07-2.62 7.08-3 7.52z" />
+                  </svg>
+                  OPEN VENMO
+                </a>
+              </>
+            )}
 
             <p style={{ margin: "12px 0 0", fontWeight: 600, color: "var(--text-primary)", fontSize: 17 }}>Step 3: Confirm below</p>
           </div>
