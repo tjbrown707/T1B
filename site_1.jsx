@@ -1362,7 +1362,7 @@ function Hero() {
       paddingBottom: 80,
       overflow: "hidden",
       textAlign: "center",
-      minHeight: 480,
+      minHeight: "clamp(520px, 72vh, 780px)",
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
@@ -1372,12 +1372,12 @@ function Hero() {
         position: "absolute",
         inset: 0,
         backgroundImage: `url('/herobackground.jpg')`,
-        backgroundSize: "125% auto",
-        backgroundPosition: `center calc(40% + ${scrollY * 0.3}px)`,
+        backgroundSize: "cover",
+        backgroundPosition: `center ${40 + scrollY * 0.015}%`,
         backgroundRepeat: "no-repeat",
-        opacity: 0.6,
+        opacity: 0.55,
         pointerEvents: "none",
-        animation: "heroZoom 20s ease-in-out infinite alternate",
+        animation: "heroZoom 22s ease-in-out infinite alternate",
       }} />
 
       {/* Dark overlay for text readability */}
