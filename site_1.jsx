@@ -1349,10 +1349,16 @@ function Header({ cartCount = 0 }) {
 function Hero() {
   const navigate = useNavigate();
   const [scrollY, setScrollY] = useState(0);
+  const [isMobile, setIsMobile] = useState(typeof window !== "undefined" && window.innerWidth < 700);
   useEffect(() => {
     const onScroll = () => setScrollY(window.scrollY);
+    const onResize = () => setIsMobile(window.innerWidth < 700);
     window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
+    window.addEventListener("resize", onResize);
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onResize);
+    };
   }, []);
 
   return (
@@ -1372,7 +1378,7 @@ function Hero() {
         position: "absolute",
         inset: 0,
         backgroundImage: `url('/herobackground.jpg')`,
-        backgroundSize: "cover",
+        backgroundSize: isMobile ? "auto 100%" : "cover",
         backgroundPosition: `center ${45 + scrollY * 0.012}%`,
         backgroundRepeat: "no-repeat",
         opacity: 0.52,
