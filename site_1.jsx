@@ -1378,7 +1378,7 @@ function Hero() {
         position: "absolute",
         inset: 0,
         backgroundImage: `url('/herobackground.jpg')`,
-        backgroundSize: isMobile ? "100% auto" : "cover",
+        backgroundSize: isMobile ? "150% auto" : "cover",
         backgroundPosition: `center ${45 + scrollY * 0.012}%`,
         backgroundRepeat: "no-repeat",
         opacity: 0.52,
