@@ -965,7 +965,7 @@ style.textContent = `
 
   @keyframes heroZoom {
     0% { transform: scale(1.0); }
-    100% { transform: scale(1.08); }
+    100% { transform: scale(1.05); }
   }
 
   @keyframes redGlowBreathe {
@@ -1362,7 +1362,7 @@ function Hero() {
       paddingBottom: 80,
       overflow: "hidden",
       textAlign: "center",
-      minHeight: "clamp(520px, 72vh, 780px)",
+      minHeight: "clamp(380px, 55vh, 620px)",
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
@@ -1373,11 +1373,11 @@ function Hero() {
         inset: 0,
         backgroundImage: `url('/herobackground.jpg')`,
         backgroundSize: "cover",
-        backgroundPosition: `center ${40 + scrollY * 0.015}%`,
+        backgroundPosition: `center ${45 + scrollY * 0.012}%`,
         backgroundRepeat: "no-repeat",
-        opacity: 0.55,
+        opacity: 0.52,
         pointerEvents: "none",
-        animation: "heroZoom 22s ease-in-out infinite alternate",
+        animation: "heroZoom 24s ease-in-out infinite alternate",
       }} />
 
       {/* Dark overlay for text readability */}
