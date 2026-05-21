@@ -1740,9 +1740,9 @@ function ProductQuickView({ product, onClose, onAddToCart, onViewDetails }) {
         position: "relative",
         background: "var(--bg-modal)",
         border: "1px solid rgba(196,30,42,0.2)",
-        maxWidth: 480,
+        maxWidth: 640,
         width: "100%",
-        maxHeight: "85vh",
+        maxHeight: "90vh",
         overflow: "auto",
         animation: "slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1)",
       }}>
@@ -1780,7 +1780,7 @@ function ProductQuickView({ product, onClose, onAddToCart, onViewDetails }) {
           alignItems: "center",
           justifyContent: "center",
           overflow: "hidden",
-          height: 200,
+          height: isMobile ? 280 : 360,
         }}>
           <img src={product.image} alt={product.name} style={{ maxHeight: "100%", maxWidth: "100%", objectFit: "contain", padding: 16 }} />
         </div>
