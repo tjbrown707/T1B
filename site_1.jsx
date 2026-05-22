@@ -822,6 +822,76 @@ function getLabResults(productName, dose) {
   return null;
 }
 
+// ─── Molecular Profiles (per compound) ────────────────────────────────────────
+const MOLECULAR_PROFILES = {
+  "BPC-157": {
+    type: "Synthetic pentadecapeptide (Body Protection Compound)",
+    aminoAcids: "15 — Gly-Glu-Pro-Pro-Pro-Gly-Lys-Pro-Ala-Asp-Asp-Ala-Gly-Leu-Val",
+    molecularWeight: "1,419.55 g/mol",
+    casNumber: "137525-51-0",
+    molecularFormula: "C₆₂H₉₈N₁₆O₂₂",
+    modification: "Free peptide (acetate salt form for storage)",
+    pubchemCID: "9941957",
+  },
+};
+
+// ─── Research References (per compound) ───────────────────────────────────────
+const REFERENCES = {
+  "BPC-157": [
+    {
+      journal: "PHARMACEUTICALS",
+      title: "Multifunctionality and Possible Medical Application of the BPC 157 Peptide — Literature and Patent Review",
+      year: 2025,
+      identifier: "PMC11859134",
+      url: "https://pmc.ncbi.nlm.nih.gov/articles/PMC11859134/",
+    },
+    {
+      journal: "PHARMACEUTICS",
+      title: "BPC-157 as an Investigational Peptide Therapeutic: Biopharmaceutical Challenges, Formulation Strategies, and Translational Development Barriers",
+      year: 2025,
+      identifier: "DOI: 10.3390/pharmaceutics18050625",
+      url: "https://doi.org/10.3390/pharmaceutics18050625",
+    },
+    {
+      journal: "BIOMEDICINES",
+      title: "Stable Gastric Pentadecapeptide BPC 157 and Wound Healing",
+      year: 2021,
+      identifier: "PMID: 34267654",
+      authors: "Sikiric P et al.",
+      url: "https://pubmed.ncbi.nlm.nih.gov/34267654/",
+    },
+    {
+      journal: "NEUROPEPTIDES",
+      title: "Concerning BPC-157, a natural pentadecapeptide, that acts as a cytoprotectant",
+      year: 2024,
+      identifier: "PMID: 40759852",
+      url: "https://pubmed.ncbi.nlm.nih.gov/40759852/",
+    },
+    {
+      journal: "INT. J. MOL. SCI.",
+      title: "Protective Effects of BPC 157 on Liver, Kidney, and Lung Distant Organ Damage in Rats with Experimental Ischemia–Reperfusion Injury",
+      year: 2025,
+      identifier: "PMC11857380",
+      url: "https://pmc.ncbi.nlm.nih.gov/articles/PMC11857380/",
+    },
+    {
+      journal: "PUBCHEM",
+      title: "BPC-157 — CID 9941957",
+      year: null,
+      identifier: "CID 9941957",
+      url: "https://pubchem.ncbi.nlm.nih.gov/compound/9941957",
+    },
+  ],
+};
+
+function getMolecularProfile(productName) {
+  return MOLECULAR_PROFILES[productName] || null;
+}
+
+function getReferences(productName) {
+  return REFERENCES[productName] || null;
+}
+
 // ─── Scroll Reveal Hook ──────────────────────────────────────────────────────
 function useScrollReveal() {
   useEffect(() => {
@@ -1710,6 +1780,196 @@ function ProductCard({ product, index, onClick, onAddToCart }) {
   );
 }
 
+function MolecularProfile({ product }) {
+  const profile = getMolecularProfile(product.name);
+  if (!profile) return null;
+  const rows = [
+    { label: "Type", value: profile.type },
+    { label: "Amino acids", value: profile.aminoAcids },
+    { label: "Molecular weight", value: profile.molecularWeight },
+    { label: "CAS Number", value: profile.casNumber },
+    { label: "Molecular formula", value: profile.molecularFormula },
+    { label: "Modification", value: profile.modification },
+  ].filter(r => r.value);
+  return (
+    <div style={{
+      border: "1px solid var(--border)",
+      background: "var(--bg-card)",
+      padding: "24px 28px",
+    }}>
+      <div style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+        marginBottom: 10,
+      }}>
+        <span style={{ fontSize: 14, color: "var(--red-primary)" }}>🧬</span>
+        <span style={{
+          fontFamily: "'Orbitron', sans-serif",
+          fontSize: 11,
+          fontWeight: 700,
+          letterSpacing: "0.18em",
+          color: "var(--red-primary)",
+          textTransform: "uppercase",
+        }}>Molecular Profile</span>
+      </div>
+      <h3 style={{
+        fontFamily: "'Orbitron', sans-serif",
+        fontWeight: 800,
+        fontSize: 22,
+        letterSpacing: "0.02em",
+        marginBottom: 18,
+        color: "var(--text-primary)",
+      }}>What is {product.name}?</h3>
+      <div style={{
+        border: "1px solid var(--border)",
+        background: "rgba(17,17,17,0.5)",
+      }}>
+        {rows.map((row, i) => (
+          <div key={row.label} style={{
+            display: "grid",
+            gridTemplateColumns: "minmax(120px, 35%) 1fr",
+            alignItems: "baseline",
+            gap: 16,
+            padding: "12px 18px",
+            borderTop: i === 0 ? "none" : "1px solid rgba(255,255,255,0.04)",
+          }}>
+            <span style={{
+              fontFamily: "'Orbitron', sans-serif",
+              fontSize: 11,
+              fontWeight: 600,
+              letterSpacing: "0.1em",
+              color: "var(--red-primary)",
+              textTransform: "uppercase",
+            }}>{row.label}</span>
+            <span style={{
+              fontFamily: "'Rajdhani', sans-serif",
+              fontSize: 15,
+              fontWeight: 600,
+              color: "var(--text-primary)",
+              wordBreak: "break-word",
+            }}>{row.value}</span>
+          </div>
+        ))}
+      </div>
+      {profile.pubchemCID && (
+        <a
+          href={`https://pubchem.ncbi.nlm.nih.gov/compound/${profile.pubchemCID}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            marginTop: 14,
+            fontFamily: "'Rajdhani', sans-serif",
+            fontSize: 14,
+            fontWeight: 600,
+            color: "var(--red-primary)",
+            textDecoration: "none",
+          }}
+        >🔗 PubChem — CID {profile.pubchemCID}</a>
+      )}
+    </div>
+  );
+}
+
+function SourcesReferences({ product }) {
+  const refs = getReferences(product.name);
+  if (!refs || refs.length === 0) return null;
+  const isMobile = window.innerWidth < 700;
+  return (
+    <div>
+      <div style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 12,
+        marginBottom: 18,
+      }}>
+        <span style={{ fontSize: 22 }}>📚</span>
+        <div>
+          <div style={{
+            fontFamily: "'Orbitron', sans-serif",
+            fontWeight: 800,
+            fontSize: 20,
+            letterSpacing: "0.02em",
+            color: "var(--text-primary)",
+          }}>Sources &amp; References</div>
+          <div style={{
+            fontFamily: "'Rajdhani', sans-serif",
+            fontSize: 14,
+            color: "var(--text-dim)",
+            marginTop: 2,
+          }}>Peer-reviewed research</div>
+        </div>
+      </div>
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill, minmax(240px, 1fr))",
+        gap: 12,
+      }}>
+        {refs.map((ref, i) => (
+          <a
+            key={i}
+            href={ref.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              display: "block",
+              padding: "16px 18px",
+              border: "1px solid var(--border)",
+              background: "rgba(17,17,17,0.5)",
+              textDecoration: "none",
+              transition: "all 0.2s",
+            }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = "rgba(196,30,42,0.4)"; e.currentTarget.style.background = "rgba(196,30,42,0.04)"; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.background = "rgba(17,17,17,0.5)"; }}
+          >
+            <div style={{
+              fontFamily: "'Orbitron', sans-serif",
+              fontSize: 10,
+              fontWeight: 700,
+              letterSpacing: "0.12em",
+              color: "var(--red-primary)",
+              marginBottom: 8,
+              textTransform: "uppercase",
+            }}>{ref.journal}</div>
+            <div style={{
+              fontFamily: "'Rajdhani', sans-serif",
+              fontSize: 15,
+              fontWeight: 600,
+              color: "var(--text-primary)",
+              lineHeight: 1.35,
+              marginBottom: 8,
+            }}>{ref.title}</div>
+            <div style={{
+              fontFamily: "'Rajdhani', sans-serif",
+              fontSize: 13,
+              color: "var(--text-dim)",
+              marginBottom: ref.authors ? 6 : 10,
+            }}>{ref.year ? `${ref.year} · ` : ""}{ref.identifier}</div>
+            {ref.authors && (
+              <div style={{
+                fontFamily: "'Rajdhani', sans-serif",
+                fontSize: 13,
+                fontStyle: "italic",
+                color: "var(--text-secondary)",
+                marginBottom: 10,
+              }}>{ref.authors}</div>
+            )}
+            <div style={{
+              fontFamily: "'Rajdhani', sans-serif",
+              fontSize: 13,
+              fontWeight: 600,
+              color: "var(--red-primary)",
+            }}>View Source ↗</div>
+          </a>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function ProductQuickView({ product, onClose, onAddToCart, onViewDetails }) {
   const overlayRef = useRef(null);
   const isMobile = window.innerWidth < 700;
@@ -1818,6 +2078,13 @@ function ProductQuickView({ product, onClose, onAddToCart, onViewDetails }) {
               </div>
             ))}
           </div>
+
+          {/* Molecular profile (if data available) */}
+          {getMolecularProfile(product.name) && (
+            <div style={{ marginBottom: 20 }}>
+              <MolecularProfile product={product} />
+            </div>
+          )}
 
           {/* Buttons */}
           <button onClick={() => onAddToCart(product)} style={{
@@ -4979,6 +5246,25 @@ export default function App() {
             >VIEW CERTIFICATE OF ANALYSIS</button>
           )}
         </div>
+
+        {/* Molecular Profile */}
+        {getMolecularProfile(product.name) && (
+          <div style={{ marginBottom: 24 }}>
+            <MolecularProfile product={product} />
+          </div>
+        )}
+
+        {/* Sources & References */}
+        {getReferences(product.name) && (
+          <div style={{
+            border: "1px solid var(--border)",
+            background: "var(--bg-card)",
+            padding: isMobile ? "24px 18px" : "32px 36px",
+            marginBottom: 24,
+          }}>
+            <SourcesReferences product={product} />
+          </div>
+        )}
 
         {/* Disclaimer */}
         <div style={{ padding: "14px 18px", border: "1px solid rgba(196,30,42,0.15)", background: "rgba(196,30,42,0.03)" }}>
