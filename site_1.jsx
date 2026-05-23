@@ -1799,10 +1799,10 @@ function MolecularProfile({ product, compact }) {
         background: "rgba(17,17,17,0.5)",
       }}>
         <div style={{
-          padding: "8px 12px",
+          padding: "10px 14px",
           borderBottom: "1px solid rgba(255,255,255,0.06)",
           fontFamily: "'Orbitron', sans-serif",
-          fontSize: 10,
+          fontSize: 11,
           fontWeight: 700,
           letterSpacing: "0.15em",
           color: "var(--red-primary)",
@@ -1811,15 +1811,15 @@ function MolecularProfile({ product, compact }) {
         {rows.map((row, i) => (
           <div key={row.label} style={{
             display: "grid",
-            gridTemplateColumns: "minmax(90px, 32%) 1fr",
+            gridTemplateColumns: "minmax(100px, 32%) 1fr",
             alignItems: "baseline",
-            gap: 10,
-            padding: "7px 12px",
+            gap: 12,
+            padding: "9px 14px",
             borderTop: i === 0 ? "none" : "1px solid rgba(255,255,255,0.04)",
           }}>
             <span style={{
               fontFamily: "'Orbitron', sans-serif",
-              fontSize: 9,
+              fontSize: 10,
               fontWeight: 600,
               letterSpacing: "0.08em",
               color: "var(--text-dim)",
@@ -1827,11 +1827,11 @@ function MolecularProfile({ product, compact }) {
             }}>{row.label}</span>
             <span style={{
               fontFamily: "'Rajdhani', sans-serif",
-              fontSize: 12,
+              fontSize: 14,
               fontWeight: 600,
               color: "var(--text-primary)",
               wordBreak: "break-word",
-              lineHeight: 1.35,
+              lineHeight: 1.4,
             }}>{row.value}</span>
           </div>
         ))}
@@ -1842,10 +1842,10 @@ function MolecularProfile({ product, compact }) {
             rel="noopener noreferrer"
             style={{
               display: "block",
-              padding: "7px 12px",
+              padding: "9px 14px",
               borderTop: "1px solid rgba(255,255,255,0.06)",
               fontFamily: "'Rajdhani', sans-serif",
-              fontSize: 11,
+              fontSize: 13,
               fontWeight: 600,
               color: "var(--red-primary)",
               textDecoration: "none",
@@ -2051,7 +2051,7 @@ function ProductQuickView({ product, onClose, onAddToCart, onViewDetails }) {
         position: "relative",
         background: "var(--bg-modal)",
         border: "1px solid rgba(196,30,42,0.2)",
-        maxWidth: 640,
+        maxWidth: 800,
         width: "100%",
         maxHeight: "90vh",
         overflow: "auto",
