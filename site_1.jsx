@@ -1780,7 +1780,7 @@ function ProductCard({ product, index, onClick, onAddToCart }) {
   );
 }
 
-function MolecularProfile({ product }) {
+function MolecularProfile({ product, compact }) {
   const profile = getMolecularProfile(product.name);
   if (!profile) return null;
   const rows = [
@@ -1791,6 +1791,71 @@ function MolecularProfile({ product }) {
     { label: "Molecular formula", value: profile.molecularFormula },
     { label: "Modification", value: profile.modification },
   ].filter(r => r.value);
+
+  if (compact) {
+    return (
+      <div style={{
+        border: "1px solid var(--border)",
+        background: "rgba(17,17,17,0.5)",
+      }}>
+        <div style={{
+          padding: "8px 12px",
+          borderBottom: "1px solid rgba(255,255,255,0.06)",
+          fontFamily: "'Orbitron', sans-serif",
+          fontSize: 10,
+          fontWeight: 700,
+          letterSpacing: "0.15em",
+          color: "var(--red-primary)",
+          textTransform: "uppercase",
+        }}>Molecular Profile</div>
+        {rows.map((row, i) => (
+          <div key={row.label} style={{
+            display: "grid",
+            gridTemplateColumns: "minmax(90px, 32%) 1fr",
+            alignItems: "baseline",
+            gap: 10,
+            padding: "7px 12px",
+            borderTop: i === 0 ? "none" : "1px solid rgba(255,255,255,0.04)",
+          }}>
+            <span style={{
+              fontFamily: "'Orbitron', sans-serif",
+              fontSize: 9,
+              fontWeight: 600,
+              letterSpacing: "0.08em",
+              color: "var(--text-dim)",
+              textTransform: "uppercase",
+            }}>{row.label}</span>
+            <span style={{
+              fontFamily: "'Rajdhani', sans-serif",
+              fontSize: 12,
+              fontWeight: 600,
+              color: "var(--text-primary)",
+              wordBreak: "break-word",
+              lineHeight: 1.35,
+            }}>{row.value}</span>
+          </div>
+        ))}
+        {profile.pubchemCID && (
+          <a
+            href={`https://pubchem.ncbi.nlm.nih.gov/compound/${profile.pubchemCID}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              display: "block",
+              padding: "7px 12px",
+              borderTop: "1px solid rgba(255,255,255,0.06)",
+              fontFamily: "'Rajdhani', sans-serif",
+              fontSize: 11,
+              fontWeight: 600,
+              color: "var(--red-primary)",
+              textDecoration: "none",
+            }}
+          >PubChem — CID {profile.pubchemCID}</a>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div style={{
       border: "1px solid var(--border)",
@@ -1798,21 +1863,14 @@ function MolecularProfile({ product }) {
       padding: "24px 28px",
     }}>
       <div style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 8,
+        fontFamily: "'Orbitron', sans-serif",
+        fontSize: 11,
+        fontWeight: 700,
+        letterSpacing: "0.18em",
+        color: "var(--red-primary)",
+        textTransform: "uppercase",
         marginBottom: 10,
-      }}>
-        <span style={{ fontSize: 14, color: "var(--red-primary)" }}>🧬</span>
-        <span style={{
-          fontFamily: "'Orbitron', sans-serif",
-          fontSize: 11,
-          fontWeight: 700,
-          letterSpacing: "0.18em",
-          color: "var(--red-primary)",
-          textTransform: "uppercase",
-        }}>Molecular Profile</span>
-      </div>
+      }}>Molecular Profile</div>
       <h3 style={{
         fontFamily: "'Orbitron', sans-serif",
         fontWeight: 800,
@@ -1858,9 +1916,7 @@ function MolecularProfile({ product }) {
           target="_blank"
           rel="noopener noreferrer"
           style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
+            display: "inline-block",
             marginTop: 14,
             fontFamily: "'Rajdhani', sans-serif",
             fontSize: 14,
@@ -1868,7 +1924,7 @@ function MolecularProfile({ product }) {
             color: "var(--red-primary)",
             textDecoration: "none",
           }}
-        >🔗 PubChem — CID {profile.pubchemCID}</a>
+        >PubChem — CID {profile.pubchemCID}</a>
       )}
     </div>
   );
@@ -1880,28 +1936,23 @@ function SourcesReferences({ product }) {
   const isMobile = window.innerWidth < 700;
   return (
     <div>
-      <div style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 12,
-        marginBottom: 18,
-      }}>
-        <span style={{ fontSize: 22 }}>📚</span>
-        <div>
-          <div style={{
-            fontFamily: "'Orbitron', sans-serif",
-            fontWeight: 800,
-            fontSize: 20,
-            letterSpacing: "0.02em",
-            color: "var(--text-primary)",
-          }}>Sources &amp; References</div>
-          <div style={{
-            fontFamily: "'Rajdhani', sans-serif",
-            fontSize: 14,
-            color: "var(--text-dim)",
-            marginTop: 2,
-          }}>Peer-reviewed research</div>
-        </div>
+      <div style={{ marginBottom: 18 }}>
+        <div style={{
+          fontFamily: "'Orbitron', sans-serif",
+          fontSize: 11,
+          fontWeight: 700,
+          letterSpacing: "0.18em",
+          color: "var(--red-primary)",
+          textTransform: "uppercase",
+          marginBottom: 6,
+        }}>Peer-reviewed research</div>
+        <div style={{
+          fontFamily: "'Orbitron', sans-serif",
+          fontWeight: 800,
+          fontSize: 22,
+          letterSpacing: "0.02em",
+          color: "var(--text-primary)",
+        }}>Sources &amp; References</div>
       </div>
       <div style={{
         display: "grid",
@@ -2047,44 +2098,54 @@ function ProductQuickView({ product, onClose, onAddToCart, onViewDetails }) {
 
         {/* Info */}
         <div style={{ padding: "20px 24px" }}>
-          <h2 style={{
-            fontFamily: "'Orbitron', sans-serif",
-            fontWeight: 800,
-            fontSize: 22,
-            letterSpacing: "0.03em",
-            lineHeight: 1.1,
-            marginBottom: 4,
-          }}>{product.name}</h2>
           <div style={{
-            fontFamily: "'Rajdhani', sans-serif",
-            fontSize: 16,
-            color: "var(--text-secondary)",
+            display: "grid",
+            gridTemplateColumns: isMobile || !getMolecularProfile(product.name) ? "1fr" : "1fr 1fr",
+            gap: 20,
             marginBottom: 16,
-          }}>{product.dose}</div>
+          }}>
+            {/* Left column: name, price, purity */}
+            <div>
+              <h2 style={{
+                fontFamily: "'Orbitron', sans-serif",
+                fontWeight: 800,
+                fontSize: 22,
+                letterSpacing: "0.03em",
+                lineHeight: 1.1,
+                marginBottom: 4,
+              }}>{product.name}</h2>
+              <div style={{
+                fontFamily: "'Rajdhani', sans-serif",
+                fontSize: 16,
+                color: "var(--text-secondary)",
+                marginBottom: 16,
+              }}>{product.dose}</div>
 
-          {/* Price */}
-          <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 4 }}>
-            <span style={{ fontFamily: "'Orbitron', sans-serif", fontWeight: 800, fontSize: 24 }}>${product.price}</span>
-            <span style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 16, color: "var(--text-secondary)" }}>/vial</span>
-          </div>
-          <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 16, color: "var(--red-primary)", fontWeight: 700, marginBottom: 20 }}>5+ Vials: ${product.bulk} each</div>
-
-          {/* Purity + Form */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 20 }}>
-            {[{ label: "PURITY", value: product.purity }, { label: "FORM", value: "Lyophilized" }].map((s, i) => (
-              <div key={i} style={{ padding: "8px 12px", border: "1px solid var(--border)" }}>
-                <div style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 10, fontWeight: 600, letterSpacing: "0.1em", color: "var(--text-dim)", marginBottom: 3 }}>{s.label}</div>
-                <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 14, fontWeight: 600, color: "var(--text-primary)" }}>{s.value}</div>
+              {/* Price */}
+              <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 4 }}>
+                <span style={{ fontFamily: "'Orbitron', sans-serif", fontWeight: 800, fontSize: 24 }}>${product.price}</span>
+                <span style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 16, color: "var(--text-secondary)" }}>/vial</span>
               </div>
-            ))}
-          </div>
+              <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 16, color: "var(--red-primary)", fontWeight: 700, marginBottom: 16 }}>5+ Vials: ${product.bulk} each</div>
 
-          {/* Molecular profile (if data available) */}
-          {getMolecularProfile(product.name) && (
-            <div style={{ marginBottom: 20 }}>
-              <MolecularProfile product={product} />
+              {/* Purity + Form */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                {[{ label: "PURITY", value: product.purity }, { label: "FORM", value: "Lyophilized" }].map((s, i) => (
+                  <div key={i} style={{ padding: "8px 12px", border: "1px solid var(--border)" }}>
+                    <div style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 10, fontWeight: 600, letterSpacing: "0.1em", color: "var(--text-dim)", marginBottom: 3 }}>{s.label}</div>
+                    <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 14, fontWeight: 600, color: "var(--text-primary)" }}>{s.value}</div>
+                  </div>
+                ))}
+              </div>
             </div>
-          )}
+
+            {/* Right column: molecular profile */}
+            {getMolecularProfile(product.name) && (
+              <div>
+                <MolecularProfile product={product} compact />
+              </div>
+            )}
+          </div>
 
           {/* Buttons */}
           <button onClick={() => onAddToCart(product)} style={{
