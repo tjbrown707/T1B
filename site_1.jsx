@@ -5160,7 +5160,10 @@ function AgeGate({ onConfirm }) {
 // ─── Main App ────────────────────────────────────────────────────────────────
 
 export default function App() {
-  const [ageVerified, setAgeVerified] = useState(() => sessionStorage.getItem("ageVerified") === "true");
+  const [ageVerified, setAgeVerified] = useState(() => {
+    try { return sessionStorage.getItem("ageVerified") === "true"; }
+    catch { return false; }
+  });
   const [ageDenied, setAgeDenied] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedProduct, setSelectedProduct] = useState(null);
@@ -5267,7 +5270,7 @@ export default function App() {
     return (
       <AgeGate onConfirm={(isOldEnough) => {
         if (isOldEnough) {
-          sessionStorage.setItem("ageVerified", "true");
+          try { sessionStorage.setItem("ageVerified", "true"); } catch {}
           setAgeVerified(true);
         } else {
           setAgeDenied(true);
