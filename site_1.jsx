@@ -1000,6 +1000,27 @@ const MOLECULAR_PROFILES = {
     molecularFormula: null,
     modification: "Heavily glycosylated; α subunit identical to LH/FSH/TSH α",
   },
+  "GLOW": {
+    type: "Multi-target tissue repair and regeneration blend",
+    totalContent: "70 mg/vial",
+    form: "Lyophilized blend",
+    components: [
+      { name: "BPC-157", dose: "10 mg", role: "Gastric pentadecapeptide — gut and joint repair" },
+      { name: "GHK-Cu", dose: "50 mg", role: "Copper tripeptide — skin, collagen, anti-inflammatory" },
+      { name: "TB-500", dose: "10 mg", role: "Thymosin β4 fragment — actin binding, wound healing" },
+    ],
+  },
+  "KLOW": {
+    type: "Multi-target tissue repair, regeneration & anti-inflammatory blend",
+    totalContent: "80 mg/vial",
+    form: "Lyophilized blend",
+    components: [
+      { name: "BPC-157", dose: "10 mg", role: "Gastric pentadecapeptide — gut and joint repair" },
+      { name: "GHK-Cu", dose: "50 mg", role: "Copper tripeptide — skin, collagen, anti-inflammatory" },
+      { name: "TB-500", dose: "10 mg", role: "Thymosin β4 fragment — actin binding, wound healing" },
+      { name: "KPV", dose: "10 mg", role: "α-MSH tripeptide — anti-inflammatory" },
+    ],
+  },
 };
 
 // ─── Research References (per compound) ───────────────────────────────────────
@@ -1113,6 +1134,22 @@ const REFERENCES = {
   "HCG": [
     { journal: "ENDOCR REV", title: "Human Chorionic Gonadotropin: Biological Functions and Clinical Applications", year: 2017, identifier: "PMC5666719", url: "https://pmc.ncbi.nlm.nih.gov/articles/PMC5666719/" },
     { journal: "WIKIPEDIA", title: "Human chorionic gonadotropin", url: "https://en.wikipedia.org/wiki/Human_chorionic_gonadotropin" },
+  ],
+  "GLOW": [
+    { journal: "PHARMACEUTICALS", title: "Multifunctionality and Possible Medical Application of the BPC 157 Peptide — Literature and Patent Review", year: 2025, identifier: "PMC11859134", authors: "BPC-157 component", url: "https://pmc.ncbi.nlm.nih.gov/articles/PMC11859134/" },
+    { journal: "BIOMEDICINES", title: "Stable Gastric Pentadecapeptide BPC 157 and Wound Healing", year: 2021, identifier: "PMID: 34267654", authors: "BPC-157 component · Sikiric P et al.", url: "https://pubmed.ncbi.nlm.nih.gov/34267654/" },
+    { journal: "BIOMED RES INT", title: "GHK-Cu may prevent oxidative stress in skin by regulating copper and modifying expression of numerous antioxidant genes", year: 2014, identifier: "PMID: 25196481", authors: "GHK-Cu component · Pickart L et al.", url: "https://pubmed.ncbi.nlm.nih.gov/25196481/" },
+    { journal: "INT J MOL SCI", title: "The Effect of the Human Peptide GHK on Gene Expression Relevant to Nervous System Function and Cognitive Decline", year: 2017, identifier: "PMID: 28604617", authors: "GHK-Cu component · Pickart L et al.", url: "https://pubmed.ncbi.nlm.nih.gov/28604617/" },
+    { journal: "ANN N Y ACAD SCI", title: "Thymosin β4 and tissue repair: the actin-sequestering peptide that regulates cell migration and wound healing", year: 2010, identifier: "PMID: 20536557", authors: "TB-500 component · Goldstein AL et al.", url: "https://pubmed.ncbi.nlm.nih.gov/20536557/" },
+    { journal: "EXPERT OPIN BIOL THER", title: "Thymosin β4 in clinical trials — a critical evaluation", year: 2018, identifier: "PMID: 30130414", authors: "TB-500 component", url: "https://pubmed.ncbi.nlm.nih.gov/30130414/" },
+  ],
+  "KLOW": [
+    { journal: "PHARMACEUTICALS", title: "Multifunctionality and Possible Medical Application of the BPC 157 Peptide — Literature and Patent Review", year: 2025, identifier: "PMC11859134", authors: "BPC-157 component", url: "https://pmc.ncbi.nlm.nih.gov/articles/PMC11859134/" },
+    { journal: "BIOMEDICINES", title: "Stable Gastric Pentadecapeptide BPC 157 and Wound Healing", year: 2021, identifier: "PMID: 34267654", authors: "BPC-157 component · Sikiric P et al.", url: "https://pubmed.ncbi.nlm.nih.gov/34267654/" },
+    { journal: "BIOMED RES INT", title: "GHK-Cu may prevent oxidative stress in skin by regulating copper and modifying expression of numerous antioxidant genes", year: 2014, identifier: "PMID: 25196481", authors: "GHK-Cu component · Pickart L et al.", url: "https://pubmed.ncbi.nlm.nih.gov/25196481/" },
+    { journal: "ANN N Y ACAD SCI", title: "Thymosin β4 and tissue repair: the actin-sequestering peptide that regulates cell migration and wound healing", year: 2010, identifier: "PMID: 20536557", authors: "TB-500 component · Goldstein AL et al.", url: "https://pubmed.ncbi.nlm.nih.gov/20536557/" },
+    { journal: "PEPTIDES", title: "α-MSH-derived tripeptide KPV exerts anti-inflammatory effects via the melanocortin pathway", year: 2003, identifier: "PMID: 12676251", authors: "KPV component", url: "https://pubmed.ncbi.nlm.nih.gov/12676251/" },
+    { journal: "FASEB J", title: "The tripeptide KPV (Lys-Pro-Val) reduces inflammation in models of colitis", year: 2010, identifier: "PMID: 20736340", authors: "KPV component", url: "https://pubmed.ncbi.nlm.nih.gov/20736340/" },
   ],
 };
 
@@ -2015,14 +2052,23 @@ function ProductCard({ product, index, onClick, onAddToCart }) {
 function MolecularProfile({ product, compact }) {
   const profile = getMolecularProfile(product.name);
   if (!profile) return null;
-  const rows = [
-    { label: "Type", value: profile.type },
-    { label: "Amino acids", value: profile.aminoAcids },
-    { label: "Molecular weight", value: profile.molecularWeight },
-    { label: "CAS Number", value: profile.casNumber },
-    { label: "Molecular formula", value: profile.molecularFormula },
-    { label: "Modification", value: profile.modification },
-  ].filter(r => r.value);
+  const isBlend = Array.isArray(profile.components);
+  const sectionLabel = isBlend ? "Composition Profile" : "Molecular Profile";
+  const rows = isBlend
+    ? [
+        { label: "Type", value: profile.type },
+        ...profile.components.map(c => ({ label: c.name, value: `${c.dose} — ${c.role}` })),
+        { label: "Total Content", value: profile.totalContent },
+        { label: "Form", value: profile.form },
+      ].filter(r => r.value)
+    : [
+        { label: "Type", value: profile.type },
+        { label: "Amino acids", value: profile.aminoAcids },
+        { label: "Molecular weight", value: profile.molecularWeight },
+        { label: "CAS Number", value: profile.casNumber },
+        { label: "Molecular formula", value: profile.molecularFormula },
+        { label: "Modification", value: profile.modification },
+      ].filter(r => r.value);
 
   if (compact) {
     return (
@@ -2039,7 +2085,7 @@ function MolecularProfile({ product, compact }) {
           letterSpacing: "0.15em",
           color: "var(--red-primary)",
           textTransform: "uppercase",
-        }}>Molecular Profile</div>
+        }}>{sectionLabel}</div>
         {rows.map((row, i) => (
           <div key={row.label} style={{
             display: "grid",
@@ -2102,7 +2148,7 @@ function MolecularProfile({ product, compact }) {
         color: "var(--red-primary)",
         textTransform: "uppercase",
         marginBottom: 10,
-      }}>Molecular Profile</div>
+      }}>{sectionLabel}</div>
       <h3 style={{
         fontFamily: "'Orbitron', sans-serif",
         fontWeight: 800,
@@ -2166,9 +2212,11 @@ function SourcesReferences({ product }) {
   const refs = getReferences(product.name);
   if (!refs || refs.length === 0) return null;
   const isMobile = window.innerWidth < 700;
+  const profile = getMolecularProfile(product.name);
+  const isBlend = Array.isArray(profile?.components);
   return (
     <div>
-      <div style={{ marginBottom: 18 }}>
+      <div style={{ marginBottom: isBlend ? 12 : 18 }}>
         <div style={{
           fontFamily: "'Orbitron', sans-serif",
           fontSize: 11,
@@ -2177,7 +2225,7 @@ function SourcesReferences({ product }) {
           color: "var(--red-primary)",
           textTransform: "uppercase",
           marginBottom: 6,
-        }}>Peer-reviewed research</div>
+        }}>{isBlend ? "Research on individual components" : "Peer-reviewed research"}</div>
         <div style={{
           fontFamily: "'Orbitron', sans-serif",
           fontWeight: 800,
@@ -2186,6 +2234,18 @@ function SourcesReferences({ product }) {
           color: "var(--text-primary)",
         }}>Sources &amp; References</div>
       </div>
+      {isBlend && (
+        <div style={{
+          padding: "10px 14px",
+          marginBottom: 16,
+          border: "1px solid rgba(196,30,42,0.15)",
+          background: "rgba(196,30,42,0.04)",
+          fontFamily: "'Rajdhani', sans-serif",
+          fontSize: 14,
+          color: "var(--text-secondary)",
+          lineHeight: 1.5,
+        }}>No published clinical research exists on this specific blend formulation. Citations below reference the individual component compounds.</div>
+      )}
       <div style={{
         display: "grid",
         gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill, minmax(240px, 1fr))",
