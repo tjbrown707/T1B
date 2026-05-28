@@ -3094,7 +3094,8 @@ function CartPage({ cart, setCart }) {
   const [isMobile, setIsMobile] = useState(window.innerWidth < 700);
   const [paymentMethod, setPaymentMethod] = useState("cashapp"); // cashapp | venmo
   const [discountInput, setDiscountInput] = useState("");
-  const [appliedDiscount, setAppliedDiscount] = useState(null); // { code, type, value, label }
+  const [appliedDiscount, setAppliedDiscount] = useState(null); // { code, type, value, label } — order discount slot
+  const [appliedShipping, setAppliedShipping] = useState(null); // { code, type, value, label } — free-shipping slot
   const [discountError, setDiscountError] = useState("");
   const [discountLoading, setDiscountLoading] = useState(false);
 
@@ -3130,14 +3131,26 @@ function CartPage({ cart, setCart }) {
     : 0;
   const subtotalAfterDiscount = Math.max(0, subtotal - discountAmount);
 
-  // Shipping: $10 flat, free at $200+ (calculated against post-discount subtotal)
-  const shipping = subtotalAfterDiscount >= 200 ? 0 : (cart.length > 0 ? 10 : 0);
+  // Shipping: $10 flat, free at $200+, also free if a shipping discount code is applied
+  const shipping = cart.length === 0
+    ? 0
+    : appliedShipping
+      ? 0
+      : (subtotalAfterDiscount >= 200 ? 0 : 10);
   const total = subtotalAfterDiscount + shipping;
+
+  // Codes that unlock the free-shipping slot instead of the regular discount slot
+  const SHIPPING_DISCOUNT_CODES = ["SHIP4FREE"];
+  const isShippingDiscount = (code) => SHIPPING_DISCOUNT_CODES.includes(code);
 
   async function applyDiscountCode() {
     const code = discountInput.trim().toUpperCase();
     if (!code) {
       setDiscountError("Enter a discount code.");
+      return;
+    }
+    if ((appliedDiscount && appliedDiscount.code === code) || (appliedShipping && appliedShipping.code === code)) {
+      setDiscountError("That code is already applied.");
       return;
     }
     setDiscountLoading(true);
@@ -3150,20 +3163,32 @@ function CartPage({ cart, setCart }) {
       });
       const data = await res.json().catch(() => ({ valid: false, error: "Could not reach discount service." }));
       if (!res.ok || !data.valid) {
-        setAppliedDiscount(null);
         setDiscountError(data.error || "Invalid discount code.");
         return;
       }
-      setAppliedDiscount({
+      const appliedCode = {
         code: data.code,
         type: data.type,
         value: data.value,
         label: data.label,
-      });
+      };
+      if (isShippingDiscount(data.code)) {
+        if (appliedShipping) {
+          setDiscountError("A free-shipping code is already applied.");
+          return;
+        }
+        setAppliedShipping(appliedCode);
+      } else {
+        if (appliedDiscount) {
+          setDiscountError("A discount code is already applied. Remove it before adding another.");
+          return;
+        }
+        setAppliedDiscount(appliedCode);
+      }
+      setDiscountInput("");
       setDiscountError("");
     } catch (err) {
       console.error("Discount validation error:", err);
-      setAppliedDiscount(null);
       setDiscountError("Could not reach discount service. Try again.");
     } finally {
       setDiscountLoading(false);
@@ -3172,7 +3197,10 @@ function CartPage({ cart, setCart }) {
 
   function removeDiscountCode() {
     setAppliedDiscount(null);
-    setDiscountInput("");
+    setDiscountError("");
+  }
+  function removeShippingCode() {
+    setAppliedShipping(null);
     setDiscountError("");
   }
 
@@ -3218,7 +3246,7 @@ function CartPage({ cart, setCart }) {
     formData.append("shippingZip", zip);
     formData.append("orderItems", itemsText);
     formData.append("orderSubtotal", `$${subtotal.toFixed(2)}`);
-    formData.append("discountCode", appliedDiscount ? appliedDiscount.code : "");
+    formData.append("discountCode", [appliedDiscount?.code, appliedShipping?.code].filter(Boolean).join(", "));
     formData.append("discountAmount", appliedDiscount ? `-$${discountAmount.toFixed(2)}` : "");
     formData.append("shipping", shipping === 0 ? "FREE" : `$${shipping.toFixed(2)}`);
     formData.append("paymentMethod", paymentMethod === "venmo" ? "Venmo" : "Cash App");
@@ -3240,7 +3268,7 @@ function CartPage({ cart, setCart }) {
       orderNumber: orderNumber,
       orderItems: itemsText,
       orderSubtotal: `$${subtotal.toFixed(2)}`,
-      discountCode: appliedDiscount ? appliedDiscount.code : "",
+      discountCode: [appliedDiscount?.code, appliedShipping?.code].filter(Boolean).join(", "),
       discountAmount: appliedDiscount ? `-$${discountAmount.toFixed(2)}` : "",
       shipping: shipping === 0 ? "FREE" : `$${shipping.toFixed(2)}`,
       paymentMethod: paymentMethod === "venmo" ? "Venmo" : "Cash App",
@@ -4100,15 +4128,18 @@ function CartPage({ cart, setCart }) {
               textTransform: "uppercase",
               marginBottom: 10,
             }}>Discount Code</div>
-            {appliedDiscount ? (
-              <div style={{
+            {[
+              appliedDiscount && { applied: appliedDiscount, onRemove: removeDiscountCode },
+              appliedShipping && { applied: appliedShipping, onRemove: removeShippingCode },
+            ].filter(Boolean).map(({ applied, onRemove }) => (
+              <div key={applied.code} style={{
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "space-between",
                 padding: "12px 16px",
                 border: "1px solid rgba(34,197,94,0.3)",
                 background: "rgba(34,197,94,0.05)",
-                marginBottom: 16,
+                marginBottom: 10,
               }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                   <span style={{
@@ -4117,16 +4148,16 @@ function CartPage({ cart, setCart }) {
                     fontWeight: 700,
                     color: "#22c55e",
                     letterSpacing: "0.1em",
-                  }}>{appliedDiscount.code}</span>
+                  }}>{applied.code}</span>
                   <span style={{
                     fontFamily: "'Rajdhani', sans-serif",
                     fontSize: 14,
                     color: "var(--text-secondary)",
-                  }}>— {appliedDiscount.label} applied</span>
+                  }}>— {applied.label} applied</span>
                 </div>
                 <button
                   type="button"
-                  onClick={removeDiscountCode}
+                  onClick={onRemove}
                   style={{
                     background: "transparent",
                     border: "1px solid var(--border)",
@@ -4143,8 +4174,9 @@ function CartPage({ cart, setCart }) {
                   onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.color = "var(--text-secondary)"; }}
                 >Remove</button>
               </div>
-            ) : (
-              <div style={{ marginBottom: 16 }}>
+            ))}
+            {(!appliedDiscount || !appliedShipping) && (
+              <div style={{ marginBottom: 16, marginTop: (appliedDiscount || appliedShipping) ? 6 : 0 }}>
                 <div style={{ display: "flex", gap: 10 }}>
                   <input
                     type="text"
@@ -4152,7 +4184,7 @@ function CartPage({ cart, setCart }) {
                     disabled={discountLoading}
                     onChange={e => { setDiscountInput(e.target.value); if (discountError) setDiscountError(""); }}
                     onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); applyDiscountCode(); } }}
-                    placeholder="Enter code"
+                    placeholder={appliedDiscount ? "Add a free-shipping code" : appliedShipping ? "Add a discount code" : "Enter code"}
                     style={{
                       flex: 1,
                       padding: "12px 16px",
