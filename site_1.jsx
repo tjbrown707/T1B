@@ -1343,6 +1343,17 @@ style.textContent = `
     50% { opacity: 1; transform: translate(-50%, -50%) scale(1.15); }
   }
 
+  @keyframes pulseReturn {
+    0%, 100% { background: rgba(34,197,94,0.08); }
+    50% { background: rgba(34,197,94,0.18); }
+  }
+
+  @keyframes pulseConfirm {
+    0% { box-shadow: 0 0 0 0 rgba(196,30,42,0.6); }
+    70% { box-shadow: 0 0 0 14px rgba(196,30,42,0); }
+    100% { box-shadow: 0 0 0 0 rgba(196,30,42,0); }
+  }
+
   /* Scroll reveal — hidden initially, revealed when .revealed is added */
   .scroll-reveal {
     opacity: 0;
@@ -3129,6 +3140,8 @@ function CartPage({ cart, setCart }) {
   const [appliedShipping, setAppliedShipping] = useState(null); // { code, type, value, label } — free-shipping slot
   const [discountError, setDiscountError] = useState("");
   const [discountLoading, setDiscountLoading] = useState(false);
+  const [paymentInitiated, setPaymentInitiated] = useState(false);
+  const [returnedFromPayment, setReturnedFromPayment] = useState(false);
 
   useEffect(() => {
     const handler = () => setIsMobile(window.innerWidth < 700);
@@ -3254,6 +3267,68 @@ function CartPage({ cart, setCart }) {
     setStep("payment");
   }
 
+  // Fires when the user clicks "Open Cash App" / "Open Venmo".
+  // Sends a "PENDING_PAYMENT" notification so the owner sees the order
+  // attempt even if the customer never returns to click confirm.
+  function handlePaymentInitiated(method) {
+    if (paymentInitiated) return; // one-shot per checkout
+    setPaymentInitiated(true);
+    const { name, email, phone, address, city, state, zip } = customerInfo;
+    const itemsText = cart.map(item => {
+      const unitPrice = getItemPrice(item);
+      const isBulk = item.qty >= 5;
+      return `${item.name} ${item.dose} x${item.qty} @ $${unitPrice.toFixed(2)}${isBulk ? " (bulk)" : ""} = $${(unitPrice * item.qty).toFixed(2)}`;
+    }).join("\n");
+    const formData = new URLSearchParams();
+    formData.append("form-name", "order");
+    formData.append("orderStatus", "PENDING_PAYMENT");
+    formData.append("orderNumber", orderNumber);
+    formData.append("customerName", name);
+    formData.append("customerEmail", email);
+    formData.append("customerPhone", phone);
+    formData.append("shippingAddress", address);
+    formData.append("shippingCity", city);
+    formData.append("shippingState", state);
+    formData.append("shippingZip", zip);
+    formData.append("orderItems", itemsText);
+    formData.append("orderSubtotal", `$${subtotal.toFixed(2)}`);
+    formData.append("discountCode", [appliedDiscount?.code, appliedShipping?.code].filter(Boolean).join(", "));
+    formData.append("discountAmount", appliedDiscount ? `-$${discountAmount.toFixed(2)}` : "");
+    formData.append("shipping", shipping === 0 ? "FREE" : `$${shipping.toFixed(2)}`);
+    formData.append("paymentMethod", method);
+    formData.append("orderTotal", `$${total.toFixed(2)}`);
+    fetch("/", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: formData.toString(),
+    }).catch((err) => console.error("Pending payment notification error:", err));
+  }
+
+  // Watch for the customer returning to the tab after going to Cash App / Venmo.
+  // Trigger the "welcome back, please confirm" UI (banner + auto-scroll + pulse).
+  useEffect(() => {
+    if (step !== "payment" || !paymentInitiated) return;
+    function onVisibilityChange() {
+      if (document.visibilityState === "visible") {
+        setReturnedFromPayment(true);
+      }
+    }
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    const originalTitle = document.title;
+    document.title = "← Confirm payment · Tier One BioSystems";
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      document.title = originalTitle;
+    };
+  }, [step, paymentInitiated]);
+
+  // When the return-banner appears, scroll to the confirm button so it's right under the customer's thumb.
+  useEffect(() => {
+    if (!returnedFromPayment) return;
+    const btn = document.getElementById("confirm-payment-btn");
+    if (btn) btn.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [returnedFromPayment]);
+
   function handlePaymentConfirmed() {
     const { name, email, phone, address, city, state, zip } = customerInfo;
 
@@ -3267,6 +3342,7 @@ function CartPage({ cart, setCart }) {
     // Submit to Netlify Forms
     const formData = new URLSearchParams();
     formData.append("form-name", "order");
+    formData.append("orderStatus", "CONFIRMED");
     formData.append("orderNumber", orderNumber);
     formData.append("customerName", name);
     formData.append("customerEmail", email);
@@ -3653,6 +3729,7 @@ function CartPage({ cart, setCart }) {
                   href={`https://cash.app/$TierOneBio/${total.toFixed(2)}`}
                   target="_blank"
                   rel="noopener noreferrer"
+                  onClick={() => handlePaymentInitiated("Cash App")}
                   style={{
                     display: "flex",
                     alignItems: "center",
@@ -3689,6 +3766,7 @@ function CartPage({ cart, setCart }) {
                   href={`https://venmo.com/u/TierOneBio?txn=pay&amount=${total.toFixed(2)}&note=${encodeURIComponent(orderNumber)}`}
                   target="_blank"
                   rel="noopener noreferrer"
+                  onClick={() => handlePaymentInitiated("Venmo")}
                   style={{
                     display: "flex",
                     alignItems: "center",
@@ -3722,7 +3800,36 @@ function CartPage({ cart, setCart }) {
           </div>
         </div>
 
-        <button onClick={handlePaymentConfirmed} style={{
+        {returnedFromPayment && (
+          <div style={{
+            padding: "14px 18px",
+            marginBottom: 16,
+            border: "1px solid #22c55e",
+            background: "rgba(34,197,94,0.08)",
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            animation: "pulseReturn 1.6s ease-in-out infinite",
+          }}>
+            <span style={{
+              fontFamily: "'Orbitron', sans-serif",
+              fontSize: 11,
+              fontWeight: 700,
+              letterSpacing: "0.15em",
+              color: "#22c55e",
+              textTransform: "uppercase",
+              whiteSpace: "nowrap",
+            }}>Welcome back</span>
+            <span style={{
+              fontFamily: "'Rajdhani', sans-serif",
+              fontSize: 14,
+              color: "var(--text-secondary)",
+              lineHeight: 1.4,
+            }}>Once your payment is sent, tap "I have sent payment" below to finalize your order.</span>
+          </div>
+        )}
+
+        <button id="confirm-payment-btn" onClick={handlePaymentConfirmed} style={{
           width: "100%",
           padding: "16px 0",
           background: "var(--red-primary)",
@@ -3736,6 +3843,8 @@ function CartPage({ cart, setCart }) {
           cursor: "pointer",
           transition: "all 0.2s",
           marginBottom: 16,
+          boxShadow: returnedFromPayment ? "0 0 0 0 rgba(196,30,42,0.6)" : "none",
+          animation: returnedFromPayment ? "pulseConfirm 1.6s ease-out infinite" : "none",
         }}
           onMouseEnter={e => { e.target.style.background = "transparent"; e.target.style.color = "var(--red-primary)"; }}
           onMouseLeave={e => { e.target.style.background = "var(--red-primary)"; e.target.style.color = "#fff"; }}
