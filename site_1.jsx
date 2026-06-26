@@ -3796,7 +3796,25 @@ function CartPage({ cart, setCart }) {
               </>
             )}
 
-            <p style={{ margin: "12px 0 0", fontWeight: 600, color: "var(--text-primary)", fontSize: 17 }}>Step 3: Confirm below</p>
+            {/* MUST-RETURN warning — shown before they leave so they know to come back and confirm */}
+            <div style={{
+              marginTop: 20,
+              padding: "14px 16px",
+              border: "1px solid rgba(245,158,11,0.5)",
+              background: "rgba(245,158,11,0.08)",
+              display: "flex",
+              gap: 10,
+              alignItems: "flex-start",
+            }}>
+              <span style={{ fontSize: 18, lineHeight: 1.3 }}>⚠️</span>
+              <span style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 15, color: "var(--text-secondary)", lineHeight: 1.5 }}>
+                <strong style={{ color: "#f59e0b" }}>Don't close this page.</strong> After you send payment in {paymentMethod === "venmo" ? "Venmo" : "Cash App"}, <strong style={{ color: "var(--text-primary)" }}>come back here</strong> and tap <strong style={{ color: "var(--text-primary)" }}>"I have sent payment"</strong> below. Your order will not be processed until you confirm it here.
+              </span>
+            </div>
+
+            <p style={{ margin: "20px 0 0", fontWeight: 600, color: "var(--text-primary)", fontSize: 17 }}>
+              Step 3: {paymentInitiated ? "Confirm your payment below" : "Confirm below — after you've paid"}
+            </p>
           </div>
         </div>
 
@@ -3829,26 +3847,44 @@ function CartPage({ cart, setCart }) {
           </div>
         )}
 
-        <button id="confirm-payment-btn" onClick={handlePaymentConfirmed} style={{
-          width: "100%",
-          padding: "16px 0",
-          background: "var(--red-primary)",
-          border: "1px solid var(--red-primary)",
-          color: "#fff",
-          fontFamily: "'Orbitron', sans-serif",
-          fontWeight: 700,
-          fontSize: 14,
-          letterSpacing: "0.2em",
-          textTransform: "uppercase",
-          cursor: "pointer",
-          transition: "all 0.2s",
-          marginBottom: 16,
-          boxShadow: returnedFromPayment ? "0 0 0 0 rgba(196,30,42,0.6)" : "none",
-          animation: returnedFromPayment ? "pulseConfirm 1.6s ease-out infinite" : "none",
-        }}
-          onMouseEnter={e => { e.target.style.background = "transparent"; e.target.style.color = "var(--red-primary)"; }}
-          onMouseLeave={e => { e.target.style.background = "var(--red-primary)"; e.target.style.color = "#fff"; }}
-        >I HAVE SENT PAYMENT</button>
+        {paymentInitiated ? (
+          <button id="confirm-payment-btn" onClick={handlePaymentConfirmed} style={{
+            width: "100%",
+            padding: "16px 0",
+            background: "var(--red-primary)",
+            border: "1px solid var(--red-primary)",
+            color: "#fff",
+            fontFamily: "'Orbitron', sans-serif",
+            fontWeight: 700,
+            fontSize: 14,
+            letterSpacing: "0.2em",
+            textTransform: "uppercase",
+            cursor: "pointer",
+            transition: "all 0.2s",
+            marginBottom: 16,
+            boxShadow: returnedFromPayment ? "0 0 0 0 rgba(196,30,42,0.6)" : "none",
+            animation: returnedFromPayment ? "pulseConfirm 1.6s ease-out infinite" : "none",
+          }}
+            onMouseEnter={e => { e.target.style.background = "transparent"; e.target.style.color = "var(--red-primary)"; }}
+            onMouseLeave={e => { e.target.style.background = "var(--red-primary)"; e.target.style.color = "#fff"; }}
+          >I HAVE SENT PAYMENT</button>
+        ) : (
+          <div style={{
+            width: "100%",
+            padding: "16px 0",
+            border: "1px dashed var(--border)",
+            background: "rgba(17,17,17,0.4)",
+            color: "var(--text-dim)",
+            fontFamily: "'Rajdhani', sans-serif",
+            fontSize: 14,
+            textAlign: "center",
+            lineHeight: 1.5,
+            marginBottom: 16,
+            boxSizing: "border-box",
+          }}>
+            Tap <strong style={{ color: "var(--text-secondary)" }}>Open {paymentMethod === "venmo" ? "Venmo" : "Cash App"}</strong> above first.<br />Your confirmation button will appear here once you do.
+          </div>
+        )}
 
         <div style={{
           fontFamily: "'Rajdhani', sans-serif",
