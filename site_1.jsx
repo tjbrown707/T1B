@@ -1192,6 +1192,92 @@ function getReferences(productName) {
   return REFERENCES[productName] || null;
 }
 
+// ─── Research Articles ────────────────────────────────────────────────────────
+// Long-form research review articles, keyed by URL slug. Adding a new article =
+// adding a new entry to this array. Each `content` is a function returning JSX
+// so we can keep articles readable inline.
+const ARTICLES = [
+  {
+    slug: "bpc-157-mechanism-of-action",
+    title: "BPC-157: Mechanism of Action and Research Applications",
+    excerpt: "An evidence-based research review of BPC-157 — its discovery, molecular structure, proposed mechanisms of action, and the major findings across musculoskeletal, gastrointestinal, and neurological applications.",
+    date: "2026-06-27",
+    author: "Tier One Research Team",
+    tags: ["BPC-157", "Recovery", "Mechanism"],
+    readingTimeMinutes: 9,
+    heroImage: "/bpc157-10.jpg",
+    metaTitle: "BPC-157 Mechanism of Action: Research Review (2026)",
+    metaDescription: "Evidence-based research review of BPC-157 covering its discovery, molecular structure, proposed mechanisms (angiogenesis, nitric oxide, growth hormone receptor), and applications in musculoskeletal, gastrointestinal, and neurological research models.",
+    content: () => (<>
+      <h2>Quick Summary</h2>
+      <ul>
+        <li>BPC-157 is a synthetic 15-amino-acid peptide derived from a protective protein found in human gastric juice.</li>
+        <li>Preclinical research suggests it promotes angiogenesis, modulates the nitric oxide system, and accelerates tissue repair.</li>
+        <li>The strongest body of evidence is in musculoskeletal models (tendon, ligament, muscle) and gastrointestinal protection.</li>
+        <li>BPC-157 demonstrates a notably favorable safety profile in animal toxicology studies, but it is not approved by the FDA or other major regulatory bodies for human therapeutic use.</li>
+      </ul>
+
+      <h2>What Is BPC-157?</h2>
+      <p>BPC-157 — short for <strong>Body Protection Compound-157</strong> — is a synthetic pentadecapeptide (a chain of 15 amino acids) derived from a fragment of a larger protective protein originally identified in human gastric juice. The peptide was first characterized by Croatian researcher Predrag Sikiric and colleagues in 1993, and the three decades since have produced an extensive (if predominantly preclinical) body of research investigating its biological effects.</p>
+      <p>The full amino acid sequence is <strong>Gly-Glu-Pro-Pro-Pro-Gly-Lys-Pro-Ala-Asp-Asp-Ala-Gly-Leu-Val</strong>, with a molecular weight of approximately 1,419.55 g/mol and the molecular formula C₆₂H₉₈N₁₆O₂₂. Unlike many therapeutic peptides, BPC-157 demonstrates unusual stability in both aqueous solutions and gastric acid, which has made it a subject of interest for researchers investigating both oral and parenteral administration routes.</p>
+      <p><em>In plain terms:</em> BPC-157 is a small protein-like molecule originally isolated from the stomach. Researchers believe the body produces it (in larger precursor forms) as part of a tissue-protective defense system, which is where the name "body protection compound" comes from.</p>
+
+      <h2>Proposed Mechanisms of Action</h2>
+      <p>BPC-157's mechanism of action remains incompletely characterized, but preclinical research has identified several distinct pathways through which it appears to produce its biological effects. The convergent evidence across studies suggests a multi-pathway mechanism rather than a single receptor target — a profile consistent with its broad range of reported effects across organ systems.</p>
+
+      <h3>Angiogenesis and the VEGF Pathway</h3>
+      <p>One of the most consistent findings across BPC-157 research is the upregulation of <strong>vascular endothelial growth factor receptor 2 (VEGFR2)</strong> expression on endothelial cells. VEGF and its receptors are central to angiogenesis — the formation of new blood vessels from existing vasculature. Enhanced angiogenesis at injury sites accelerates oxygen and nutrient delivery to regenerating tissue, which appears to be a major factor in BPC-157's reported wound-healing effects across multiple tissue types.</p>
+
+      <h3>Nitric Oxide System Modulation</h3>
+      <p>BPC-157 appears to modulate the <strong>nitric oxide (NO) system</strong> through multiple parallel mechanisms. In studies using L-NAME (a nitric oxide synthase inhibitor) and L-arginine (a NO precursor), BPC-157 administration restores normal NO-dependent vascular and gastrointestinal function. This has implications across cardiovascular, gastrointestinal, and wound-healing contexts where NO signaling is rate-limiting for repair processes.</p>
+
+      <h3>Growth Hormone Receptor Upregulation</h3>
+      <p>Preclinical work suggests BPC-157 <strong>upregulates growth hormone receptor expression</strong> in fibroblasts and other repair-active cell populations. This effect sensitizes target tissues to circulating growth hormone, providing one explanation for the synergy researchers have observed when BPC-157 is studied alongside growth-hormone-stimulating peptides.</p>
+
+      <h3>Dopaminergic and Serotonergic Modulation</h3>
+      <p>Animal studies have documented BPC-157's interactions with both <strong>dopaminergic and serotonergic systems</strong> in the central nervous system. This has driven research interest in neurological models, including traumatic brain injury, cuprizone-induced demyelination paradigms, and various behavioral models of depression and anxiety.</p>
+
+      <h2>Research Applications</h2>
+
+      <h3>Musculoskeletal: Tendon, Ligament, and Muscle Repair</h3>
+      <p>The largest single body of BPC-157 research is in <strong>musculoskeletal tissue repair models</strong>. Studies in rats demonstrate accelerated healing of transected Achilles tendons, with measurably increased tensile strength, faster fibroblast outgrowth, and improved collagen organization compared to controls. Similar findings have been reported in medial collateral ligament transection models and in crushed-muscle injury paradigms. The effect appears robust across multiple research groups and administration routes.</p>
+
+      <h3>Gastrointestinal Protection</h3>
+      <p>Given BPC-157's origin in gastric juice, much of the earliest research focused on <strong>gastrointestinal applications</strong>. Multiple studies have demonstrated protective effects against NSAID-induced gastric ulceration, alcohol-induced gastric lesions, and various models of inflammatory bowel disease. The proposed mechanism involves preservation of GI mucosal blood flow, modulation of the gut microbiome composition, and direct cytoprotective effects on intestinal epithelial cells.</p>
+
+      <h3>Neuroprotection</h3>
+      <p>Preclinical research has investigated BPC-157 in models of <strong>traumatic brain injury, spinal cord injury, and various neurodegenerative paradigms</strong>. Reported outcomes have included reduced lesion volumes, improved functional recovery scores, and modulation of neuroinflammatory marker expression. The peptide appears to cross the blood-brain barrier, though the extent and mechanism of CNS penetration are still being characterized.</p>
+
+      <h3>Cardiovascular Research</h3>
+      <p>Animal studies have examined BPC-157 in models of myocardial infarction, vascular occlusion, and various forms of vasculopathy. Findings include preserved cardiac function, accelerated collateral vessel formation, and protection against ischemia-reperfusion injury — broadly consistent with the peptide's apparent effects on angiogenesis and NO signaling.</p>
+
+      <h2>BPC-157 in Research Settings</h2>
+      <p>Research-grade BPC-157 is supplied as a lyophilized (freeze-dried) powder in glass vials for laboratory reconstitution. Reconstitution is most commonly performed with bacteriostatic water for injection, with reconstituted solutions stored under refrigeration. Lyophilized powder remains stable for extended periods under standard freezer conditions away from light and moisture.</p>
+      <p>Detailed handling, reconstitution, and storage information specific to our research-grade BPC-157 — including third-party Certificate of Analysis data — is available on the product pages linked below.</p>
+
+      <h2>Safety and Regulatory Status</h2>
+      <p>In animal toxicology studies, BPC-157 has demonstrated a notably <strong>favorable safety profile</strong>, with no LD50 having been established at tested doses and minimal reported off-target effects. Human safety data remain limited, however, and the peptide has not been approved by the FDA, EMA, or any other major regulatory body for therapeutic use.</p>
+      <p>BPC-157 is included on the <strong>World Anti-Doping Agency (WADA) Prohibited List</strong>, classified as a non-approved substance under category S0. Researchers working with BPC-157 should be aware of the regulatory landscape in their jurisdiction.</p>
+
+      <h2>Conclusion</h2>
+      <p>BPC-157 represents one of the most thoroughly characterized synthetic peptides in the preclinical research space. The convergent evidence across angiogenesis, nitric oxide signaling, growth hormone receptor sensitization, and tissue repair models points to a multi-pathway mechanism that may explain the wide range of physiological systems in which it has demonstrated activity. Continued translational research will be needed to establish whether preclinical findings extend reliably to human applications.</p>
+    </>),
+    references: [
+      { journal: "PHARMACEUTICALS", title: "Multifunctionality and Possible Medical Application of the BPC 157 Peptide — Literature and Patent Review", year: 2025, identifier: "PMC11859134", url: "https://pmc.ncbi.nlm.nih.gov/articles/PMC11859134/" },
+      { journal: "BIOMEDICINES", title: "Stable Gastric Pentadecapeptide BPC 157 and Wound Healing", year: 2021, identifier: "PMID: 34267654", authors: "Sikiric P et al.", url: "https://pubmed.ncbi.nlm.nih.gov/34267654/" },
+      { journal: "PHARMACEUTICS", title: "BPC-157 as an Investigational Peptide Therapeutic: Biopharmaceutical Challenges, Formulation Strategies, and Translational Development Barriers", year: 2025, identifier: "DOI: 10.3390/pharmaceutics18050625", url: "https://doi.org/10.3390/pharmaceutics18050625" },
+      { journal: "NEUROPEPTIDES", title: "Concerning BPC-157, a natural pentadecapeptide, that acts as a cytoprotectant", year: 2024, identifier: "PMID: 40759852", url: "https://pubmed.ncbi.nlm.nih.gov/40759852/" },
+      { journal: "INT. J. MOL. SCI.", title: "Protective Effects of BPC 157 on Liver, Kidney, and Lung Distant Organ Damage in Rats with Experimental Ischemia–Reperfusion Injury", year: 2025, identifier: "PMC11857380", url: "https://pmc.ncbi.nlm.nih.gov/articles/PMC11857380/" },
+      { journal: "PUBCHEM", title: "BPC-157 — CID 9941957", identifier: "CID 9941957", url: "https://pubchem.ncbi.nlm.nih.gov/compound/9941957" },
+    ],
+    relatedProductIds: ["bpc157-5", "bpc157-10"],
+  },
+];
+
+function getArticleBySlug(slug) {
+  return ARTICLES.find(a => a.slug === slug) || null;
+}
+
 // ─── Scroll Reveal Hook ──────────────────────────────────────────────────────
 function useScrollReveal() {
   useEffect(() => {
@@ -1352,6 +1438,50 @@ style.textContent = `
     0% { box-shadow: 0 0 0 0 rgba(196,30,42,0.6); }
     70% { box-shadow: 0 0 0 14px rgba(196,30,42,0); }
     100% { box-shadow: 0 0 0 0 rgba(196,30,42,0); }
+  }
+
+  .article-body h2 {
+    font-family: 'Orbitron', sans-serif;
+    font-weight: 800;
+    font-size: 24px;
+    letter-spacing: 0.02em;
+    color: var(--text-primary);
+    margin-top: 38px;
+    margin-bottom: 14px;
+    line-height: 1.25;
+  }
+  .article-body h2:first-child { margin-top: 0; }
+  .article-body h3 {
+    font-family: 'Orbitron', sans-serif;
+    font-weight: 700;
+    font-size: 17px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--red-primary);
+    margin-top: 28px;
+    margin-bottom: 10px;
+  }
+  .article-body p {
+    margin: 0 0 18px;
+  }
+  .article-body ul {
+    margin: 0 0 22px;
+    padding-left: 22px;
+  }
+  .article-body li {
+    margin-bottom: 8px;
+  }
+  .article-body strong {
+    color: var(--text-primary);
+    font-weight: 700;
+  }
+  .article-body a {
+    color: var(--red-primary);
+    text-decoration: none;
+    border-bottom: 1px solid rgba(196,30,42,0.4);
+  }
+  .article-body a:hover {
+    border-bottom-color: var(--red-primary);
   }
 
   /* Scroll reveal — hidden initially, revealed when .revealed is added */
@@ -1559,6 +1689,7 @@ function Header({ cartCount = 0 }) {
     if (dest === "Products") navigate("/products");
     else if (dest === "Lab Results") navigate("/lab-results");
     else if (dest === "Calculator") navigate("/calculator");
+    else if (dest === "Research") navigate("/research");
     else if (dest === "Contact") navigate("/contact");
     else if (dest === "Cart") navigate("/cart");
     else navigate("/");
@@ -1605,7 +1736,7 @@ function Header({ cartCount = 0 }) {
 
         <nav style={{ display: "flex", gap: isMobile ? 16 : 32, alignItems: "center" }}>
           {/* Desktop nav */}
-          {!isMobile && ["Products", "Lab Results", "Calculator", "Contact"].map(item => (
+          {!isMobile && ["Products", "Research", "Lab Results", "Calculator", "Contact"].map(item => (
             <span
               key={item}
               onClick={() => handleNav(item)}
@@ -1703,7 +1834,7 @@ function Header({ cartCount = 0 }) {
           padding: "12px 0",
           animation: "fadeIn 0.2s ease-out",
         }}>
-          {["Products", "Lab Results", "Calculator", "Contact", "Cart"].map(item => (
+          {["Products", "Research", "Lab Results", "Calculator", "Contact", "Cart"].map(item => (
             <div
               key={item}
               onClick={() => handleNav(item)}
@@ -5225,6 +5356,180 @@ function TestingStandardsPage() {
   );
 }
 
+function ResearchPage() {
+  usePageMeta(
+    "Research",
+    "Peer-reviewed research summaries, peptide mechanism explainers, and educational articles from Tier One BioSystems — evidence-based content for qualified researchers."
+  );
+  const navigate = useNavigate();
+  const isMobile = window.innerWidth < 700;
+  const sorted = [...ARTICLES].sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+  return (
+    <>
+      <div style={{ maxWidth: 1100, margin: "0 auto", padding: "120px 24px 80px" }}>
+        <div style={{ textAlign: "center", marginBottom: 48 }}>
+          <div style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 11, fontWeight: 600, letterSpacing: "0.2em", color: "var(--red-primary)", marginBottom: 10 }}>RESEARCH</div>
+          <h1 style={{ fontFamily: "'Orbitron', sans-serif", fontWeight: 800, fontSize: "clamp(24px, 5vw, 36px)", letterSpacing: "0.04em", textTransform: "uppercase", marginBottom: 14 }}>Peptide Research & Education</h1>
+          <p style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 17, color: "var(--text-secondary)", maxWidth: 680, margin: "0 auto", lineHeight: 1.7 }}>Evidence-based reviews of peptide mechanisms, research applications, and the peer-reviewed literature behind the compounds in our catalog.</p>
+        </div>
+
+        {sorted.length === 0 ? (
+          <div style={{ textAlign: "center", padding: "60px 20px", fontFamily: "'Rajdhani', sans-serif", color: "var(--text-dim)" }}>No articles yet. Check back soon.</div>
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill, minmax(320px, 1fr))", gap: 20 }}>
+            {sorted.map(article => (
+              <a key={article.slug} href={`/research/${article.slug}`} onClick={(e) => { e.preventDefault(); navigate(`/research/${article.slug}`); }} style={{ display: "block", textDecoration: "none", color: "inherit" }}>
+                <article style={{ border: "1px solid var(--border)", background: "var(--bg-card)", overflow: "hidden", transition: "all 0.2s", height: "100%", display: "flex", flexDirection: "column" }} onMouseEnter={e => e.currentTarget.style.borderColor = "rgba(196,30,42,0.4)"} onMouseLeave={e => e.currentTarget.style.borderColor = "var(--border)"}>
+                  {article.heroImage && (
+                    <div style={{ height: 180, background: "#080808", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <img src={article.heroImage} alt={article.title} loading="lazy" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} />
+                    </div>
+                  )}
+                  <div style={{ padding: "20px 22px", flex: 1, display: "flex", flexDirection: "column" }}>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+                      {(article.tags || []).slice(0, 3).map(tag => (
+                        <span key={tag} style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 9, fontWeight: 700, letterSpacing: "0.12em", padding: "3px 8px", border: "1px solid rgba(196,30,42,0.3)", color: "var(--red-primary)", textTransform: "uppercase" }}>{tag}</span>
+                      ))}
+                    </div>
+                    <h2 style={{ fontFamily: "'Orbitron', sans-serif", fontWeight: 800, fontSize: 18, letterSpacing: "0.02em", lineHeight: 1.25, marginBottom: 10, color: "var(--text-primary)" }}>{article.title}</h2>
+                    <p style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 14, color: "var(--text-secondary)", lineHeight: 1.55, marginBottom: 14, flex: 1 }}>{article.excerpt}</p>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontFamily: "'Rajdhani', sans-serif", fontSize: 12, color: "var(--text-dim)", paddingTop: 12, borderTop: "1px solid var(--border)" }}>
+                      <span>{formatArticleDate(article.date)}</span>
+                      <span>{article.readingTimeMinutes} min read</span>
+                    </div>
+                  </div>
+                </article>
+              </a>
+            ))}
+          </div>
+        )}
+      </div>
+      <Footer />
+    </>
+  );
+}
+
+function ArticlePage() {
+  const { slug } = useParams();
+  const article = getArticleBySlug(slug);
+  const navigate = useNavigate();
+  usePageMeta(
+    article ? (article.metaTitle || article.title) : "Article Not Found",
+    article ? article.metaDescription : ""
+  );
+  useEffect(() => {
+    if (!article) return;
+    const DOMAIN = "https://www.tierone.bio";
+    const jsonld = {
+      "@context": "https://schema.org",
+      "@type": "Article",
+      "headline": article.title,
+      "description": article.metaDescription,
+      "image": article.heroImage ? `${DOMAIN}${article.heroImage}` : undefined,
+      "datePublished": article.date,
+      "dateModified": article.date,
+      "author": { "@type": "Organization", "name": article.author || "Tier One BioSystems" },
+      "publisher": { "@type": "Organization", "name": "Tier One BioSystems", "logo": { "@type": "ImageObject", "url": `${DOMAIN}/logo_transparent.png` } },
+      "mainEntityOfPage": { "@type": "WebPage", "@id": `${DOMAIN}/research/${article.slug}` },
+    };
+    const script = document.createElement("script");
+    script.type = "application/ld+json";
+    script.setAttribute("data-tier1-article", "true");
+    script.textContent = JSON.stringify(jsonld);
+    document.head.appendChild(script);
+    return () => { document.querySelectorAll('script[data-tier1-article]').forEach(el => el.remove()); };
+  }, [article]);
+  if (!article) return <NotFoundPage />;
+  const isMobile = window.innerWidth < 700;
+  const related = (article.relatedProductIds || []).map(id => PRODUCTS.find(p => p.id === id)).filter(Boolean);
+  return (
+    <>
+      <article style={{ maxWidth: 760, margin: "0 auto", padding: "110px 24px 80px" }}>
+        <div style={{ marginBottom: 24, fontFamily: "'Rajdhani', sans-serif", fontSize: 13 }}>
+          <a href="/research" onClick={(e) => { e.preventDefault(); navigate("/research"); }} style={{ color: "var(--red-primary)", textDecoration: "none" }}>← All research articles</a>
+        </div>
+
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
+          {(article.tags || []).map(tag => (
+            <span key={tag} style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 10, fontWeight: 700, letterSpacing: "0.15em", padding: "4px 10px", border: "1px solid rgba(196,30,42,0.3)", color: "var(--red-primary)", textTransform: "uppercase" }}>{tag}</span>
+          ))}
+        </div>
+
+        <h1 style={{ fontFamily: "'Orbitron', sans-serif", fontWeight: 800, fontSize: "clamp(26px, 5vw, 38px)", letterSpacing: "0.02em", lineHeight: 1.15, marginBottom: 16, color: "var(--text-primary)" }}>{article.title}</h1>
+
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 14, fontFamily: "'Rajdhani', sans-serif", fontSize: 13, color: "var(--text-dim)", marginBottom: 32, paddingBottom: 24, borderBottom: "1px solid var(--border)" }}>
+          <span>{article.author || "Tier One Research Team"}</span>
+          <span>·</span>
+          <span>{formatArticleDate(article.date)}</span>
+          <span>·</span>
+          <span>{article.readingTimeMinutes} min read</span>
+        </div>
+
+        {article.heroImage && (
+          <div style={{ height: isMobile ? 240 : 320, background: "#080808", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 36, border: "1px solid var(--border)" }}>
+            <img src={article.heroImage} alt={article.title} style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", padding: 16 }} />
+          </div>
+        )}
+
+        <div className="article-body" style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 17, lineHeight: 1.8, color: "var(--text-secondary)" }}>
+          {article.content()}
+        </div>
+
+        {article.references && article.references.length > 0 && (
+          <div style={{ marginTop: 48, paddingTop: 32, borderTop: "1px solid var(--border)" }}>
+            <div style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 11, fontWeight: 700, letterSpacing: "0.18em", color: "var(--red-primary)", textTransform: "uppercase", marginBottom: 6 }}>Peer-reviewed research</div>
+            <h2 style={{ fontFamily: "'Orbitron', sans-serif", fontWeight: 800, fontSize: 22, letterSpacing: "0.02em", color: "var(--text-primary)", marginBottom: 18 }}>References</h2>
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill, minmax(260px, 1fr))", gap: 12 }}>
+              {article.references.map((ref, i) => (
+                <a key={i} href={ref.url} target="_blank" rel="noopener noreferrer" style={{ display: "block", padding: "16px 18px", border: "1px solid var(--border)", background: "rgba(17,17,17,0.5)", textDecoration: "none", transition: "all 0.2s" }} onMouseEnter={e => { e.currentTarget.style.borderColor = "rgba(196,30,42,0.4)"; e.currentTarget.style.background = "rgba(196,30,42,0.04)"; }} onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.background = "rgba(17,17,17,0.5)"; }}>
+                  <div style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", color: "var(--red-primary)", marginBottom: 8, textTransform: "uppercase" }}>{ref.journal}</div>
+                  <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 14, fontWeight: 600, color: "var(--text-primary)", lineHeight: 1.35, marginBottom: 8 }}>{ref.title}</div>
+                  <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 13, color: "var(--text-dim)", marginBottom: ref.authors ? 6 : 10 }}>{ref.year ? `${ref.year} · ` : ""}{ref.identifier}</div>
+                  {ref.authors && <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 13, fontStyle: "italic", color: "var(--text-secondary)", marginBottom: 10 }}>{ref.authors}</div>}
+                  <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 13, fontWeight: 600, color: "var(--red-primary)" }}>View Source ↗</div>
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {related.length > 0 && (
+          <div style={{ marginTop: 48, paddingTop: 32, borderTop: "1px solid var(--border)" }}>
+            <div style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 11, fontWeight: 700, letterSpacing: "0.18em", color: "var(--red-primary)", textTransform: "uppercase", marginBottom: 6 }}>From our catalog</div>
+            <h2 style={{ fontFamily: "'Orbitron', sans-serif", fontWeight: 800, fontSize: 22, letterSpacing: "0.02em", color: "var(--text-primary)", marginBottom: 18 }}>Related Products</h2>
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill, minmax(220px, 1fr))", gap: 16 }}>
+              {related.map(p => (
+                <a key={p.id} href={`/product/${p.id}`} onClick={(e) => { e.preventDefault(); navigate(`/product/${p.id}`); }} style={{ display: "block", textDecoration: "none", border: "1px solid var(--border)", background: "var(--bg-card)", padding: 16, transition: "all 0.2s" }} onMouseEnter={e => e.currentTarget.style.borderColor = "rgba(196,30,42,0.4)"} onMouseLeave={e => e.currentTarget.style.borderColor = "var(--border)"}>
+                  <div style={{ height: 110, display: "flex", alignItems: "center", justifyContent: "center", background: "#080808", marginBottom: 12 }}>
+                    <img src={p.image} alt={p.name} loading="lazy" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", padding: 6 }} />
+                  </div>
+                  <div style={{ fontFamily: "'Orbitron', sans-serif", fontWeight: 700, fontSize: 14, color: "var(--text-primary)", marginBottom: 4 }}>{p.name}</div>
+                  <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 13, color: "var(--text-secondary)", marginBottom: 10 }}>{p.dose}</div>
+                  <div style={{ fontFamily: "'Orbitron', sans-serif", fontWeight: 800, fontSize: 16, color: "var(--text-primary)" }}>${p.price}<span style={{ fontFamily: "'Rajdhani', sans-serif", fontWeight: 500, fontSize: 13, color: "var(--text-dim)" }}> /vial</span></div>
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div style={{ marginTop: 48, padding: "20px 22px", border: "1px solid rgba(196,30,42,0.15)", background: "rgba(196,30,42,0.03)" }}>
+          <div style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 12, fontWeight: 700, letterSpacing: "0.15em", color: "var(--red-primary)", marginBottom: 6, textTransform: "uppercase" }}>Research Use Only</div>
+          <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 15, color: "var(--text-secondary)", lineHeight: 1.6 }}>This content is for educational and research purposes. Tier One BioSystems products are sold for laboratory research use only. Not for human consumption. Not a drug, food, or cosmetic.</div>
+        </div>
+      </article>
+      <Footer />
+    </>
+  );
+}
+
+function formatArticleDate(iso) {
+  if (!iso) return "";
+  try {
+    const d = new Date(iso + "T12:00:00");
+    return d.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+  } catch { return iso; }
+}
+
 function AgeGate({ onConfirm }) {
   return (
     <div style={{
@@ -5859,6 +6164,8 @@ export default function App() {
         <Route path="/products" element={<ProductsPage />} />
         <Route path="/product/:id" element={<ProductPage />} />
         <Route path="/calculator" element={<PeptideCalculator />} />
+        <Route path="/research" element={<ResearchPage />} />
+        <Route path="/research/:slug" element={<ArticlePage />} />
         <Route path="/contact" element={<ContactPage />} />
         <Route path="/lab-results" element={<LabResultsPage />} />
         <Route path="/cart" element={<CartPage cart={cart} setCart={setCart} />} />
