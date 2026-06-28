@@ -1550,6 +1550,358 @@ const ARTICLES = [
     ],
     relatedProductIds: ["bpc157-10", "ghkcu-100", "tesamorelin", "igf1lr3"],
   },
+  {
+    slug: "thymosin-alpha-1-immune-research",
+    title: "Thymosin Alpha-1 and Immune System Research",
+    excerpt: "A research review of Thymosin Alpha-1 (Tα1) — the 28-amino-acid thymic peptide approved in over 35 countries as an immunomodulator. Covers its mechanism via TLR signaling, applications in immune research, and the major published findings.",
+    date: "2026-06-28",
+    author: "Tier One Research Team",
+    tags: ["Thymosin Alpha 1", "Immune", "Mechanism"],
+    readingTimeMinutes: 8,
+    heroImage: "/ta1.jpg",
+    metaTitle: "Thymosin Alpha-1 Research: Immune Modulation & Mechanism (2026)",
+    metaDescription: "Research review of Thymosin Alpha-1 (Tα1, thymalfasin) — a 28-amino-acid thymic peptide. Covers TLR2/TLR9 mechanism, T-cell maturation effects, clinical research in hepatitis and immunocompromised populations, and global regulatory status.",
+    content: () => (<>
+      <h2>Quick Summary</h2>
+      <ul>
+        <li>Thymosin Alpha-1 (Tα1) is a synthetic 28-amino-acid peptide identical to a polypeptide naturally produced by the thymus gland.</li>
+        <li>Approved in over <strong>35 countries</strong> as <em>thymalfasin</em> for chronic hepatitis B, hepatitis C, and as an adjuvant in cancer chemotherapy.</li>
+        <li>Mechanism: activates Toll-Like Receptors 2 and 9 on dendritic cells, modulating both innate and adaptive immunity.</li>
+        <li>Has a notably favorable safety profile across decades of clinical research.</li>
+      </ul>
+
+      <h2>What Is Thymosin Alpha-1?</h2>
+      <p><strong>Thymosin Alpha-1</strong> (Tα1) is a 28-amino-acid peptide first isolated and characterized by Allan Goldstein and colleagues in 1972 from calf thymus extracts. Its full sequence — Ac-Ser-Asp-Ala-Ala-Val-Asp-Thr-Ser-Ser-Glu-Ile-Thr-Thr-Lys-Asp-Leu-Lys-Glu-Lys-Lys-Glu-Val-Val-Glu-Glu-Ala-Glu-Asn — features N-terminal acetylation and a molecular weight of approximately 3,108 g/mol.</p>
+      <p>The synthetic version is marketed pharmaceutically as <strong>thymalfasin</strong> (brand name Zadaxin) and is approved in more than 35 countries worldwide. Although not approved by the US FDA for a primary indication, it has received orphan drug designations and is widely used in research settings.</p>
+      <p><em>In plain terms:</em> Thymosin Alpha-1 is a copy of a natural peptide that your thymus gland produces to help train and activate immune cells. It's been used clinically for decades in other countries to treat conditions where the immune system needs a boost.</p>
+
+      <h2>Mechanism of Action</h2>
+
+      <h3>Toll-Like Receptor Activation</h3>
+      <p>The primary mechanism through which Tα1 exerts its immunomodulatory effects is activation of <strong>Toll-Like Receptor 2 (TLR2) and Toll-Like Receptor 9 (TLR9)</strong> on dendritic cells. These receptors are part of the pattern-recognition system that bridges innate and adaptive immunity. By activating them, Tα1 promotes dendritic cell maturation, antigen presentation, and downstream T-cell activation.</p>
+
+      <h3>T-Cell Maturation and Differentiation</h3>
+      <p>Consistent with its thymic origin, Tα1 promotes the differentiation and maturation of T-lymphocyte precursors. Published research has documented enhanced CD4+ helper T-cell production, increased natural killer (NK) cell activity, and improved Th1 cytokine responses (IFN-γ, IL-2) — a profile favoring cell-mediated immunity over humoral immunity.</p>
+
+      <h3>Cytokine Modulation</h3>
+      <p>Tα1 modulates production of multiple cytokines, generally favoring antiviral and anti-tumor immune responses. It also appears to dampen inflammatory cytokine overproduction in scenarios characterized by immune dysregulation, suggesting a balancing rather than purely stimulatory role.</p>
+
+      <h2>Research Applications</h2>
+
+      <h3>Chronic Viral Hepatitis</h3>
+      <p>The largest body of clinical research is in <strong>chronic hepatitis B (HBV) and chronic hepatitis C (HCV)</strong>. Multiple controlled trials have examined Tα1 as monotherapy and in combination with interferon or direct-acting antivirals, with consistent findings of improved viral suppression, ALT normalization, and HBeAg/HBV-DNA loss rates compared to control regimens.</p>
+
+      <h3>Immunocompromised Populations</h3>
+      <p>Tα1 has been studied in patients with chemotherapy-induced immunosuppression, HIV-associated immune dysfunction, and certain congenital immunodeficiencies. Outcomes have included improved CD4+ counts, reduced opportunistic infection rates, and better tolerance of cytotoxic therapy.</p>
+
+      <h3>Cancer Adjuvant Research</h3>
+      <p>As an adjuvant to standard cancer treatment, Tα1 has been examined in hepatocellular carcinoma, melanoma, non-small cell lung cancer, and several others. The proposed mechanism involves restoration of dendritic cell function (often suppressed in tumor microenvironments) and enhancement of T-cell anti-tumor responses.</p>
+
+      <h3>Sepsis and Severe Infection</h3>
+      <p>Research has examined Tα1 in severe sepsis and septic shock, where immune dysregulation contributes substantially to mortality. Some studies have suggested mortality benefit with Tα1 adjunctive therapy, though the evidence base remains heterogeneous.</p>
+
+      <h2>Safety Profile</h2>
+      <p>Across decades of clinical use in approved indications, Tα1 has demonstrated a remarkably <strong>favorable safety profile</strong>. The most commonly reported adverse events are mild injection-site reactions; serious adverse events directly attributable to Tα1 are rare. No major drug-drug interactions have been documented, and the peptide does not appear to suppress endogenous thymic function.</p>
+
+      <h2>Conclusion</h2>
+      <p>Thymosin Alpha-1 represents one of the most clinically validated peptide immunomodulators available, with over four decades of research and regulatory approval in multiple jurisdictions. Its TLR-based mechanism positions it as both an immune activator and an immune balancer, making it broadly applicable to research scenarios involving immune dysfunction. For researchers in immunology, oncology, or infectious disease, Tα1 offers an unusually well-characterized tool compound.</p>
+    </>),
+    references: [
+      { journal: "EXPERT OPIN BIOL THER", title: "Thymosin α1: from bench to bedside", year: 2018, identifier: "PMID: 29469595", authors: "Romani L et al.", url: "https://pubmed.ncbi.nlm.nih.gov/29469595/" },
+      { journal: "ANN N Y ACAD SCI", title: "Thymosin α1 as a chemotherapy adjuvant: meta-analyses and reviews", year: 2010, identifier: "PMID: 20536572", url: "https://pubmed.ncbi.nlm.nih.gov/20536572/" },
+      { journal: "CLIN EXP RHEUMATOL", title: "Thymosin alpha 1 mechanism of action and clinical applications", year: 2015, identifier: "PMID: 26458172", url: "https://pubmed.ncbi.nlm.nih.gov/26458172/" },
+      { journal: "WIKIPEDIA", title: "Thymalfasin", url: "https://en.wikipedia.org/wiki/Thymalfasin" },
+      { journal: "PUBCHEM", title: "Thymosin α1 — CID 16130571", identifier: "CID 16130571", url: "https://pubchem.ncbi.nlm.nih.gov/compound/16130571" },
+    ],
+    relatedProductIds: ["ta1"],
+  },
+  {
+    slug: "nad-plus-supplementation-research",
+    title: "NAD+ Supplementation: Mechanisms and Current Research",
+    excerpt: "A research review of nicotinamide adenine dinucleotide (NAD+) — the essential coenzyme that declines with age. Covers its role in cellular metabolism, sirtuin and PARP enzyme activation, age-related decline, and current supplementation research.",
+    date: "2026-06-28",
+    author: "Tier One Research Team",
+    tags: ["NAD+", "Longevity", "Metabolism"],
+    readingTimeMinutes: 9,
+    heroImage: "/nad.jpg",
+    metaTitle: "NAD+ Supplementation: Mechanisms, Aging & Current Research (2026)",
+    metaDescription: "Research review of NAD+ (nicotinamide adenine dinucleotide) — the essential cellular coenzyme. Covers age-related decline, sirtuin activation, PARP-mediated DNA repair, mitochondrial function, and the latest supplementation research findings.",
+    content: () => (<>
+      <h2>Quick Summary</h2>
+      <ul>
+        <li>NAD+ is a small-molecule coenzyme essential for energy production, DNA repair, and circadian regulation in every living cell.</li>
+        <li>NAD+ levels decline significantly with age — by some estimates 50% or more between young adulthood and old age.</li>
+        <li>The decline has been linked to age-related metabolic dysfunction, reduced DNA repair capacity, and mitochondrial impairment.</li>
+        <li>Supplementation research uses direct NAD+ as well as precursors (NMN, NR) — direct NAD+ is most commonly delivered by injection or IV in research and clinical settings.</li>
+      </ul>
+
+      <h2>What Is NAD+?</h2>
+      <p><strong>Nicotinamide adenine dinucleotide (NAD+)</strong> is a small molecule found in every living cell. Despite being just a single coenzyme (not a peptide or hormone), NAD+ participates in an extraordinarily wide range of biological processes — making it one of the most-studied molecules in aging biology.</p>
+      <p>Its molecular formula is C₂₁H₂₇N₇O₁₄P₂ with a molecular weight of approximately 663 g/mol. Structurally, NAD+ consists of two nucleotides — adenine and nicotinamide — joined by a pair of phosphate groups. The "+" in NAD+ refers to its oxidized state; the reduced form is NADH, and the pair cycles between states as electrons are passed during cellular metabolism.</p>
+      <p><em>In plain terms:</em> NAD+ is a tiny molecule your cells use to make energy and repair their DNA. Your levels of it drop a lot as you age, and researchers are studying whether restoring those levels can slow some aspects of aging.</p>
+
+      <h2>Biological Roles</h2>
+
+      <h3>Energy Metabolism</h3>
+      <p>The most fundamental role of NAD+ is in <strong>cellular energy production</strong>. In glycolysis, the citric acid cycle, and oxidative phosphorylation, NAD+ accepts electrons from metabolic substrates (becoming NADH), then delivers them to the electron transport chain in the mitochondria to drive ATP synthesis. Without adequate NAD+, energy production stalls.</p>
+
+      <h3>Sirtuin Activation</h3>
+      <p><strong>Sirtuins</strong> are a family of NAD+-dependent enzymes (SIRT1 through SIRT7) involved in regulating gene expression, DNA repair, metabolism, and stress responses. Because they consume NAD+ as a cofactor, sirtuin activity is directly limited by NAD+ availability. The decline in NAD+ with age is one proposed mechanism by which sirtuin-mediated longevity pathways become less effective.</p>
+
+      <h3>DNA Repair via PARP Enzymes</h3>
+      <p><strong>Poly(ADP-ribose) polymerases (PARPs)</strong> are NAD+-dependent enzymes that detect DNA damage and recruit repair machinery to fix it. PARPs are heavily activated under conditions of genotoxic stress and can consume large amounts of NAD+ — sometimes to the point of depleting cellular pools and triggering metabolic distress.</p>
+
+      <h3>Circadian Rhythm Regulation</h3>
+      <p>NAD+ levels themselves oscillate over the course of the day, and this oscillation interacts with the molecular circadian clock through sirtuin-mediated deacetylation of clock proteins. Disruption of NAD+ rhythms has been implicated in shift-work-related metabolic dysfunction.</p>
+
+      <h2>Age-Related Decline</h2>
+      <p>One of the most consistent findings across NAD+ research is a substantial <strong>age-related decline</strong> in tissue NAD+ levels. The magnitude varies by tissue and measurement method, but reductions of 40–60% between young adulthood and old age have been documented in multiple tissues including skin, muscle, brain, and liver.</p>
+      <p>The decline appears to be driven by both reduced biosynthesis and increased consumption — particularly by chronic activation of PARPs and CD38 (a cell-surface enzyme that consumes NAD+ and whose expression increases with age and inflammation).</p>
+
+      <h2>Supplementation Research</h2>
+
+      <h3>Direct NAD+</h3>
+      <p>Direct NAD+ delivery (typically intravenous or intramuscular) has been studied for fatigue, addiction recovery, neurodegenerative conditions, and post-exercise recovery. Most published research is preliminary, with mixed methodologies and small sample sizes — but interest is sustained given the clear biological rationale.</p>
+
+      <h3>NAD+ Precursors</h3>
+      <p>Research has also examined NAD+ precursors — most commonly <strong>nicotinamide mononucleotide (NMN)</strong> and <strong>nicotinamide riboside (NR)</strong> — which are taken orally and converted to NAD+ inside cells. Multiple human studies have demonstrated that these precursors meaningfully elevate blood and tissue NAD+ levels, though clinical outcomes data remain mixed.</p>
+
+      <h3>Sirtuin-Mediated Outcomes</h3>
+      <p>A parallel research stream examines whether restoring NAD+ levels meaningfully recovers sirtuin function — and whether sirtuin recovery in turn reverses age-related dysfunction. Animal models have produced positive results in metabolic, neurological, and cardiovascular domains; human translation remains an active research area.</p>
+
+      <h2>Safety</h2>
+      <p>NAD+ has a generally favorable safety profile in human research, with mild flushing, transient nausea, and injection-site discomfort being the most common reported effects. Because NAD+ is endogenous and rapidly metabolized, accumulation toxicity is not a typical concern. As with any small molecule, hypersensitivity reactions are possible but rare.</p>
+
+      <h2>Conclusion</h2>
+      <p>NAD+ sits at the intersection of metabolism, DNA repair, gene regulation, and circadian biology. Its well-documented age-related decline and its essential role in pathways central to cellular health have made it one of the most active areas of aging research. For researchers working on mitochondrial function, sirtuin biology, DNA damage response, or metabolic regulation, NAD+ provides a foundational research tool with broad applicability.</p>
+    </>),
+    references: [
+      { journal: "CELL METAB", title: "NAD+ Metabolism and Its Roles in Cellular Processes during Ageing", year: 2020, identifier: "PMID: 32130985", authors: "Covarrubias AJ, Perrone R, Grozio A, Verdin E", url: "https://pubmed.ncbi.nlm.nih.gov/32130985/" },
+      { journal: "SCIENCE", title: "Declining NAD+ Induces a Pseudohypoxic State Disrupting Nuclear-Mitochondrial Communication during Aging", year: 2013, identifier: "PMID: 24360282", authors: "Gomes AP et al.", url: "https://pubmed.ncbi.nlm.nih.gov/24360282/" },
+      { journal: "CELL METAB", title: "Therapeutic Potential of NAD-Boosting Molecules: The In Vivo Evidence", year: 2018, identifier: "PMID: 29874566", authors: "Rajman L, Chwalek K, Sinclair DA", url: "https://pubmed.ncbi.nlm.nih.gov/29874566/" },
+      { journal: "WIKIPEDIA", title: "Nicotinamide adenine dinucleotide", url: "https://en.wikipedia.org/wiki/Nicotinamide_adenine_dinucleotide" },
+      { journal: "PUBCHEM", title: "NAD+ — CID 5893", identifier: "CID 5893", url: "https://pubchem.ncbi.nlm.nih.gov/compound/5893" },
+    ],
+    relatedProductIds: ["nad"],
+  },
+  {
+    slug: "selank-semax-russian-nootropic-peptides",
+    title: "Selank and Semax: Russian Nootropic Peptides Research Summary",
+    excerpt: "A research review of Selank and Semax — two synthetic peptides developed at the Russian Academy of Sciences. Covers their mechanisms via BDNF and cytokine modulation, anxiolytic vs nootropic profiles, and the clinical research behind both compounds.",
+    date: "2026-06-28",
+    author: "Tier One Research Team",
+    tags: ["Selank", "Semax", "Cognitive", "Mechanism"],
+    readingTimeMinutes: 9,
+    heroImage: "/semax.jpg",
+    metaTitle: "Selank vs Semax: Russian Nootropic Peptide Research (2026)",
+    metaDescription: "Research review of Selank (anxiolytic) and Semax (nootropic) — synthetic peptides developed at the Russian Academy of Sciences. Covers BDNF upregulation, tuftsin and ACTH analog mechanisms, clinical research findings, and comparative use.",
+    content: () => (<>
+      <h2>Quick Summary</h2>
+      <ul>
+        <li><strong>Selank</strong> is a synthetic 7-amino-acid analog of the immunomodulatory peptide <em>tuftsin</em>, with anxiolytic and mild nootropic effects.</li>
+        <li><strong>Semax</strong> is a synthetic 7-amino-acid analog of adrenocorticotropic hormone (ACTH 4-10) fragment, with primarily nootropic and neuroprotective effects.</li>
+        <li>Both were developed at the Russian Academy of Sciences and are approved as medications in Russia.</li>
+        <li>Mechanism: both upregulate BDNF (brain-derived neurotrophic factor) and modulate monoamine neurotransmitter systems.</li>
+      </ul>
+
+      <h2>Background: Russian Peptide Development</h2>
+      <p>Russia has a distinctive pharmaceutical tradition of developing small synthetic peptides for neurological and psychiatric indications — many emerging from the <strong>Institute of Molecular Genetics, Russian Academy of Sciences</strong>. Both Selank and Semax originate from this program, which has prioritized peptides modeled on natural regulatory molecules with structural modifications that improve in vivo stability.</p>
+      <p>While these compounds have decades of Russian clinical experience behind them, neither has FDA approval in the United States, and the published Western-journal literature is more limited than for compounds with broader regulatory adoption.</p>
+
+      <h2>Selank: The Anxiolytic Tuftsin Analog</h2>
+
+      <h3>Structure and Origin</h3>
+      <p>Selank is a synthetic heptapeptide with the sequence <strong>Thr-Lys-Pro-Arg-Pro-Gly-Pro</strong> (TKPRPGP). The first four amino acids (TKPR) correspond to the natural immunomodulatory peptide <strong>tuftsin</strong>, with a C-terminal Pro-Gly-Pro extension added to substantially improve proteolytic stability. Molecular weight is approximately 751.87 g/mol.</p>
+
+      <h3>Mechanism of Action</h3>
+      <p>Selank's mechanism involves several parallel pathways:</p>
+      <ul>
+        <li><strong>BDNF upregulation</strong> — particularly in the hippocampus, which appears to mediate cognitive and mood effects.</li>
+        <li><strong>Modulation of enkephalin degradation</strong> — Selank inhibits enzymes that break down endogenous opioid peptides, indirectly enhancing endogenous opioid signaling.</li>
+        <li><strong>Th1/Th2 cytokine balance</strong> — a direct immunomodulatory effect inherited from its tuftsin origin.</li>
+        <li><strong>Serotonergic and dopaminergic modulation</strong> — observed in animal models, contributing to its anxiolytic profile.</li>
+      </ul>
+
+      <h3>Clinical Research</h3>
+      <p>Russian clinical research has examined Selank in <strong>generalized anxiety disorder</strong>, with reported efficacy comparable to traditional benzodiazepines but without sedation, cognitive impairment, or dependence. Smaller studies have examined cognitive performance, immune modulation, and adjunctive use in mood disorders.</p>
+
+      <h2>Semax: The Nootropic ACTH Analog</h2>
+
+      <h3>Structure and Origin</h3>
+      <p>Semax is a synthetic heptapeptide with the sequence <strong>Met-Glu-His-Phe-Pro-Gly-Pro</strong> (MEHFPGP). The first four amino acids correspond to ACTH residues 4–7, with the same Pro-Gly-Pro stability extension as Selank. Molecular weight is approximately 813.92 g/mol.</p>
+      <p>Critically, Semax retains the cognitive and neurotrophic effects of ACTH(4-10) without the endocrine effects of the full ACTH hormone — making it neuropharmacologically useful without affecting cortisol regulation.</p>
+
+      <h3>Mechanism of Action</h3>
+      <p>Semax's most-cited mechanism is potent <strong>upregulation of BDNF and its receptor TrkB</strong> in the hippocampus. The peptide rapidly (within hours) elevates BDNF protein levels, which in turn supports neurogenesis, synaptic plasticity, and neuronal survival under stress. Additional documented effects include modulation of dopaminergic and serotonergic systems and direct neuroprotective effects against ischemic damage.</p>
+
+      <h3>Clinical Research</h3>
+      <p>Russian clinical research has focused on:</p>
+      <ul>
+        <li><strong>Ischemic stroke</strong> — adjunctive use during the acute and recovery phases, with reported improvements in neurological deficit scores.</li>
+        <li><strong>Cognitive impairment</strong> — both age-related and following brain injury.</li>
+        <li><strong>Optic nerve disorders</strong> — leveraging Semax's neuroprotective profile.</li>
+        <li><strong>ADHD and learning disabilities</strong> in pediatric populations.</li>
+      </ul>
+
+      <h2>Selank vs Semax: When Each Is Used</h2>
+      <p>Although structurally similar (both heptapeptides with Pro-Gly-Pro stability extensions) and sharing some mechanistic overlap (both upregulate BDNF), the two compounds have distinct therapeutic profiles:</p>
+      <ul>
+        <li><strong>Selank</strong> — primarily anxiolytic with mild cognitive support. Closer comparator: benzodiazepines (without sedation).</li>
+        <li><strong>Semax</strong> — primarily nootropic and neuroprotective. Closer comparator: cognitive enhancers like piracetam, with stronger neurotrophic effects.</li>
+      </ul>
+
+      <h2>Safety</h2>
+      <p>Both peptides have demonstrated favorable safety profiles in Russian clinical research, with minimal adverse events reported across decades of medical use. The most commonly reported effects are mild and transient — typically related to the intranasal administration route (the most common delivery method in Russian practice). Neither peptide is known to produce dependence or withdrawal.</p>
+
+      <h2>Conclusion</h2>
+      <p>Selank and Semax represent a unique slice of peptide neuropharmacology — well-characterized in Russian research, less so in Western literature, but with distinctive mechanistic profiles based on BDNF upregulation and monoamine modulation. For researchers investigating peptide-based approaches to anxiety, cognitive enhancement, or neuroprotection, both compounds offer well-defined starting points with substantial existing literature in their respective domains.</p>
+    </>),
+    references: [
+      { journal: "EXPERT OPIN INVESTIG DRUGS", title: "Semax, an analog of ACTH(4-10) with cognitive effects: from molecular mechanisms to clinical applications", year: 2018, identifier: "PMID: 30067100", url: "https://pubmed.ncbi.nlm.nih.gov/30067100/" },
+      { journal: "BULL EXP BIOL MED", title: "Selank, a peptide analog of tuftsin, influences gene expression in serotonergic and dopaminergic neurons", year: 2009, identifier: "PMID: 19798403", url: "https://pubmed.ncbi.nlm.nih.gov/19798403/" },
+      { journal: "INT J MOL SCI", title: "The Neuroprotective Effect of Semax in Models of Cerebral Ischemia: Role of BDNF and Trk-Receptor Signaling", year: 2019, identifier: "PMID: 31416202", url: "https://pubmed.ncbi.nlm.nih.gov/31416202/" },
+      { journal: "ZH NEVROL PSIKHIATR IM S S KORSAKOVA", title: "Clinical and experimental evaluation of the anxiolytic action of Selank", year: 2005, identifier: "PMID: 16447562", authors: "Medvedev VE et al.", url: "https://pubmed.ncbi.nlm.nih.gov/16447562/" },
+      { journal: "WIKIPEDIA", title: "Selank", url: "https://en.wikipedia.org/wiki/Selank" },
+      { journal: "WIKIPEDIA", title: "Semax", url: "https://en.wikipedia.org/wiki/Semax" },
+    ],
+    relatedProductIds: ["selank", "semax"],
+  },
+  {
+    slug: "mots-c-mitochondrial-peptide-research",
+    title: "MOTS-c: The Mitochondrial Peptide and Metabolic Health Research",
+    excerpt: "A research review of MOTS-c — the mitochondrially-encoded peptide. Covers its discovery, AMPK pathway activation, role as an exercise mimetic, and implications for insulin sensitivity and metabolic health research.",
+    date: "2026-06-28",
+    author: "Tier One Research Team",
+    tags: ["MOTS-c", "Longevity", "Metabolism", "Exercise Mimetic"],
+    readingTimeMinutes: 8,
+    heroImage: "/motsc.jpg",
+    metaTitle: "MOTS-c Research: Mitochondrial Peptide & Metabolic Health (2026)",
+    metaDescription: "Research review of MOTS-c — the 16-amino-acid mitochondrial-derived peptide. Covers AMPK pathway activation, exercise mimetic effects, insulin sensitivity, glucose metabolism, and the foundational research from the Pinchas Cohen laboratory.",
+    content: () => (<>
+      <h2>Quick Summary</h2>
+      <ul>
+        <li>MOTS-c is a 16-amino-acid peptide encoded by the mitochondrial DNA — one of a small class of "mitochondrial-derived peptides."</li>
+        <li>Activates the AMPK pathway, enhancing glucose uptake, fatty acid oxidation, and insulin sensitivity.</li>
+        <li>Has been described as an "exercise mimetic" because many of its metabolic effects parallel those of physical exercise.</li>
+        <li>Discovered in 2015 by Dr. Pinchas Cohen's laboratory at USC; research applications are expanding rapidly.</li>
+      </ul>
+
+      <h2>What Is MOTS-c?</h2>
+      <p><strong>MOTS-c</strong> — short for <em>Mitochondrial Open Reading Frame of the Twelve S rRNA type-c</em> — is a 16-amino-acid peptide with the sequence <strong>Met-Arg-Trp-Gln-Glu-Met-Gly-Tyr-Ile-Phe-Tyr-Pro-Arg-Lys-Leu-Arg</strong>. The peptide was first characterized in 2015 by the research group of Dr. Pinchas Cohen at the University of Southern California.</p>
+      <p>What makes MOTS-c remarkable is its origin: it is encoded within the <strong>mitochondrial DNA</strong> (specifically in the 12S rRNA region), not the nuclear genome. This places MOTS-c in a small but growing class of <strong>mitochondrial-derived peptides (MDPs)</strong>, which appear to act as signaling molecules between mitochondria and the rest of the cell.</p>
+      <p><em>In plain terms:</em> Most of your body's proteins are made from instructions stored in your cell nucleus. MOTS-c is unusual because it's made from instructions stored inside the mitochondria themselves. It seems to act as a signal that tells the rest of your body how the mitochondria are doing.</p>
+
+      <h2>Mechanism of Action</h2>
+
+      <h3>AMPK Pathway Activation</h3>
+      <p>The primary downstream target of MOTS-c is <strong>AMP-activated protein kinase (AMPK)</strong> — a master regulator of cellular energy balance. AMPK activation triggers a coordinated set of effects: increased glucose uptake into cells, enhanced fatty acid oxidation, suppression of energy-consuming biosynthetic pathways, and activation of mitochondrial biogenesis.</p>
+      <p>Notably, AMPK is the same pathway activated by physical exercise and by metformin (the most prescribed antidiabetic drug) — explaining MOTS-c's classification as an "exercise mimetic."</p>
+
+      <h3>Nuclear Translocation</h3>
+      <p>One particularly striking finding is that MOTS-c <strong>translocates from the mitochondria to the cell nucleus</strong> under metabolic stress, where it appears to regulate the expression of nuclear genes involved in metabolic adaptation. This bidirectional communication — mitochondria sending peptide signals to the nucleus — represents a novel layer of cellular metabolic regulation.</p>
+
+      <h3>Insulin Sensitivity</h3>
+      <p>Animal studies have demonstrated that MOTS-c improves <strong>insulin sensitivity</strong> in both skeletal muscle and adipose tissue, partially reversing high-fat-diet-induced insulin resistance. This effect appears to be mediated by AMPK activation and enhanced glucose disposal capacity.</p>
+
+      <h2>Research Applications</h2>
+
+      <h3>Metabolic Health</h3>
+      <p>The largest body of MOTS-c research focuses on <strong>metabolic disease models</strong> — type 2 diabetes, obesity, and metabolic syndrome. Across multiple animal models, MOTS-c administration improves fasting glucose, insulin sensitivity, body composition, and lipid profile. Human research is still preliminary but expanding.</p>
+
+      <h3>Exercise and Performance Research</h3>
+      <p>MOTS-c levels naturally rise in response to <strong>physical exercise</strong>, and supplementation studies have examined whether exogenous MOTS-c can recapitulate or amplify exercise's metabolic benefits. Animal research has demonstrated improvements in running endurance and skeletal muscle metabolic capacity.</p>
+
+      <h3>Aging Research</h3>
+      <p>MOTS-c levels decline with age, paralleling the broader pattern of declining mitochondrial function. Restoration research in aged animal models has shown improvements in metabolic flexibility, exercise capacity, and several markers of metabolic age — making MOTS-c a research focus in <strong>longevity science</strong>.</p>
+
+      <h3>Cardiovascular Research</h3>
+      <p>Smaller studies have examined MOTS-c in cardiovascular contexts, including endothelial function, vascular calcification, and ischemia-reperfusion injury. Findings have been broadly consistent with the AMPK-mediated protective profile observed in metabolic studies.</p>
+
+      <h2>Safety</h2>
+      <p>MOTS-c has demonstrated a favorable safety profile in animal studies, with no significant toxicity at the doses tested. Human safety data remain limited but no major adverse signal has emerged. As with all peptides, individual variation in response is expected, and the long-term effects of sustained MOTS-c supplementation in humans have not been fully characterized.</p>
+
+      <h2>Conclusion</h2>
+      <p>MOTS-c represents one of the most exciting recent additions to peptide research — both because of its novel mitochondrial origin and because of its potent effects on the AMPK pathway. As the field of mitochondrial-derived peptides matures, MOTS-c is positioned as the most thoroughly characterized member of this emerging class. For researchers in metabolism, aging biology, or exercise physiology, MOTS-c offers a uniquely targeted tool for studying mitochondrial-to-nuclear signaling.</p>
+    </>),
+    references: [
+      { journal: "CELL METAB", title: "The mitochondrial-derived peptide MOTS-c promotes metabolic homeostasis and reduces obesity and insulin resistance", year: 2015, identifier: "PMID: 25738459", authors: "Lee C et al.", url: "https://pubmed.ncbi.nlm.nih.gov/25738459/" },
+      { journal: "CELL METAB", title: "Mitochondrial-encoded MOTS-c translocates to the nucleus to regulate nuclear gene expression in response to metabolic stress", year: 2018, identifier: "PMID: 29551415", authors: "Kim KH et al.", url: "https://pubmed.ncbi.nlm.nih.gov/29551415/" },
+      { journal: "FRONT ENDOCRINOL", title: "MOTS-c: A promising mitochondrial-derived peptide for therapeutic exploitation", year: 2023, identifier: "PMC9905433", url: "https://pmc.ncbi.nlm.nih.gov/articles/PMC9905433/" },
+      { journal: "WIKIPEDIA", title: "MOTS-c", url: "https://en.wikipedia.org/wiki/MOTS-c" },
+      { journal: "PUBCHEM", title: "MOTS-c — CID 118767809", identifier: "CID 118767809", url: "https://pubchem.ncbi.nlm.nih.gov/compound/118767809" },
+    ],
+    relatedProductIds: ["motsc"],
+  },
+  {
+    slug: "tissue-repair-peptide-blends-research",
+    title: "Peptide Blends for Tissue Repair: BPC-157 + GHK-Cu + TB-500 Research Rationale",
+    excerpt: "An evidence-based review of multi-peptide tissue repair blends. Covers the complementary mechanisms of BPC-157, GHK-Cu, TB-500 (and KPV), the research rationale for combining them, and the current state of single-compound versus combination evidence.",
+    date: "2026-06-28",
+    author: "Tier One Research Team",
+    tags: ["Blends", "Recovery", "GLOW", "KLOW", "Tissue Repair"],
+    readingTimeMinutes: 9,
+    heroImage: "/glow.jpg",
+    metaTitle: "Peptide Blends for Tissue Repair: BPC-157 + GHK-Cu + TB-500 (2026)",
+    metaDescription: "Research rationale for combining BPC-157, GHK-Cu, TB-500, and KPV in tissue repair blends. Covers complementary mechanisms (angiogenesis, gene expression, actin binding, anti-inflammation), single-compound research, and current combination evidence.",
+    content: () => (<>
+      <h2>Quick Summary</h2>
+      <ul>
+        <li>Multi-peptide tissue repair blends combine compounds with <strong>complementary mechanisms</strong> rather than redundant ones.</li>
+        <li><strong>BPC-157</strong> promotes angiogenesis and modulates the nitric oxide system; <strong>GHK-Cu</strong> regulates over 4,000 genes involved in tissue regeneration; <strong>TB-500</strong> (Thymosin β4 fragment) drives cell migration via actin binding; <strong>KPV</strong> provides α-MSH-derived anti-inflammatory action.</li>
+        <li>The research rationale for combining them is mechanistic complementarity — different points in the repair cascade are addressed simultaneously.</li>
+        <li>Published controlled trials specifically on the blend formulations themselves do not exist; the evidence base is from the individual component compounds.</li>
+      </ul>
+
+      <h2>Why Combine Peptides for Tissue Repair?</h2>
+      <p>Tissue repair is a multi-stage biological process, not a single event. Following injury, the body sequentially activates hemostasis, inflammation, proliferation, and remodeling — each phase governed by different cellular populations and signaling pathways. The premise behind multi-peptide tissue repair blends is that compounds targeting <strong>distinct phases or pathways</strong> can address the repair cascade more comprehensively than any single compound alone.</p>
+      <p>This approach has analogs in conventional pharmacology — combination therapies in oncology, HIV, and chronic disease management all rely on attacking a process through multiple parallel mechanisms.</p>
+      <p><em>In plain terms:</em> Tissue healing isn't one event — it's a chain of overlapping processes (inflammation, building new tissue, remodeling). Blends combine peptides that each handle different parts of that chain.</p>
+
+      <h2>The Component Compounds</h2>
+
+      <h3>BPC-157: Angiogenesis and Tissue Protection</h3>
+      <p><strong>BPC-157</strong> (Body Protection Compound) is a synthetic pentadecapeptide whose primary documented effects include upregulation of VEGFR2 (driving angiogenesis), modulation of the nitric oxide system, and sensitization of tissues to growth hormone. In musculoskeletal repair models, BPC-157 accelerates healing of tendon, ligament, and muscle injuries — with measurably improved collagen organization and tensile strength.</p>
+      <p>Its contribution to a tissue repair blend: <strong>vascular and matrix-level support for the regenerating tissue</strong>, enabling oxygen and nutrient delivery to the injury site.</p>
+
+      <h3>GHK-Cu: Gene Expression and Regenerative Programming</h3>
+      <p><strong>GHK-Cu</strong> is a naturally occurring copper-binding tripeptide that modulates the expression of over 4,000 human genes — broadly favoring regenerative, anti-inflammatory, and "youthful" expression patterns. In wound healing models, GHK-Cu accelerates closure, improves collagen deposition, and recruits repair-active cells to injury sites.</p>
+      <p>Its contribution to a tissue repair blend: <strong>broad gene-expression reprogramming toward the regenerative phenotype</strong> across multiple cell types involved in repair.</p>
+
+      <h3>TB-500: Cell Migration and Actin Dynamics</h3>
+      <p><strong>TB-500</strong> is a synthetic N-acetylated active fragment of Thymosin β4 (residues 17–23). Its primary documented effect is <strong>actin binding</strong> — the cytoskeletal protein that regulates cell migration. By modulating actin dynamics, TB-500 accelerates the movement of repair-active cells (fibroblasts, endothelial cells, keratinocytes) into injury sites.</p>
+      <p>Its contribution to a tissue repair blend: <strong>improved cellular mobility</strong>, allowing repair cells to reach the injury location faster.</p>
+
+      <h3>KPV: Targeted Anti-Inflammatory Action</h3>
+      <p><strong>KPV</strong> (Lys-Pro-Val) is the C-terminal tripeptide of α-melanocyte-stimulating hormone (α-MSH). It retains the anti-inflammatory properties of full α-MSH — including suppression of NF-κB signaling and pro-inflammatory cytokine production — but lacks the pigmenting effects associated with melanocortin receptor activation.</p>
+      <p>Its contribution to a tissue repair blend (included in KLOW formulations): <strong>focused anti-inflammatory action</strong> without off-target endocrine effects, dampening the inflammatory phase to allow proliferation and remodeling to proceed.</p>
+
+      <h2>Research Rationale for the Combinations</h2>
+
+      <h3>GLOW: BPC-157 + GHK-Cu + TB-500</h3>
+      <p>The three-component GLOW blend combines compounds covering <strong>angiogenesis + gene expression + cell migration</strong>. Mechanistically, these address vascular support, regenerative programming, and cellular mobility — three foundational requirements for tissue repair that operate in parallel rather than in series.</p>
+
+      <h3>KLOW: BPC-157 + GHK-Cu + TB-500 + KPV</h3>
+      <p>The four-component KLOW blend adds <strong>anti-inflammatory action</strong> via KPV. The rationale: in scenarios where excessive or prolonged inflammation impedes repair (chronic injuries, autoimmune-associated tissue damage, post-surgical recovery), dampening the inflammatory phase while supporting the regenerative phase may produce better outcomes than the regenerative components alone.</p>
+
+      <h2>The State of Combination Research</h2>
+      <p>An important honest note: <strong>peer-reviewed clinical trials specifically on the BPC-157 + GHK-Cu + TB-500 (± KPV) combination formulations themselves have not been published.</strong> The research basis for combining these compounds is mechanistic — derived from the established (but predominantly preclinical) research on each individual component.</p>
+      <p>This is not unique to peptide blends; many combination therapies in mainstream pharmacology emerged from individual-component research before formal combination trials were conducted. But it is a meaningful limitation that researchers using these blends should be aware of when interpreting outcomes.</p>
+
+      <h2>Safety Considerations</h2>
+      <p>Each component peptide individually has a favorable safety profile in animal research and (where available) human use. Combination safety is generally inferred from component profiles, with no documented adverse pharmacokinetic or pharmacodynamic interactions between the four. As with all research peptides, individual variability is expected and the long-term safety of sustained combination administration in humans has not been formally characterized.</p>
+
+      <h2>Conclusion</h2>
+      <p>Multi-peptide tissue repair blends represent a mechanistically rational extension of single-compound peptide research — combining compounds whose effects are complementary rather than redundant. The strongest argument for the combination approach lies in the multi-phase nature of tissue repair and the documented distinct mechanisms of each component. The strongest caveat is that the combination itself has not yet been studied in controlled trials. For researchers studying tissue regeneration with peptide tools, the blend approach offers a practical way to address multiple repair pathways simultaneously — with the understanding that the combination's specific synergies remain to be formally characterized.</p>
+    </>),
+    references: [
+      { journal: "PHARMACEUTICALS", title: "Multifunctionality and Possible Medical Application of the BPC 157 Peptide — Literature and Patent Review", year: 2025, identifier: "PMC11859134", authors: "BPC-157 component", url: "https://pmc.ncbi.nlm.nih.gov/articles/PMC11859134/" },
+      { journal: "BIOMED RES INT", title: "GHK-Cu may prevent oxidative stress in skin by regulating copper and modifying expression of numerous antioxidant genes", year: 2014, identifier: "PMID: 25196481", authors: "GHK-Cu component · Pickart L et al.", url: "https://pubmed.ncbi.nlm.nih.gov/25196481/" },
+      { journal: "ANN N Y ACAD SCI", title: "Thymosin β4 and tissue repair: the actin-sequestering peptide that regulates cell migration and wound healing", year: 2010, identifier: "PMID: 20536557", authors: "TB-500 component · Goldstein AL et al.", url: "https://pubmed.ncbi.nlm.nih.gov/20536557/" },
+      { journal: "PEPTIDES", title: "α-MSH-derived tripeptide KPV exerts anti-inflammatory effects via the melanocortin pathway", year: 2003, identifier: "PMID: 12676251", authors: "KPV component", url: "https://pubmed.ncbi.nlm.nih.gov/12676251/" },
+      { journal: "FASEB J", title: "The tripeptide KPV (Lys-Pro-Val) reduces inflammation in models of colitis", year: 2010, identifier: "PMID: 20736340", authors: "KPV component", url: "https://pubmed.ncbi.nlm.nih.gov/20736340/" },
+    ],
+    relatedProductIds: ["glow", "klow", "bpc157-10", "ghkcu-100", "tb500"],
+  },
 ];
 
 function getArticleBySlug(slug) {
@@ -2983,6 +3335,7 @@ function Footer() {
         <div>
           <div style={headingStyle}>Shop</div>
           <a onClick={() => navigate("/products")} style={linkStyle} onMouseEnter={e => e.target.style.color = "var(--red-primary)"} onMouseLeave={e => e.target.style.color = "var(--text-secondary)"}>All Products</a>
+          <a onClick={() => navigate("/research")} style={linkStyle} onMouseEnter={e => e.target.style.color = "var(--red-primary)"} onMouseLeave={e => e.target.style.color = "var(--text-secondary)"}>Research</a>
           <a onClick={() => navigate("/lab-results")} style={linkStyle} onMouseEnter={e => e.target.style.color = "var(--red-primary)"} onMouseLeave={e => e.target.style.color = "var(--text-secondary)"}>Lab Results</a>
           <a onClick={() => navigate("/calculator")} style={linkStyle} onMouseEnter={e => e.target.style.color = "var(--red-primary)"} onMouseLeave={e => e.target.style.color = "var(--text-secondary)"}>Reconstitution Calculator</a>
         </div>
