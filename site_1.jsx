@@ -3998,6 +3998,10 @@ function CartPage({ cart, setCart }) {
   const isShippingDiscount = (code) => SHIPPING_DISCOUNT_CODES.includes(code);
 
   async function applyDiscountCode() {
+    if (isSaleActive()) {
+      setDiscountError(`Discount codes are disabled during the ${SITEWIDE_SALE.headline.toLowerCase().replace(" sitewide", "")}.`);
+      return;
+    }
     const code = discountInput.trim().toUpperCase();
     if (!code) {
       setDiscountError("Enter a discount code.");
@@ -5118,7 +5122,8 @@ function CartPage({ cart, setCart }) {
             })}
           </div>
 
-          {/* Discount code section */}
+          {/* Discount code section — hidden while sitewide sale is active */}
+          {!isSaleActive() && (
           <div style={{
             padding: "24px 0 8px",
             borderBottom: "1px solid var(--border)",
@@ -5237,6 +5242,7 @@ function CartPage({ cart, setCart }) {
               </div>
             )}
           </div>
+          )}
 
           <div style={{
             padding: "20px 0 8px",
