@@ -13,7 +13,7 @@ const SITEWIDE_SALE = {
 function isSaleActive() { return !!(SITEWIDE_SALE && SITEWIDE_SALE.active); }
 function applySale(price) {
   if (!isSaleActive() || typeof price !== "number") return price;
-  return Math.round(price * (100 - SITEWIDE_SALE.percentOff)) / 100;
+  return Math.round(price * (100 - SITEWIDE_SALE.percentOff) / 100);
 }
 function formatSaleEndDate(iso) {
   if (!iso) return "";
@@ -2845,9 +2845,9 @@ function ProductCard({ product, index, onClick, onAddToCart }) {
 
         <div style={{ marginTop: "auto", display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
           {isSaleActive() ? (<>
-            <span style={{ fontFamily: "'Orbitron', sans-serif", fontWeight: 700, fontSize: 26, color: "var(--red-primary)" }}>${applySale(product.price).toFixed(2)}</span>
+            <span style={{ fontFamily: "'Orbitron', sans-serif", fontWeight: 700, fontSize: 26, color: "var(--text-primary)" }}>${applySale(product.price)}</span>
             <span style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 15, color: "var(--text-dim)", textDecoration: "line-through" }}>${product.price}</span>
-            <span style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 15, color: "var(--red-primary)", fontWeight: 700 }}>5+ @ ${applySale(product.bulk).toFixed(2)}</span>
+            <span style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 16, color: "var(--red-primary)", fontWeight: 700 }}>5+ @ ${applySale(product.bulk)}</span>
           </>) : (<>
             <span style={{ fontFamily: "'Orbitron', sans-serif", fontWeight: 700, fontSize: 26, color: "var(--text-primary)" }}>${product.price}</span>
             <span style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 18, color: "var(--red-primary)", fontWeight: 700 }}>5+ @ ${product.bulk}</span>
@@ -3254,12 +3254,12 @@ function ProductQuickView({ product, onClose, onAddToCart, onViewDetails }) {
               {/* Price */}
               {isSaleActive() ? (<>
                 <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 2 }}>
-                  <span style={{ fontFamily: "'Orbitron', sans-serif", fontWeight: 800, fontSize: 24, color: "var(--red-primary)" }}>${applySale(product.price).toFixed(2)}</span>
+                  <span style={{ fontFamily: "'Orbitron', sans-serif", fontWeight: 800, fontSize: 24, color: "var(--text-primary)" }}>${applySale(product.price)}</span>
                   <span style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 16, color: "var(--text-secondary)" }}>/vial</span>
                   <span style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 14, color: "var(--text-dim)", textDecoration: "line-through" }}>${product.price}</span>
                 </div>
                 <div style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 10, letterSpacing: "0.15em", color: "var(--red-primary)", fontWeight: 700, marginBottom: 6 }}>SAVE {SITEWIDE_SALE.percentOff}%</div>
-                <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 16, color: "var(--red-primary)", fontWeight: 700, marginBottom: 16 }}>5+ Vials: ${applySale(product.bulk).toFixed(2)} each <span style={{ color: "var(--text-dim)", fontWeight: 400, textDecoration: "line-through", fontSize: 14, marginLeft: 6 }}>${product.bulk}</span></div>
+                <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 16, color: "var(--red-primary)", fontWeight: 700, marginBottom: 16 }}>5+ Vials: ${applySale(product.bulk)} each <span style={{ color: "var(--text-dim)", fontWeight: 400, textDecoration: "line-through", fontSize: 14, marginLeft: 6 }}>${product.bulk}</span></div>
               </>) : (<>
                 <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 4 }}>
                   <span style={{ fontFamily: "'Orbitron', sans-serif", fontWeight: 800, fontSize: 24 }}>${product.price}</span>
@@ -6715,11 +6715,11 @@ export default function App() {
               {isSaleActive() ? (<>
                 <div style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 10, letterSpacing: "0.18em", fontWeight: 700, color: "var(--red-primary)", marginBottom: 6, textTransform: "uppercase" }}>{SITEWIDE_SALE.headline}</div>
                 <div style={{ display: "flex", alignItems: "baseline", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
-                  <span style={{ fontFamily: "'Orbitron', sans-serif", fontWeight: 800, fontSize: 28, color: "var(--red-primary)" }}>${applySale(product.price).toFixed(2)}</span>
+                  <span style={{ fontFamily: "'Orbitron', sans-serif", fontWeight: 800, fontSize: 28, color: "var(--text-primary)" }}>${applySale(product.price)}</span>
                   <span style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 18, color: "var(--text-secondary)" }}>/vial</span>
                   <span style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 16, color: "var(--text-dim)", textDecoration: "line-through" }}>${product.price}</span>
                 </div>
-                <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 18, color: "var(--red-primary)", fontWeight: 700 }}>5+ Vials: ${applySale(product.bulk).toFixed(2)} each <span style={{ color: "var(--text-dim)", fontWeight: 400, textDecoration: "line-through", fontSize: 15, marginLeft: 8 }}>${product.bulk}</span></div>
+                <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 18, color: "var(--red-primary)", fontWeight: 700 }}>5+ Vials: ${applySale(product.bulk)} each <span style={{ color: "var(--text-dim)", fontWeight: 400, textDecoration: "line-through", fontSize: 15, marginLeft: 8 }}>${product.bulk}</span></div>
               </>) : (<>
                 <div style={{ display: "flex", alignItems: "baseline", gap: 12, marginBottom: 6 }}>
                   <span style={{ fontFamily: "'Orbitron', sans-serif", fontWeight: 800, fontSize: 28 }}>${product.price}</span>
