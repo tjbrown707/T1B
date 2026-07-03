@@ -2178,10 +2178,12 @@ function CartPopup({ cart, visible, onClose }) {
   if (!visible || cart.length === 0) return null;
 
   const tieredPrice = (item) => {
-    if (item.qty >= 25) return Math.round(item.bulk * 0.90 * 100) / 100;
-    if (item.qty >= 10) return Math.round(item.bulk * 0.95 * 100) / 100;
-    if (item.qty >= 5) return item.bulk;
-    return item.price;
+    let base;
+    if (item.qty >= 25) base = Math.round(item.bulk * 0.90 * 100) / 100;
+    else if (item.qty >= 10) base = Math.round(item.bulk * 0.95 * 100) / 100;
+    else if (item.qty >= 5) base = item.bulk;
+    else base = item.price;
+    return isSaleActive() ? applySale(base) : base;
   };
   const subtotal = cart.reduce((sum, item) => sum + tieredPrice(item) * item.qty, 0);
   const totalItems = cart.reduce((sum, i) => sum + i.qty, 0);
@@ -2426,7 +2428,7 @@ function Header({ cartCount = 0 }) {
           ))}
 
           {/* Cart icon (always visible) */}
-          <div aria-label="Shopping cart" onClick={() => { setMenuOpen(false); navigate("/cart"); }} style={{ position: "relative", display: "inline-flex", cursor: "pointer" }}>
+          <div role="button" tabIndex={0} aria-label="Shopping cart" onClick={() => { setMenuOpen(false); navigate("/cart"); }} onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setMenuOpen(false); navigate("/cart"); } }} style={{ position: "relative", display: "inline-flex", cursor: "pointer" }}>
             <span style={{
               fontFamily: "'Rajdhani', sans-serif",
               fontSize: 22,
@@ -3330,18 +3332,30 @@ function ProductQuickView({ product, onClose, onAddToCart, onViewDetails }) {
   );
 }
 
-function Footer() {
+const FOOTER_LINK_STYLE = {
+  fontFamily: "'Rajdhani', sans-serif",
+  fontSize: 13,
+  color: "var(--text-secondary)",
+  cursor: "pointer",
+  textDecoration: "none",
+  transition: "color 0.2s",
+  display: "block",
+  padding: "4px 0",
+};
+function FooterLink({ to, children }) {
   const navigate = useNavigate();
-  const linkStyle = {
-    fontFamily: "'Rajdhani', sans-serif",
-    fontSize: 13,
-    color: "var(--text-secondary)",
-    cursor: "pointer",
-    textDecoration: "none",
-    transition: "color 0.2s",
-    display: "block",
-    padding: "4px 0",
-  };
+  return (
+    <a
+      href={to}
+      onClick={(e) => { e.preventDefault(); navigate(to); }}
+      style={FOOTER_LINK_STYLE}
+      onMouseEnter={e => e.target.style.color = "var(--red-primary)"}
+      onMouseLeave={e => e.target.style.color = "var(--text-secondary)"}
+    >{children}</a>
+  );
+}
+
+function Footer() {
   const headingStyle = {
     fontFamily: "'Orbitron', sans-serif",
     fontSize: 11,
@@ -3379,26 +3393,26 @@ function Footer() {
 
         <div>
           <div style={headingStyle}>Shop</div>
-          <a onClick={() => navigate("/products")} style={linkStyle} onMouseEnter={e => e.target.style.color = "var(--red-primary)"} onMouseLeave={e => e.target.style.color = "var(--text-secondary)"}>All Products</a>
-          <a onClick={() => navigate("/research")} style={linkStyle} onMouseEnter={e => e.target.style.color = "var(--red-primary)"} onMouseLeave={e => e.target.style.color = "var(--text-secondary)"}>Research</a>
-          <a onClick={() => navigate("/lab-results")} style={linkStyle} onMouseEnter={e => e.target.style.color = "var(--red-primary)"} onMouseLeave={e => e.target.style.color = "var(--text-secondary)"}>Lab Results</a>
-          <a onClick={() => navigate("/calculator")} style={linkStyle} onMouseEnter={e => e.target.style.color = "var(--red-primary)"} onMouseLeave={e => e.target.style.color = "var(--text-secondary)"}>Reconstitution Calculator</a>
+          <FooterLink to="/products">All Products</FooterLink>
+          <FooterLink to="/research">Research</FooterLink>
+          <FooterLink to="/lab-results">Lab Results</FooterLink>
+          <FooterLink to="/calculator">Reconstitution Calculator</FooterLink>
         </div>
 
         <div>
           <div style={headingStyle}>Info</div>
-          <a onClick={() => navigate("/about")} style={linkStyle} onMouseEnter={e => e.target.style.color = "var(--red-primary)"} onMouseLeave={e => e.target.style.color = "var(--text-secondary)"}>About</a>
-          <a onClick={() => navigate("/faq")} style={linkStyle} onMouseEnter={e => e.target.style.color = "var(--red-primary)"} onMouseLeave={e => e.target.style.color = "var(--text-secondary)"}>FAQ</a>
-          <a onClick={() => navigate("/testing-standards")} style={linkStyle} onMouseEnter={e => e.target.style.color = "var(--red-primary)"} onMouseLeave={e => e.target.style.color = "var(--text-secondary)"}>Testing Standards</a>
-          <a onClick={() => navigate("/contact")} style={linkStyle} onMouseEnter={e => e.target.style.color = "var(--red-primary)"} onMouseLeave={e => e.target.style.color = "var(--text-secondary)"}>Contact</a>
+          <FooterLink to="/about">About</FooterLink>
+          <FooterLink to="/faq">FAQ</FooterLink>
+          <FooterLink to="/testing-standards">Testing Standards</FooterLink>
+          <FooterLink to="/contact">Contact</FooterLink>
         </div>
 
         <div>
           <div style={headingStyle}>Policies</div>
-          <a onClick={() => navigate("/shipping")} style={linkStyle} onMouseEnter={e => e.target.style.color = "var(--red-primary)"} onMouseLeave={e => e.target.style.color = "var(--text-secondary)"}>Shipping</a>
-          <a onClick={() => navigate("/returns")} style={linkStyle} onMouseEnter={e => e.target.style.color = "var(--red-primary)"} onMouseLeave={e => e.target.style.color = "var(--text-secondary)"}>Returns</a>
-          <a onClick={() => navigate("/terms")} style={linkStyle} onMouseEnter={e => e.target.style.color = "var(--red-primary)"} onMouseLeave={e => e.target.style.color = "var(--text-secondary)"}>Terms of Service</a>
-          <a onClick={() => navigate("/privacy")} style={linkStyle} onMouseEnter={e => e.target.style.color = "var(--red-primary)"} onMouseLeave={e => e.target.style.color = "var(--text-secondary)"}>Privacy Policy</a>
+          <FooterLink to="/shipping">Shipping</FooterLink>
+          <FooterLink to="/returns">Returns</FooterLink>
+          <FooterLink to="/terms">Terms of Service</FooterLink>
+          <FooterLink to="/privacy">Privacy Policy</FooterLink>
         </div>
       </div>
 
@@ -3775,6 +3789,7 @@ function ContactPage() {
   usePageMeta("Contact Us", "Get in touch with Tier One BioSystems. Questions about research peptides, orders, or wholesale inquiries.");
   const [form, setForm] = useState({ name: "", email: "", subject: "", message: "" });
   const [submitted, setSubmitted] = useState(false);
+  const [sending, setSending] = useState(false);
 
   const inputStyle = {
     width: "100%",
@@ -3801,6 +3816,8 @@ function ContactPage() {
 
   function handleSubmit(e) {
     e.preventDefault();
+    if (sending) return;
+    setSending(true);
     const formData = new URLSearchParams();
     formData.append("form-name", "contact");
     formData.append("name", form.name);
@@ -3814,7 +3831,7 @@ function ContactPage() {
     }).then((res) => {
       if (res.ok) setSubmitted(true);
       else console.error("Form submission failed:", res.status);
-    }).catch((err) => console.error("Form error:", err));
+    }).catch((err) => console.error("Form error:", err)).finally(() => setSending(false));
   }
 
   return (
@@ -3904,7 +3921,7 @@ function ContactPage() {
               onFocus={e => e.target.style.borderColor = "var(--red-primary)"}
               onBlur={e => e.target.style.borderColor = "var(--border)"} />
           </div>
-          <button type="submit" style={{
+          <button type="submit" disabled={sending} style={{
             padding: "14px 0",
             background: "var(--red-primary)",
             border: "1px solid var(--red-primary)",
@@ -3914,12 +3931,13 @@ function ContactPage() {
             fontSize: 13,
             letterSpacing: "0.2em",
             textTransform: "uppercase",
-            cursor: "pointer",
+            cursor: sending ? "not-allowed" : "pointer",
             transition: "all 0.2s",
+            opacity: sending ? 0.6 : 1,
           }}
-            onMouseEnter={e => { e.target.style.background = "transparent"; e.target.style.color = "var(--red-primary)"; }}
+            onMouseEnter={e => { if (!sending) { e.target.style.background = "transparent"; e.target.style.color = "var(--red-primary)"; } }}
             onMouseLeave={e => { e.target.style.background = "var(--red-primary)"; e.target.style.color = "#fff"; }}
-          >Send Message</button>
+          >{sending ? "Sending…" : "Send Message"}</button>
         </form>
       )}
     </div>
@@ -6016,10 +6034,11 @@ function FAQPage() {
 
 function TestingStandardsPage() {
   usePageMeta("Testing Standards", "How Tier One BioSystems verifies research peptide purity, identity, and safety. HPLC, ESI-MS, AAA, peptide content, and endotoxin testing explained.");
+  const navigate = useNavigate();
   return (
     <>
       <PolicyShell kicker="QUALITY ASSURANCE" title="Testing Standards">
-        <p>Every lot Tier One BioSystems releases is independently tested against a defined acceptance specification. Below is what we test, why we test it, and the methods used. The current Certificate of Analysis for each product is published on the <a onClick={(e) => { e.preventDefault(); window.location.href = "/lab-results"; }} style={{ color: "var(--red-primary)", cursor: "pointer" }}>Lab Results</a> page.</p>
+        <p>Every lot Tier One BioSystems releases is independently tested against a defined acceptance specification. Below is what we test, why we test it, and the methods used. The current Certificate of Analysis for each product is published on the <a href="/lab-results" onClick={(e) => { e.preventDefault(); navigate("/lab-results"); }} style={{ color: "var(--red-primary)", cursor: "pointer" }}>Lab Results</a> page.</p>
 
         <h2 style={policyHeadingStyle}>Appearance</h2>
         <p><strong style={{ color: "var(--text-primary)" }}>Method: Visual.</strong> Lyophilized peptides are inspected for color, form, and visible particulates. Released lots are clean white-to-off-white powders unless otherwise noted (GHK-Cu, for example, is naturally blue).</p>
@@ -6375,6 +6394,373 @@ function AgeGate({ onConfirm }) {
 
 // ─── Main App ────────────────────────────────────────────────────────────────
 
+// ─── Routed Page Components ───────────────────────────────────────────────────
+const FEATURED_IDS = ["glp3rt-10", "tesamorelin", "bpc157-10", "tb500", "klow", "motsc"];
+
+function HomePage({ onAddToCart, onSelectProduct }) {
+  const navigate = useNavigate();
+  const featuredProducts = FEATURED_IDS.map(id => PRODUCTS.find(p => p.id === id)).filter(Boolean);
+  usePageMeta(null, "Premium research grade peptides with 99%+ purity. Third-party tested. BPC-157, GLP-3RT, Tesamorelin, and more. US-based supplier.");
+  useScrollReveal();
+  return (<>
+    <Hero />
+
+    {/* Featured Products */}
+    <section className="scroll-reveal" style={{ maxWidth: 1400, margin: "0 auto", padding: "0 24px 60px" }}>
+      <div style={{ textAlign: "center", marginBottom: 40 }}>
+        <div style={{
+          fontFamily: "'Orbitron', sans-serif",
+          fontSize: 11,
+          fontWeight: 600,
+          letterSpacing: "0.2em",
+          color: "var(--red-primary)",
+          marginBottom: 10,
+        }}>BEST SELLERS</div>
+        <h2 style={{
+          fontFamily: "'Orbitron', sans-serif",
+          fontWeight: 800,
+          fontSize: 28,
+          letterSpacing: "0.05em",
+        }}>FEATURED COMPOUNDS</h2>
+      </div>
+
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(auto-fill, minmax(min(260px, 45%), 1fr))",
+        gap: 20,
+      }}>
+        {featuredProducts.map((product, i) => (
+          <ProductCard
+            key={product.id}
+            product={product}
+            index={i}
+            onClick={() => onSelectProduct(product)}
+            onAddToCart={onAddToCart}
+          />
+        ))}
+      </div>
+
+      <div style={{ textAlign: "center", marginTop: 48 }}>
+        <button onClick={() => navigate("/products")} style={{
+          fontFamily: "'Orbitron', sans-serif",
+          fontSize: 13,
+          fontWeight: 700,
+          letterSpacing: "0.15em",
+          padding: "16px 48px",
+          background: "transparent",
+          border: "1px solid var(--red-primary)",
+          color: "var(--red-primary)",
+          cursor: "pointer",
+          textTransform: "uppercase",
+          transition: "all 0.2s",
+        }}
+          onMouseEnter={e => { e.target.style.background = "var(--red-primary)"; e.target.style.color = "#fff"; }}
+          onMouseLeave={e => { e.target.style.background = "transparent"; e.target.style.color = "var(--red-primary)"; }}
+        >VIEW ALL PRODUCTS</button>
+      </div>
+    </section>
+
+    <Footer />
+  </>);
+};
+
+// Full Products Page
+function ProductsPage({ searchQuery, setSearchQuery, onAddToCart, onSelectProduct }) {
+  const filtered = PRODUCTS.filter(p => searchQuery === "" || p.name.toLowerCase().includes(searchQuery.toLowerCase()));
+  usePageMeta("All Products", "Browse our full catalog of research grade peptides. 99%+ purity, third-party tested.");
+  useScrollReveal();
+  return (<>
+    <section style={{ maxWidth: 1400, margin: "0 auto", padding: "120px 24px 80px" }}>
+      <div style={{ textAlign: "center", marginBottom: 40 }}>
+        <div style={{
+          fontFamily: "'Orbitron', sans-serif",
+          fontSize: 11,
+          fontWeight: 600,
+          letterSpacing: "0.2em",
+          color: "var(--red-primary)",
+          marginBottom: 10,
+        }}>CATALOG</div>
+        <h2 style={{
+          fontFamily: "'Orbitron', sans-serif",
+          fontWeight: 800,
+          fontSize: 28,
+          letterSpacing: "0.05em",
+        }}>ALL RESEARCH COMPOUNDS</h2>
+      </div>
+
+      {/* Search bar */}
+      <div style={{
+        display: "flex",
+        justifyContent: "center",
+        marginBottom: 32,
+      }}>
+        <input
+          type="text"
+          placeholder="Search compounds..."
+          value={searchQuery}
+          onChange={e => setSearchQuery(e.target.value)}
+          style={{
+            width: "100%",
+            maxWidth: 400,
+            padding: "10px 18px",
+            fontFamily: "'Rajdhani', sans-serif",
+            fontSize: 14,
+            fontWeight: 500,
+            background: "var(--bg-card)",
+            border: "1px solid var(--border)",
+            color: "var(--text-primary)",
+            outline: "none",
+            letterSpacing: "0.05em",
+            transition: "border-color 0.2s",
+          }}
+          onFocus={e => e.target.style.borderColor = "rgba(196,30,42,0.4)"}
+          onBlur={e => e.target.style.borderColor = "var(--border)"}
+        />
+      </div>
+
+      {/* Product grid */}
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(auto-fill, minmax(min(260px, 45%), 1fr))",
+        gap: 20,
+      }}>
+        {filtered.map((product, i) => (
+          <ProductCard
+            key={product.id}
+            product={product}
+            index={i}
+            onClick={() => onSelectProduct(product)}
+            onAddToCart={onAddToCart}
+          />
+        ))}
+      </div>
+
+      {filtered.length === 0 && (
+        <div style={{
+          textAlign: "center",
+          padding: "60px 20px",
+          fontFamily: "'Rajdhani', sans-serif",
+          fontSize: 16,
+          color: "var(--text-dim)",
+        }}>No compounds found matching your search.</div>
+      )}
+    </section>
+    <Footer />
+  </>);
+};
+
+// Individual Product Page
+function ProductPage({ onAddToCart }) {
+  const navigate = useNavigate();
+  const { id } = useParams();
+  const product = PRODUCTS.find(p => p.id === id);
+  usePageMeta(
+    product ? `${product.name} ${product.dose}` : "Product Not Found",
+    product ? `${product.name} ${product.dose} — ${product.research?.slice(0, 150)}` : ""
+  );
+  const isMobile = window.innerWidth < 700;
+  if (!product) return <NotFoundPage />;
+  return (<>
+    <section style={{ maxWidth: 1000, margin: "0 auto", padding: "120px 24px 80px" }}>
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
+        gap: 0,
+        border: "1px solid var(--border)",
+        background: "var(--bg-card)",
+        marginBottom: 32,
+      }}>
+        {/* Image */}
+        <div style={{
+          background: "#080808",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          overflow: "hidden",
+          maxHeight: isMobile ? 300 : 450,
+        }}>
+          <img src={product.image} alt={product.name} loading="lazy" style={{
+            width: "100%",
+            height: "100%",
+            objectFit: "contain",
+            padding: isMobile ? 10 : 20,
+          }} />
+        </div>
+
+        {/* Info */}
+        <div style={{ padding: isMobile ? "20px 18px" : "40px 36px", display: "flex", flexDirection: "column" }}>
+          <h1 style={{
+            fontFamily: "'Orbitron', sans-serif",
+            fontWeight: 800,
+            fontSize: isMobile ? 24 : 32,
+            letterSpacing: "0.03em",
+            lineHeight: 1.1,
+            marginBottom: 4,
+          }}>{product.name}</h1>
+
+          <div style={{
+            fontFamily: "'Rajdhani', sans-serif",
+            fontSize: 18,
+            fontWeight: 500,
+            color: "var(--text-secondary)",
+            marginBottom: 24,
+          }}>{product.dose}</div>
+
+          {/* Price block */}
+          <div style={{
+            padding: "16px 20px",
+            border: "1px solid var(--border)",
+            background: "rgba(196,30,42,0.03)",
+            marginBottom: 24,
+          }}>
+            {isSaleActive() ? (<>
+              <div style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 10, letterSpacing: "0.18em", fontWeight: 700, color: "var(--red-primary)", marginBottom: 6, textTransform: "uppercase" }}>{SITEWIDE_SALE.headline}</div>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
+                <span style={{ fontFamily: "'Orbitron', sans-serif", fontWeight: 800, fontSize: 28, color: "var(--text-primary)" }}>${applySale(product.price)}</span>
+                <span style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 18, color: "var(--text-secondary)" }}>/vial</span>
+                <span style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 16, color: "var(--text-dim)", textDecoration: "line-through" }}>${product.price}</span>
+              </div>
+              <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 18, color: "var(--red-primary)", fontWeight: 700 }}>5+ Vials: ${applySale(product.bulk)} each <span style={{ color: "var(--text-dim)", fontWeight: 400, textDecoration: "line-through", fontSize: 15, marginLeft: 8 }}>${product.bulk}</span></div>
+            </>) : (<>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 12, marginBottom: 6 }}>
+                <span style={{ fontFamily: "'Orbitron', sans-serif", fontWeight: 800, fontSize: 28 }}>${product.price}</span>
+                <span style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 18, color: "var(--text-secondary)" }}>/vial</span>
+              </div>
+              <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 18, color: "var(--red-primary)", fontWeight: 700 }}>5+ Vials: ${product.bulk} each</div>
+            </>)}
+            <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 13, color: "var(--text-dim)", marginTop: 4 }}>10+ extra 5% off · 25+ extra 10% off</div>
+          </div>
+
+          <button onClick={() => onAddToCart(product)} style={{
+            width: "100%",
+            padding: "14px 0",
+            background: "var(--red-primary)",
+            border: "1px solid var(--red-primary)",
+            color: "#fff",
+            fontFamily: "'Orbitron', sans-serif",
+            fontWeight: 700,
+            fontSize: 13,
+            letterSpacing: "0.2em",
+            textTransform: "uppercase",
+            cursor: "pointer",
+            transition: "all 0.2s",
+            marginBottom: 20,
+          }}
+            onMouseEnter={e => { e.target.style.background = "transparent"; e.target.style.color = "var(--red-primary)"; }}
+            onMouseLeave={e => { e.target.style.background = "var(--red-primary)"; e.target.style.color = "#fff"; }}
+          >ADD TO CART</button>
+
+          {/* Trust bar */}
+          <div style={{
+            display: "flex",
+            gap: 8,
+            flexWrap: "wrap",
+            marginBottom: 20,
+          }}>
+            {[
+              { label: "LOT-TESTED", color: "#22c55e" },
+              { label: "SHIPS FROM US", color: "var(--red-primary)" },
+              { label: "FREE OVER $200", color: "#22c55e" },
+            ].map((b, i) => (
+              <span key={i} style={{
+                fontFamily: "'Orbitron', sans-serif",
+                fontSize: 9,
+                fontWeight: 700,
+                letterSpacing: "0.1em",
+                padding: "5px 10px",
+                border: `1px solid ${b.color === "#22c55e" ? "rgba(34,197,94,0.3)" : "rgba(196,30,42,0.4)"}`,
+                background: b.color === "#22c55e" ? "rgba(34,197,94,0.05)" : "rgba(196,30,42,0.05)",
+                color: b.color,
+              }}>{b.label}</span>
+            ))}
+          </div>
+
+          {/* Quick specs */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            {[
+              { label: "PURITY", value: product.purity },
+              { label: "FORM", value: "Lyophilized" },
+            ].map((spec, i) => (
+              <div key={i} style={{ padding: "10px 14px", border: "1px solid var(--border)" }}>
+                <div style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 11, fontWeight: 600, letterSpacing: "0.1em", color: "var(--text-secondary)", marginBottom: 4 }}>{spec.label}</div>
+                <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 14, fontWeight: 600, color: "var(--text-primary)" }}>{spec.value}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Research info */}
+      <div style={{ border: "1px solid var(--border)", background: "var(--bg-card)", padding: isMobile ? "24px 18px" : "36px 40px", marginBottom: 24 }}>
+        <div style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 12, fontWeight: 700, letterSpacing: "0.15em", color: "var(--red-primary)", marginBottom: 16 }}>RESEARCH PROFILE</div>
+        <p style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 17, fontWeight: 400, color: "var(--text-secondary)", lineHeight: 1.8, marginBottom: 28 }}>{product.research}</p>
+
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 16 }}>
+          {[
+            { label: "SEQUENCE / COMPOSITION", value: product.sequence },
+            { label: "STORAGE CONDITIONS", value: product.storage },
+          ].map((item, i) => (
+            <div key={i} style={{ padding: "16px 20px", border: "1px solid var(--border)", background: "rgba(17,17,17,0.5)" }}>
+              <div style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 12, fontWeight: 600, letterSpacing: "0.1em", color: "var(--text-secondary)", marginBottom: 8 }}>{item.label}</div>
+              <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 16, fontWeight: 500, color: "var(--text-secondary)", lineHeight: 1.6 }}>{item.value}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* View COA button */}
+        {getLabResults(product.name, product.dose) && (
+          <button onClick={() => navigate(`/lab-results?product=${encodeURIComponent(product.name)}&dose=${encodeURIComponent(product.dose)}`)} style={{
+            marginTop: 28,
+            width: "100%",
+            padding: "12px 0",
+            background: "transparent",
+            border: "1px solid rgba(34,197,94,0.3)",
+            color: "#22c55e",
+            fontFamily: "'Orbitron', sans-serif",
+            fontWeight: 700,
+            fontSize: 12,
+            letterSpacing: "0.15em",
+            textTransform: "uppercase",
+            cursor: "pointer",
+            transition: "all 0.2s",
+          }}
+            onMouseEnter={e => { e.target.style.background = "rgba(34,197,94,0.1)"; }}
+            onMouseLeave={e => { e.target.style.background = "transparent"; }}
+          >VIEW CERTIFICATE OF ANALYSIS</button>
+        )}
+      </div>
+
+      {/* Molecular Profile */}
+      {getMolecularProfile(product.name) && (
+        <div style={{ marginBottom: 24 }}>
+          <MolecularProfile product={product} />
+        </div>
+      )}
+
+      {/* Sources & References */}
+      {getReferences(product.name) && (
+        <div style={{
+          border: "1px solid var(--border)",
+          background: "var(--bg-card)",
+          padding: isMobile ? "24px 18px" : "32px 36px",
+          marginBottom: 24,
+        }}>
+          <SourcesReferences product={product} />
+        </div>
+      )}
+
+      {/* Disclaimer */}
+      <div style={{ padding: "14px 18px", border: "1px solid rgba(196,30,42,0.15)", background: "rgba(196,30,42,0.03)" }}>
+        <div style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 13, fontWeight: 700, letterSpacing: "0.1em", color: "var(--red-primary)", marginBottom: 6 }}>RESEARCH USE ONLY</div>
+        <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 16, color: "var(--text-secondary)", lineHeight: 1.6 }}>
+          This product is intended for laboratory research use only. Not for human consumption. Not a drug, food, or cosmetic. Handle with appropriate laboratory safety protocols.
+        </div>
+      </div>
+    </section>
+    <Footer />
+  </>);
+};
+
 export default function App() {
   const [ageVerified, setAgeVerified] = useState(() => {
     try { return sessionStorage.getItem("ageVerified") === "true"; }
@@ -6427,7 +6813,7 @@ export default function App() {
         "offers": {
           "@type": "Offer",
           "url": `${DOMAIN}/product/${p.id}`,
-          "price": p.price,
+          "price": applySale(p.price),
           "priceCurrency": "USD",
           "availability": "https://schema.org/InStock",
           "priceValidUntil": "2027-12-31",
@@ -6444,11 +6830,6 @@ export default function App() {
       document.querySelectorAll('script[data-tier1-products]').forEach(el => el.remove());
     };
   }, []);
-
-  const filtered = PRODUCTS.filter(p => {
-    return searchQuery === "" ||
-      p.name.toLowerCase().includes(searchQuery.toLowerCase());
-  });
 
   // Age denied screen
   if (ageDenied) {
@@ -6495,371 +6876,6 @@ export default function App() {
     );
   }
 
-  // Home page content as a component
-  // Featured product IDs
-  const FEATURED_IDS = ["glp3rt-10", "tesamorelin", "bpc157-10", "tb500", "klow", "motsc"];
-  const featuredProducts = FEATURED_IDS.map(id => PRODUCTS.find(p => p.id === id)).filter(Boolean);
-
-  const HomePage = () => {
-    usePageMeta(null, "Premium research grade peptides with 99%+ purity. Third-party tested. BPC-157, GLP-3RT, Tesamorelin, and more. US-based supplier.");
-    useScrollReveal();
-    return (<>
-      <Hero />
-
-      {/* Featured Products */}
-      <section className="scroll-reveal" style={{ maxWidth: 1400, margin: "0 auto", padding: "0 24px 60px" }}>
-        <div style={{ textAlign: "center", marginBottom: 40 }}>
-          <div style={{
-            fontFamily: "'Orbitron', sans-serif",
-            fontSize: 11,
-            fontWeight: 600,
-            letterSpacing: "0.2em",
-            color: "var(--red-primary)",
-            marginBottom: 10,
-          }}>BEST SELLERS</div>
-          <h2 style={{
-            fontFamily: "'Orbitron', sans-serif",
-            fontWeight: 800,
-            fontSize: 28,
-            letterSpacing: "0.05em",
-          }}>FEATURED COMPOUNDS</h2>
-        </div>
-
-        <div style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fill, minmax(min(260px, 45%), 1fr))",
-          gap: 20,
-        }}>
-          {featuredProducts.map((product, i) => (
-            <ProductCard
-              key={product.id}
-              product={product}
-              index={i}
-              onClick={() => setSelectedProduct(product)}
-              onAddToCart={addToCart}
-            />
-          ))}
-        </div>
-
-        <div style={{ textAlign: "center", marginTop: 48 }}>
-          <button onClick={() => navigate("/products")} style={{
-            fontFamily: "'Orbitron', sans-serif",
-            fontSize: 13,
-            fontWeight: 700,
-            letterSpacing: "0.15em",
-            padding: "16px 48px",
-            background: "transparent",
-            border: "1px solid var(--red-primary)",
-            color: "var(--red-primary)",
-            cursor: "pointer",
-            textTransform: "uppercase",
-            transition: "all 0.2s",
-          }}
-            onMouseEnter={e => { e.target.style.background = "var(--red-primary)"; e.target.style.color = "#fff"; }}
-            onMouseLeave={e => { e.target.style.background = "transparent"; e.target.style.color = "var(--red-primary)"; }}
-          >VIEW ALL PRODUCTS</button>
-        </div>
-      </section>
-
-      <Footer />
-    </>);
-  };
-
-  // Full Products Page
-  const ProductsPage = () => {
-    usePageMeta("All Products", "Browse our full catalog of research grade peptides. 99%+ purity, third-party tested.");
-    useScrollReveal();
-    return (<>
-      <section style={{ maxWidth: 1400, margin: "0 auto", padding: "120px 24px 80px" }}>
-        <div style={{ textAlign: "center", marginBottom: 40 }}>
-          <div style={{
-            fontFamily: "'Orbitron', sans-serif",
-            fontSize: 11,
-            fontWeight: 600,
-            letterSpacing: "0.2em",
-            color: "var(--red-primary)",
-            marginBottom: 10,
-          }}>CATALOG</div>
-          <h2 style={{
-            fontFamily: "'Orbitron', sans-serif",
-            fontWeight: 800,
-            fontSize: 28,
-            letterSpacing: "0.05em",
-          }}>ALL RESEARCH COMPOUNDS</h2>
-        </div>
-
-        {/* Search bar */}
-        <div style={{
-          display: "flex",
-          justifyContent: "center",
-          marginBottom: 32,
-        }}>
-          <input
-            type="text"
-            placeholder="Search compounds..."
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            style={{
-              width: "100%",
-              maxWidth: 400,
-              padding: "10px 18px",
-              fontFamily: "'Rajdhani', sans-serif",
-              fontSize: 14,
-              fontWeight: 500,
-              background: "var(--bg-card)",
-              border: "1px solid var(--border)",
-              color: "var(--text-primary)",
-              outline: "none",
-              letterSpacing: "0.05em",
-              transition: "border-color 0.2s",
-            }}
-            onFocus={e => e.target.style.borderColor = "rgba(196,30,42,0.4)"}
-            onBlur={e => e.target.style.borderColor = "var(--border)"}
-          />
-        </div>
-
-        {/* Product grid */}
-        <div style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fill, minmax(min(260px, 45%), 1fr))",
-          gap: 20,
-        }}>
-          {filtered.map((product, i) => (
-            <ProductCard
-              key={product.id}
-              product={product}
-              index={i}
-              onClick={() => setSelectedProduct(product)}
-              onAddToCart={addToCart}
-            />
-          ))}
-        </div>
-
-        {filtered.length === 0 && (
-          <div style={{
-            textAlign: "center",
-            padding: "60px 20px",
-            fontFamily: "'Rajdhani', sans-serif",
-            fontSize: 16,
-            color: "var(--text-dim)",
-          }}>No compounds found matching your search.</div>
-        )}
-      </section>
-      <Footer />
-    </>);
-  };
-
-  // Individual Product Page
-  const ProductPage = () => {
-    const { id } = useParams();
-    const product = PRODUCTS.find(p => p.id === id);
-    usePageMeta(
-      product ? `${product.name} ${product.dose}` : "Product Not Found",
-      product ? `${product.name} ${product.dose} — ${product.research?.slice(0, 150)}` : ""
-    );
-    const isMobile = window.innerWidth < 700;
-    if (!product) return <NotFoundPage />;
-    return (<>
-      <section style={{ maxWidth: 1000, margin: "0 auto", padding: "120px 24px 80px" }}>
-        <div style={{
-          display: "grid",
-          gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
-          gap: 0,
-          border: "1px solid var(--border)",
-          background: "var(--bg-card)",
-          marginBottom: 32,
-        }}>
-          {/* Image */}
-          <div style={{
-            background: "#080808",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            overflow: "hidden",
-            maxHeight: isMobile ? 300 : 450,
-          }}>
-            <img src={product.image} alt={product.name} loading="lazy" style={{
-              width: "100%",
-              height: "100%",
-              objectFit: "contain",
-              padding: isMobile ? 10 : 20,
-            }} />
-          </div>
-
-          {/* Info */}
-          <div style={{ padding: isMobile ? "20px 18px" : "40px 36px", display: "flex", flexDirection: "column" }}>
-            <h1 style={{
-              fontFamily: "'Orbitron', sans-serif",
-              fontWeight: 800,
-              fontSize: isMobile ? 24 : 32,
-              letterSpacing: "0.03em",
-              lineHeight: 1.1,
-              marginBottom: 4,
-            }}>{product.name}</h1>
-
-            <div style={{
-              fontFamily: "'Rajdhani', sans-serif",
-              fontSize: 18,
-              fontWeight: 500,
-              color: "var(--text-secondary)",
-              marginBottom: 24,
-            }}>{product.dose}</div>
-
-            {/* Price block */}
-            <div style={{
-              padding: "16px 20px",
-              border: "1px solid var(--border)",
-              background: "rgba(196,30,42,0.03)",
-              marginBottom: 24,
-            }}>
-              {isSaleActive() ? (<>
-                <div style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 10, letterSpacing: "0.18em", fontWeight: 700, color: "var(--red-primary)", marginBottom: 6, textTransform: "uppercase" }}>{SITEWIDE_SALE.headline}</div>
-                <div style={{ display: "flex", alignItems: "baseline", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
-                  <span style={{ fontFamily: "'Orbitron', sans-serif", fontWeight: 800, fontSize: 28, color: "var(--text-primary)" }}>${applySale(product.price)}</span>
-                  <span style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 18, color: "var(--text-secondary)" }}>/vial</span>
-                  <span style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 16, color: "var(--text-dim)", textDecoration: "line-through" }}>${product.price}</span>
-                </div>
-                <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 18, color: "var(--red-primary)", fontWeight: 700 }}>5+ Vials: ${applySale(product.bulk)} each <span style={{ color: "var(--text-dim)", fontWeight: 400, textDecoration: "line-through", fontSize: 15, marginLeft: 8 }}>${product.bulk}</span></div>
-              </>) : (<>
-                <div style={{ display: "flex", alignItems: "baseline", gap: 12, marginBottom: 6 }}>
-                  <span style={{ fontFamily: "'Orbitron', sans-serif", fontWeight: 800, fontSize: 28 }}>${product.price}</span>
-                  <span style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 18, color: "var(--text-secondary)" }}>/vial</span>
-                </div>
-                <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 18, color: "var(--red-primary)", fontWeight: 700 }}>5+ Vials: ${product.bulk} each</div>
-              </>)}
-              <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 13, color: "var(--text-dim)", marginTop: 4 }}>10+ extra 5% off · 25+ extra 10% off</div>
-            </div>
-
-            <button onClick={() => addToCart(product)} style={{
-              width: "100%",
-              padding: "14px 0",
-              background: "var(--red-primary)",
-              border: "1px solid var(--red-primary)",
-              color: "#fff",
-              fontFamily: "'Orbitron', sans-serif",
-              fontWeight: 700,
-              fontSize: 13,
-              letterSpacing: "0.2em",
-              textTransform: "uppercase",
-              cursor: "pointer",
-              transition: "all 0.2s",
-              marginBottom: 20,
-            }}
-              onMouseEnter={e => { e.target.style.background = "transparent"; e.target.style.color = "var(--red-primary)"; }}
-              onMouseLeave={e => { e.target.style.background = "var(--red-primary)"; e.target.style.color = "#fff"; }}
-            >ADD TO CART</button>
-
-            {/* Trust bar */}
-            <div style={{
-              display: "flex",
-              gap: 8,
-              flexWrap: "wrap",
-              marginBottom: 20,
-            }}>
-              {[
-                { label: "LOT-TESTED", color: "#22c55e" },
-                { label: "SHIPS FROM US", color: "var(--red-primary)" },
-                { label: "FREE OVER $200", color: "#22c55e" },
-              ].map((b, i) => (
-                <span key={i} style={{
-                  fontFamily: "'Orbitron', sans-serif",
-                  fontSize: 9,
-                  fontWeight: 700,
-                  letterSpacing: "0.1em",
-                  padding: "5px 10px",
-                  border: `1px solid ${b.color === "#22c55e" ? "rgba(34,197,94,0.3)" : "rgba(196,30,42,0.4)"}`,
-                  background: b.color === "#22c55e" ? "rgba(34,197,94,0.05)" : "rgba(196,30,42,0.05)",
-                  color: b.color,
-                }}>{b.label}</span>
-              ))}
-            </div>
-
-            {/* Quick specs */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              {[
-                { label: "PURITY", value: product.purity },
-                { label: "FORM", value: "Lyophilized" },
-              ].map((spec, i) => (
-                <div key={i} style={{ padding: "10px 14px", border: "1px solid var(--border)" }}>
-                  <div style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 11, fontWeight: 600, letterSpacing: "0.1em", color: "var(--text-secondary)", marginBottom: 4 }}>{spec.label}</div>
-                  <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 14, fontWeight: 600, color: "var(--text-primary)" }}>{spec.value}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Research info */}
-        <div style={{ border: "1px solid var(--border)", background: "var(--bg-card)", padding: isMobile ? "24px 18px" : "36px 40px", marginBottom: 24 }}>
-          <div style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 12, fontWeight: 700, letterSpacing: "0.15em", color: "var(--red-primary)", marginBottom: 16 }}>RESEARCH PROFILE</div>
-          <p style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 17, fontWeight: 400, color: "var(--text-secondary)", lineHeight: 1.8, marginBottom: 28 }}>{product.research}</p>
-
-          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 16 }}>
-            {[
-              { label: "SEQUENCE / COMPOSITION", value: product.sequence },
-              { label: "STORAGE CONDITIONS", value: product.storage },
-            ].map((item, i) => (
-              <div key={i} style={{ padding: "16px 20px", border: "1px solid var(--border)", background: "rgba(17,17,17,0.5)" }}>
-                <div style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 12, fontWeight: 600, letterSpacing: "0.1em", color: "var(--text-secondary)", marginBottom: 8 }}>{item.label}</div>
-                <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 16, fontWeight: 500, color: "var(--text-secondary)", lineHeight: 1.6 }}>{item.value}</div>
-              </div>
-            ))}
-          </div>
-
-          {/* View COA button */}
-          {getLabResults(product.name, product.dose) && (
-            <button onClick={() => navigate(`/lab-results?product=${encodeURIComponent(product.name)}&dose=${encodeURIComponent(product.dose)}`)} style={{
-              marginTop: 28,
-              width: "100%",
-              padding: "12px 0",
-              background: "transparent",
-              border: "1px solid rgba(34,197,94,0.3)",
-              color: "#22c55e",
-              fontFamily: "'Orbitron', sans-serif",
-              fontWeight: 700,
-              fontSize: 12,
-              letterSpacing: "0.15em",
-              textTransform: "uppercase",
-              cursor: "pointer",
-              transition: "all 0.2s",
-            }}
-              onMouseEnter={e => { e.target.style.background = "rgba(34,197,94,0.1)"; }}
-              onMouseLeave={e => { e.target.style.background = "transparent"; }}
-            >VIEW CERTIFICATE OF ANALYSIS</button>
-          )}
-        </div>
-
-        {/* Molecular Profile */}
-        {getMolecularProfile(product.name) && (
-          <div style={{ marginBottom: 24 }}>
-            <MolecularProfile product={product} />
-          </div>
-        )}
-
-        {/* Sources & References */}
-        {getReferences(product.name) && (
-          <div style={{
-            border: "1px solid var(--border)",
-            background: "var(--bg-card)",
-            padding: isMobile ? "24px 18px" : "32px 36px",
-            marginBottom: 24,
-          }}>
-            <SourcesReferences product={product} />
-          </div>
-        )}
-
-        {/* Disclaimer */}
-        <div style={{ padding: "14px 18px", border: "1px solid rgba(196,30,42,0.15)", background: "rgba(196,30,42,0.03)" }}>
-          <div style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 13, fontWeight: 700, letterSpacing: "0.1em", color: "var(--red-primary)", marginBottom: 6 }}>RESEARCH USE ONLY</div>
-          <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 16, color: "var(--text-secondary)", lineHeight: 1.6 }}>
-            This product is intended for laboratory research use only. Not for human consumption. Not a drug, food, or cosmetic. Handle with appropriate laboratory safety protocols.
-          </div>
-        </div>
-      </section>
-      <Footer />
-    </>);
-  };
-
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg-primary)" }}>
       <Header cartCount={cart.reduce((sum, i) => sum + i.qty, 0)} />
@@ -6873,9 +6889,9 @@ export default function App() {
         />
       )}
       <Routes>
-        <Route path="/" element={<HomePage />} />
-        <Route path="/products" element={<ProductsPage />} />
-        <Route path="/product/:id" element={<ProductPage />} />
+        <Route path="/" element={<HomePage onAddToCart={addToCart} onSelectProduct={setSelectedProduct} />} />
+        <Route path="/products" element={<ProductsPage searchQuery={searchQuery} setSearchQuery={setSearchQuery} onAddToCart={addToCart} onSelectProduct={setSelectedProduct} />} />
+        <Route path="/product/:id" element={<ProductPage onAddToCart={addToCart} />} />
         <Route path="/calculator" element={<PeptideCalculator />} />
         <Route path="/research" element={<ResearchPage />} />
         <Route path="/research/:slug" element={<ArticlePage />} />
