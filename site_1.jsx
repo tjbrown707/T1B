@@ -5,7 +5,7 @@ import emailjs from "@emailjs/browser";
 // ─── Sitewide Sale ───────────────────────────────────────────────────────────
 // Flip `active` to false to end the sale. Adjust `endDate` for the banner.
 const SITEWIDE_SALE = {
-  active: true,
+  active: false,
   percentOff: 30,
   headline: "4TH OF JULY SALE — 30% OFF SITEWIDE",
   endDate: "2026-07-05",
