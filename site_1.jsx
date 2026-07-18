@@ -1991,6 +1991,64 @@ const ARTICLES = [
     ],
     relatedProductIds: ["bpc157-5", "bpc157-10", "tb500", "glow"],
   },
+  {
+    slug: "cjc-1295-ipamorelin-growth-hormone-stack",
+    title: "CJC-1295 and Ipamorelin: Growth Hormone Peptide Stack Research",
+    excerpt: "An evidence-based review of the most-studied growth hormone peptide pairing. Covers how CJC-1295 and Ipamorelin work through two different receptors, the DAC vs no-DAC distinction, why they're combined, and the research behind the stack.",
+    date: "2026-07-10",
+    author: "Tier One Research Team",
+    tags: ["CJC-1295", "Ipamorelin", "Growth Hormone", "Comparison"],
+    readingTimeMinutes: 11,
+    heroImage: "/cjc-ipa.jpg",
+    metaTitle: "CJC-1295 + Ipamorelin Stack: GH Peptide Research (2026)",
+    metaDescription: "Research review of the CJC-1295 and Ipamorelin growth hormone peptide stack. Covers the dual-receptor mechanism (GHRH + ghrelin), CJC-1295 with DAC vs without DAC (Mod GRF 1-29), half-life differences, Ipamorelin selectivity, and the synergy rationale.",
+    content: () => (<>
+      <h2>Quick Summary</h2>
+      <ul>
+        <li><strong>CJC-1295</strong> is a GHRH analog that stimulates the pituitary to release growth hormone and <strong>prolongs each GH pulse</strong>.</li>
+        <li><strong>Ipamorelin</strong> is a selective ghrelin-receptor agonist that <strong>amplifies the strength</strong> of the GH pulse through a separate pathway.</li>
+        <li>Because they act on <strong>two different receptors</strong>, combining them produces a greater GH response than either alone — the basis of the popular stack.</li>
+        <li>A key distinction buyers ask about: <strong>CJC-1295 "with DAC" (long half-life) vs "without DAC" / Mod GRF 1-29 (short half-life)</strong>.</li>
+      </ul>
+
+      <h2>The Two-Pathway Logic</h2>
+      <p>Growth hormone (GH) release from the pituitary is governed by two main signals: <strong>GHRH</strong> (growth hormone-releasing hormone), which tells the pituitary to make and release GH, and <strong>ghrelin</strong> (acting on the GHS-R1a receptor), which amplifies that release through a separate calcium-dependent pathway. CJC-1295 mimics the first signal; Ipamorelin mimics the second. Activating both at once produces a larger, cleaner GH pulse than hitting either pathway alone — which is precisely why the two are so often studied as a pair.</p>
+      <p><em>In plain terms:</em> one peptide tells the body to release growth hormone and keeps that signal going longer; the other makes each release stronger. Different switches, same light — pressing both gives a brighter result than pressing either one.</p>
+
+      <h2>CJC-1295: The GHRH Analog</h2>
+      <p><strong>CJC-1295</strong> is a synthetic analog of GHRH. It comes in two forms that are frequently confused, and the difference matters:</p>
+      <h3>CJC-1295 With DAC</h3>
+      <p>The "DAC" (Drug Affinity Complex) version carries a chemical group that binds to albumin in the blood, dramatically extending its half-life — from the roughly 7-minute half-life of natural GHRH to approximately <strong>6–8 days</strong>. This produces a sustained elevation in GH and IGF-1 often described as a "GH bleed" — a continuous low-level increase rather than sharp pulses.</p>
+      <h3>CJC-1295 Without DAC (Mod GRF 1-29)</h3>
+      <p>The "no-DAC" version — also called <strong>Modified GRF (1-29)</strong> — lacks the albumin-binding group and has a short half-life of roughly <strong>30 minutes</strong>. This produces a discrete GH pulse that more closely mimics the body's natural pulsatile release. The no-DAC form is the one most commonly paired with Ipamorelin in research, because both have short half-lives and together generate a clean, well-defined pulse.</p>
+      <p>Its sequence corresponds to the first 29 amino acids of GHRH with stabilizing modifications. Understanding which version is in a given formulation is essential to interpreting any research using it.</p>
+
+      <h2>Ipamorelin: The Selective Secretagogue</h2>
+      <p><strong>Ipamorelin</strong> is a growth hormone secretagogue that activates the ghrelin receptor (GHS-R1a). Its defining feature is <strong>selectivity</strong>: among the GH-releasing peptides, it is one of the cleanest. Unlike older secretagogues such as GHRP-6 and GHRP-2, research indicates Ipamorelin does not significantly raise cortisol, prolactin, or aldosterone at effective doses, and it does not produce the strong hunger stimulation associated with some other ghrelin-receptor agonists.</p>
+      <p>This selectivity is the main reason Ipamorelin became the preferred secretagogue for pairing with a GHRH analog — it amplifies GH release without dragging along the off-target hormonal effects that complicate research with earlier GHRPs.</p>
+
+      <h2>Why They're Combined</h2>
+      <p>The combination rationale is <strong>mechanistic complementarity through two receptors</strong>. CJC-1295 (GHRH receptor) increases the amount of GH available and, in the no-DAC form, defines the timing of the pulse; Ipamorelin (ghrelin receptor) amplifies the magnitude of that pulse. Research on GHRH-analog-plus-secretagogue pairings has consistently shown that dual stimulation yields a GH response exceeding the sum of the individual effects — a genuine synergy rather than simple addition.</p>
+      <p>The result researchers describe is a stronger, well-defined GH pulse that preserves the body's natural pulsatile pattern and negative-feedback regulation — a profile distinct from administering growth hormone directly, which produces sustained supraphysiological levels and can suppress the body's own production.</p>
+
+      <h2>Research Context and IGF-1</h2>
+      <p>Released GH drives hepatic production of <strong>IGF-1</strong> (insulin-like growth factor 1), the primary downstream mediator of most of GH's effects on tissue. Individual-component research shows sustained IGF-1 elevation with CJC-1295 and selective pulsatile GH release with Ipamorelin. Research applications for the pairing center on body composition, recovery, and the GH/IGF-1 axis. As with most research peptides, the strongest data are preclinical and mechanistic; large controlled human trials of the specific combination are limited.</p>
+
+      <h2>Safety Considerations</h2>
+      <p>Both peptides have shown favorable safety profiles in available research. Ipamorelin's selectivity means it largely avoids the cortisol and prolactin elevations seen with older secretagogues. The most commonly reported effects in research on this class are injection-site reactions, transient water retention, headache, and — via GH's counter-regulatory action on insulin — the theoretical potential for altered glucose tolerance at higher exposures. Both compounds appear on the World Anti-Doping Agency (WADA) Prohibited List. Researchers should confirm the regulatory status in their jurisdiction.</p>
+
+      <h2>Conclusion</h2>
+      <p>CJC-1295 and Ipamorelin are combined because they solve two halves of the same problem through independent receptors — one governs how much GH is released and for how long, the other how strongly. The DAC vs no-DAC distinction in CJC-1295 is the single most important detail to get right when interpreting research, since it determines whether the compound produces a sharp pulse or a sustained elevation. For researchers studying the GH/IGF-1 axis, the pairing remains one of the most mechanistically well-motivated stacks in peptide science — with the usual caveat that its human trial evidence lags behind its mechanistic rationale.</p>
+    </>),
+    references: [
+      { journal: "J CLIN ENDOCRINOL METAB", title: "Sustained effects of CJC-1295, a long-acting growth hormone-releasing hormone analog, on growth hormone and insulin-like growth factor I in healthy adults", year: 2006, identifier: "PMID: 16352683", authors: "Teichman SL et al.", url: "https://pubmed.ncbi.nlm.nih.gov/16352683/" },
+      { journal: "EUR J ENDOCRINOL", title: "Ipamorelin, the first selective growth hormone secretagogue", year: 1998, identifier: "PMID: 9849822", authors: "Raun K et al.", url: "https://pubmed.ncbi.nlm.nih.gov/9849822/" },
+      { journal: "ENDOCRINOLOGY", title: "Growth hormone-releasing peptides and the growth hormone-releasing hormone receptor: synergistic GH release", year: 1999, identifier: "PMID: 9886862", url: "https://pubmed.ncbi.nlm.nih.gov/9886862/" },
+      { journal: "WIKIPEDIA", title: "CJC-1295", url: "https://en.wikipedia.org/wiki/CJC-1295" },
+      { journal: "WIKIPEDIA", title: "Ipamorelin", url: "https://en.wikipedia.org/wiki/Ipamorelin" },
+    ],
+    relatedProductIds: ["cjc-ipa", "ipamorelin", "tesamorelin"],
+  },
 ];
 
 function getArticleBySlug(slug) {
