@@ -1,0 +1,109 @@
+<!--
+  Supabase Auth → "Magic Link" template
+  Suggested subject: Your Tier One BioSystems sign-in link
+  Variables: {{ .ConfirmationURL }} (login link), {{ .Email }}
+-->
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body, table, td, div, p, h1, span, a, strong { -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
+    table { border-collapse: collapse; mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
+    img { border: 0; outline: none; text-decoration: none; -ms-interpolation-mode: bicubic; }
+  </style>
+</head>
+<body style="margin:0;padding:0;background-color:#0a0a0a;font-family:Arial,Helvetica,sans-serif;width:100%;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#0a0a0a;margin:0;padding:0;">
+    <tr>
+      <td align="center" valign="top" style="padding:24px 8px;">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:560px;width:100%;">
+
+          <tr>
+            <td align="center" style="padding:32px 0 24px;">
+              <img src="https://www.tierone.bio/logo_transparent.png" alt="Tier One BioSystems" width="140" style="display:block;width:140px;max-width:140px;height:auto;" />
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:0 20px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr><td style="height:1px;background-color:#c41e2a;font-size:1px;line-height:1px;">&nbsp;</td></tr>
+              </table>
+            </td>
+          </tr>
+
+          <tr>
+            <td align="center" style="padding:28px 20px 12px;">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td style="background-color:#1a0d0e;border:1px solid #c41e2a;padding:8px 20px;">
+                    <span style="font-family:Arial,sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;color:#c41e2a;text-transform:uppercase;">Sign In</span>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:12px 20px 6px;">
+              <h1 style="margin:0;font-family:Arial,sans-serif;font-size:22px;font-weight:700;color:#ffffff;text-align:center;">Your login link</h1>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:0 20px 28px;">
+              <p style="margin:0;font-family:Arial,sans-serif;font-size:14px;color:#999999;text-align:center;line-height:1.6;">
+                Click below to securely sign in to your Tier One BioSystems account. This link will expire shortly for your security.
+              </p>
+            </td>
+          </tr>
+
+          <tr>
+            <td align="center" style="padding:0 20px 28px;">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td align="center" bgcolor="#c41e2a" style="background-color:#c41e2a;">
+                    <a href="{{ .ConfirmationURL }}" target="_blank" style="display:inline-block;padding:15px 44px;font-family:Arial,sans-serif;font-size:14px;font-weight:700;letter-spacing:2px;color:#ffffff;text-transform:uppercase;text-decoration:none;">Sign In</a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:0 20px 28px;">
+              <p style="margin:0 0 6px;font-family:Arial,sans-serif;font-size:12px;color:#666666;text-align:center;line-height:1.6;">
+                If the button doesn't work, copy and paste this link into your browser:
+              </p>
+              <p style="margin:0;font-family:Arial,sans-serif;font-size:12px;color:#c41e2a;text-align:center;line-height:1.6;word-break:break-all;">
+                <a href="{{ .ConfirmationURL }}" target="_blank" style="color:#c41e2a;text-decoration:underline;">{{ .ConfirmationURL }}</a>
+              </p>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:0 20px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr><td style="height:1px;background-color:#222222;font-size:1px;line-height:1px;">&nbsp;</td></tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td align="center" style="padding:24px 20px 40px;">
+              <p style="margin:0 0 6px;font-family:Arial,sans-serif;font-size:12px;color:#666666;line-height:1.6;">
+                Questions? Contact us at <a href="mailto:info@tierone.bio" style="color:#999999;text-decoration:underline;">info@tierone.bio</a>
+              </p>
+              <p style="margin:0;font-family:Arial,sans-serif;font-size:11px;color:#555555;line-height:1.6;">
+                If you didn't request this link, you can safely ignore this email.<br>
+                Tier One BioSystems · All products sold for research use only. Not for human consumption.
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
