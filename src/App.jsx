@@ -1,4 +1,5 @@
 import { BrowserRouter } from "react-router-dom"
+import { AuthProvider } from "./AuthContext.jsx"
 import Site from "../site_1.jsx"
 
 // This file is just thin wiring.
@@ -8,7 +9,9 @@ import Site from "../site_1.jsx"
 export default function App() {
   return (
     <BrowserRouter>
-      <Site />
+      <AuthProvider>
+        <Site />
+      </AuthProvider>
     </BrowserRouter>
   )
 }

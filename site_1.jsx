@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import { Routes, Route, Navigate, useNavigate, useLocation, useParams, useSearchParams } from "react-router-dom";
 import emailjs from "@emailjs/browser";
+import { supabase } from "./supabaseClient";
+import { useAuth } from "./src/AuthContext.jsx";
 
 // ─── Sitewide Sale ───────────────────────────────────────────────────────────
 // Flip `active` to false to end the sale. Adjust `endDate` for the banner.
@@ -2454,6 +2456,7 @@ function CartPopup({ cart, visible, onClose }) {
 
 function Header({ cartCount = 0 }) {
   const navigate = useNavigate();
+  const { isLoggedIn } = useAuth();
   const [isMobile, setIsMobile] = useState(window.innerWidth < 640);
   const [menuOpen, setMenuOpen] = useState(false);
   useEffect(() => {
@@ -2461,6 +2464,8 @@ function Header({ cartCount = 0 }) {
     window.addEventListener("resize", handler);
     return () => window.removeEventListener("resize", handler);
   }, []);
+
+  const accountLabel = isLoggedIn ? "Account" : "Sign In";
 
   // Close menu when navigating
   const handleNav = (dest) => {
@@ -2471,6 +2476,8 @@ function Header({ cartCount = 0 }) {
     else if (dest === "Research") navigate("/research");
     else if (dest === "Contact") navigate("/contact");
     else if (dest === "Cart") navigate("/cart");
+    else if (dest === "Account") navigate(isLoggedIn ? "/account" : "/login");
+    else if (dest === "Sign In") navigate("/login");
     else navigate("/");
   };
 
@@ -2553,6 +2560,34 @@ function Header({ cartCount = 0 }) {
             >{item}</span>
           ))}
 
+          {/* Account / Sign In (desktop) */}
+          {!isMobile && (
+            <span
+              onClick={() => handleNav("Account")}
+              style={{
+                fontFamily: "'Rajdhani', sans-serif",
+                fontWeight: 600,
+                fontSize: 13,
+                letterSpacing: "0.15em",
+                textTransform: "uppercase",
+                color: isLoggedIn ? "var(--red-primary)" : "var(--text-secondary)",
+                cursor: "pointer",
+                transition: "color 0.2s",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+              }}
+              onMouseEnter={e => e.currentTarget.style.color = "var(--red-primary)"}
+              onMouseLeave={e => e.currentTarget.style.color = isLoggedIn ? "var(--red-primary)" : "var(--text-secondary)"}
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                <circle cx="12" cy="7" r="4" />
+              </svg>
+              {accountLabel}
+            </span>
+          )}
+
           {/* Cart icon (always visible) */}
           <div role="button" tabIndex={0} aria-label="Shopping cart" onClick={() => { setMenuOpen(false); navigate("/cart"); }} onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setMenuOpen(false); navigate("/cart"); } }} style={{ position: "relative", display: "inline-flex", cursor: "pointer" }}>
             <span style={{
@@ -2631,7 +2666,7 @@ function Header({ cartCount = 0 }) {
           padding: "12px 0",
           animation: "fadeIn 0.2s ease-out",
         }}>
-          {["Products", "Research", "Lab Results", "Calculator", "Contact", "Cart"].map(item => (
+          {["Products", "Research", "Lab Results", "Calculator", "Contact", "Cart", accountLabel].map(item => (
             <div
               key={item}
               onClick={() => handleNav(item)}
@@ -2642,7 +2677,7 @@ function Header({ cartCount = 0 }) {
                 fontSize: 15,
                 letterSpacing: "0.15em",
                 textTransform: "uppercase",
-                color: "var(--text-secondary)",
+                color: (item === accountLabel && isLoggedIn) ? "var(--red-primary)" : "var(--text-secondary)",
                 cursor: "pointer",
                 borderBottom: "1px solid rgba(255,255,255,0.05)",
                 transition: "all 0.2s",
@@ -4079,10 +4114,26 @@ function ContactPage() {
 function CartPage({ cart, setCart }) {
   usePageMeta("Your Cart", "Review your order and checkout at Tier One BioSystems.");
   const navigate = useNavigate();
+  const { user, profile, isLoggedIn } = useAuth();
   const [step, setStep] = useState("cart"); // cart, info, payment, confirmed
+  const [guestMode, setGuestMode] = useState(false); // customer chose to skip creating an account
   const [customerInfo, setCustomerInfo] = useState({
     name: "", email: "", phone: "", address: "", city: "", state: "", zip: "",
   });
+
+  // Prefill shipping details from the signed-in customer's saved profile.
+  useEffect(() => {
+    if (!profile) return;
+    setCustomerInfo(prev => ({
+      name: prev.name || profile.full_name || "",
+      email: prev.email || profile.email || user?.email || "",
+      phone: prev.phone || profile.phone || "",
+      address: prev.address || profile.address || "",
+      city: prev.city || profile.city || "",
+      state: prev.state || profile.state || "",
+      zip: prev.zip || profile.zip || "",
+    }));
+  }, [profile, user]);
   const [orderNumber, setOrderNumber] = useState("");
   const [isMobile, setIsMobile] = useState(window.innerWidth < 700);
   const [paymentMethod, setPaymentMethod] = useState("cashapp"); // cashapp | venmo
@@ -4296,6 +4347,46 @@ function CartPage({ cart, setCart }) {
       const isBulk = item.qty >= 5;
       return `${item.name} ${item.dose} x${item.qty} @ $${unitPrice.toFixed(2)}${isBulk ? " (bulk)" : ""} = $${(unitPrice * item.qty).toFixed(2)}`;
     }).join("\n");
+
+    // Structured line items for the database record (logged-in customers).
+    const itemsStructured = cart.map(item => {
+      const unitPrice = getItemPrice(item);
+      return {
+        id: item.id,
+        name: item.name,
+        dose: item.dose,
+        qty: item.qty,
+        unitPrice,
+        lineTotal: Math.round(unitPrice * item.qty * 100) / 100,
+        bulk: item.qty >= 5,
+      };
+    });
+
+    // Persist the order to Supabase so signed-in customers can see it in their
+    // order history. Guests skip this (RLS requires an authenticated user);
+    // their order still flows through Netlify Forms + EmailJS below.
+    if (user) {
+      supabase.from("orders").insert({
+        user_id: user.id,
+        order_number: orderNumber,
+        status: "CONFIRMED",
+        items: itemsStructured,
+        items_text: itemsText,
+        subtotal: Math.round(subtotal * 100) / 100,
+        discount_code: [appliedDiscount?.code, appliedShipping?.code].filter(Boolean).join(", ") || null,
+        discount_amount: Math.round(discountAmount * 100) / 100,
+        shipping: shipping,
+        total: Math.round(total * 100) / 100,
+        payment_method: paymentMethod === "venmo" ? "Venmo" : "Cash App",
+        customer_name: name,
+        customer_email: email,
+        customer_phone: phone,
+        ship_address: address,
+        ship_city: city,
+        ship_state: state,
+        ship_zip: zip,
+      }).then(({ error }) => { if (error) console.error("Order DB save error:", error); });
+    }
 
     // Submit to Netlify Forms
     const formData = new URLSearchParams();
@@ -5465,24 +5556,114 @@ function CartPage({ cart, setCart }) {
             }}>${total.toFixed(2)}</span>
           </div>
 
-          <button onClick={() => setStep("info")} style={{
-            width: "100%",
-            padding: "16px 0",
-            background: "var(--red-primary)",
-            border: "1px solid var(--red-primary)",
-            color: "#fff",
-            fontFamily: "'Orbitron', sans-serif",
-            fontWeight: 700,
-            fontSize: 14,
-            letterSpacing: "0.2em",
-            textTransform: "uppercase",
-            cursor: "pointer",
-            transition: "all 0.2s",
-            marginBottom: 16,
-          }}
-            onMouseEnter={e => { e.target.style.background = "transparent"; e.target.style.color = "var(--red-primary)"; }}
-            onMouseLeave={e => { e.target.style.background = "var(--red-primary)"; e.target.style.color = "#fff"; }}
-          >PROCEED TO CHECKOUT</button>
+          {/* Account gate — encourage sign-in for order tracking, allow guest fallback */}
+          {isLoggedIn ? (
+            <div style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              padding: "12px 16px",
+              marginBottom: 16,
+              border: "1px solid rgba(34,197,94,0.3)",
+              background: "rgba(34,197,94,0.05)",
+            }}>
+              <span style={{ color: "#22c55e", fontSize: 16 }}>✓</span>
+              <span style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 14, color: "var(--text-secondary)" }}>
+                Signed in as <strong style={{ color: "var(--text-primary)" }}>{user.email}</strong> — your shipping details are pre-filled and this order will be saved to your account.
+              </span>
+            </div>
+          ) : !guestMode ? (
+            <div style={{
+              padding: "20px 22px",
+              marginBottom: 16,
+              border: "1px solid rgba(196,30,42,0.3)",
+              background: "rgba(196,30,42,0.04)",
+            }}>
+              <div style={{
+                fontFamily: "'Orbitron', sans-serif",
+                fontSize: 13,
+                fontWeight: 700,
+                letterSpacing: "0.12em",
+                textTransform: "uppercase",
+                color: "var(--text-primary)",
+                marginBottom: 8,
+              }}>Track your order</div>
+              <p style={{
+                fontFamily: "'Rajdhani', sans-serif",
+                fontSize: 15,
+                color: "var(--text-secondary)",
+                lineHeight: 1.5,
+                margin: "0 0 16px",
+              }}>Sign in or create an account to save your shipping info and view your full order history. It only takes a moment.</p>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
+                <button onClick={() => navigate("/login?redirect=/cart")} style={{
+                  padding: "14px 0",
+                  background: "var(--red-primary)",
+                  border: "1px solid var(--red-primary)",
+                  color: "#fff",
+                  fontFamily: "'Orbitron', sans-serif",
+                  fontWeight: 700,
+                  fontSize: 12,
+                  letterSpacing: "0.12em",
+                  textTransform: "uppercase",
+                  cursor: "pointer",
+                  transition: "all 0.2s",
+                }}
+                  onMouseEnter={e => { e.target.style.background = "transparent"; e.target.style.color = "var(--red-primary)"; }}
+                  onMouseLeave={e => { e.target.style.background = "var(--red-primary)"; e.target.style.color = "#fff"; }}
+                >Sign In</button>
+                <button onClick={() => navigate("/signup?redirect=/cart")} style={{
+                  padding: "14px 0",
+                  background: "transparent",
+                  border: "1px solid var(--red-primary)",
+                  color: "var(--red-primary)",
+                  fontFamily: "'Orbitron', sans-serif",
+                  fontWeight: 700,
+                  fontSize: 12,
+                  letterSpacing: "0.12em",
+                  textTransform: "uppercase",
+                  cursor: "pointer",
+                  transition: "all 0.2s",
+                }}
+                  onMouseEnter={e => { e.target.style.background = "var(--red-primary)"; e.target.style.color = "#fff"; }}
+                  onMouseLeave={e => { e.target.style.background = "transparent"; e.target.style.color = "var(--red-primary)"; }}
+                >Create Account</button>
+              </div>
+              <button onClick={() => setGuestMode(true)} style={{
+                width: "100%",
+                background: "transparent",
+                border: "none",
+                color: "var(--text-dim)",
+                fontFamily: "'Rajdhani', sans-serif",
+                fontSize: 14,
+                fontWeight: 600,
+                cursor: "pointer",
+                textDecoration: "underline",
+                textUnderlineOffset: 3,
+              }}>Continue as guest →</button>
+            </div>
+          ) : null}
+
+          {(isLoggedIn || guestMode) && (
+            <button onClick={() => setStep("info")} style={{
+              width: "100%",
+              padding: "16px 0",
+              background: "var(--red-primary)",
+              border: "1px solid var(--red-primary)",
+              color: "#fff",
+              fontFamily: "'Orbitron', sans-serif",
+              fontWeight: 700,
+              fontSize: 14,
+              letterSpacing: "0.2em",
+              textTransform: "uppercase",
+              cursor: "pointer",
+              transition: "all 0.2s",
+              marginBottom: 16,
+            }}
+              onMouseEnter={e => { e.target.style.background = "transparent"; e.target.style.color = "var(--red-primary)"; }}
+              onMouseLeave={e => { e.target.style.background = "var(--red-primary)"; e.target.style.color = "#fff"; }}
+            >PROCEED TO CHECKOUT</button>
+          )}
 
           <div style={{
             fontFamily: "'Rajdhani', sans-serif",
@@ -5823,6 +6004,368 @@ function LabResultsPage() {
       </div>
     </div>
   );
+}
+
+// ─── Auth Page (Sign In / Create Account) ─────────────────────────────────────
+
+const AUTH_INPUT_STYLE = {
+  width: "100%",
+  padding: "12px 16px",
+  background: "rgba(17,17,17,0.8)",
+  border: "1px solid var(--border)",
+  color: "var(--text-primary)",
+  fontFamily: "'Rajdhani', sans-serif",
+  fontSize: 16,
+  outline: "none",
+  boxSizing: "border-box",
+};
+const AUTH_LABEL_STYLE = {
+  fontFamily: "'Orbitron', sans-serif",
+  fontSize: 11,
+  fontWeight: 600,
+  letterSpacing: "0.15em",
+  color: "var(--text-secondary)",
+  textTransform: "uppercase",
+  marginBottom: 8,
+  display: "block",
+};
+
+function AuthPage() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
+  const { signIn, signUp, isLoggedIn, loading: authLoading } = useAuth();
+  const isSignup = location.pathname === "/signup";
+  const redirectTo = searchParams.get("redirect") || "/account";
+  usePageMeta(
+    isSignup ? "Create Account" : "Sign In",
+    isSignup
+      ? "Create a Tier One BioSystems account to save your info and track your orders."
+      : "Sign in to your Tier One BioSystems account to view your orders."
+  );
+
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [phone, setPhone] = useState("");
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  // Already signed in → skip straight to the intended destination.
+  useEffect(() => {
+    if (!authLoading && isLoggedIn) navigate(redirectTo, { replace: true });
+  }, [authLoading, isLoggedIn]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setError(""); setNotice("");
+    if (!email || !password) { setError("Enter your email and password."); return; }
+    if (isSignup && password.length < 6) { setError("Password must be at least 6 characters."); return; }
+    setSubmitting(true);
+    try {
+      if (isSignup) {
+        const { data, error } = await signUp(email, password, { full_name: fullName, phone });
+        if (error) setError(error.message);
+        else if (data.session) navigate(redirectTo, { replace: true });
+        else setNotice("Account created! Check your email to confirm your address, then sign in.");
+      } else {
+        const { error } = await signIn(email, password);
+        if (error) setError(error.message);
+        else navigate(redirectTo, { replace: true });
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  const otherPath = (isSignup ? "/login" : "/signup") + (searchParams.get("redirect") ? `?redirect=${encodeURIComponent(redirectTo)}` : "");
+
+  return (
+    <div style={{ maxWidth: 460, margin: "0 auto", padding: "120px 24px 80px" }}>
+      <div style={{ textAlign: "center", marginBottom: 32 }}>
+        <div style={{
+          fontFamily: "'Orbitron', sans-serif",
+          fontSize: 11,
+          fontWeight: 600,
+          letterSpacing: "0.2em",
+          color: "var(--red-primary)",
+          marginBottom: 10,
+        }}>{isSignup ? "JOIN TIER ONE" : "WELCOME BACK"}</div>
+        <h2 style={{
+          fontFamily: "'Orbitron', sans-serif",
+          fontWeight: 800,
+          fontSize: 28,
+          color: "var(--text-primary)",
+        }}>{isSignup ? "CREATE ACCOUNT" : "SIGN IN"}</h2>
+      </div>
+
+      <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+        {isSignup && (
+          <div>
+            <label style={AUTH_LABEL_STYLE}>Full Name</label>
+            <input type="text" value={fullName} onChange={e => setFullName(e.target.value)} style={AUTH_INPUT_STYLE} placeholder="John Doe" autoComplete="name" />
+          </div>
+        )}
+        <div>
+          <label style={AUTH_LABEL_STYLE}>Email *</label>
+          <input type="email" required value={email} onChange={e => setEmail(e.target.value)} style={AUTH_INPUT_STYLE} placeholder="john@example.com" autoComplete="email" />
+        </div>
+        <div>
+          <label style={AUTH_LABEL_STYLE}>Password *</label>
+          <input type="password" required value={password} onChange={e => setPassword(e.target.value)} style={AUTH_INPUT_STYLE} placeholder={isSignup ? "At least 6 characters" : "Your password"} autoComplete={isSignup ? "new-password" : "current-password"} />
+        </div>
+        {isSignup && (
+          <div>
+            <label style={AUTH_LABEL_STYLE}>Phone (optional)</label>
+            <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} style={AUTH_INPUT_STYLE} placeholder="(555) 123-4567" autoComplete="tel" />
+          </div>
+        )}
+
+        {error && (
+          <div style={{ padding: "10px 14px", border: "1px solid rgba(196,30,42,0.5)", background: "rgba(196,30,42,0.08)", color: "#ff6b6b", fontFamily: "'Rajdhani', sans-serif", fontSize: 14 }}>{error}</div>
+        )}
+        {notice && (
+          <div style={{ padding: "10px 14px", border: "1px solid rgba(34,197,94,0.5)", background: "rgba(34,197,94,0.08)", color: "#22c55e", fontFamily: "'Rajdhani', sans-serif", fontSize: 14 }}>{notice}</div>
+        )}
+
+        <button type="submit" disabled={submitting} style={{
+          width: "100%",
+          padding: "16px 0",
+          background: submitting ? "rgba(196,30,42,0.3)" : "var(--red-primary)",
+          border: "1px solid var(--red-primary)",
+          color: "#fff",
+          fontFamily: "'Orbitron', sans-serif",
+          fontWeight: 700,
+          fontSize: 14,
+          letterSpacing: "0.2em",
+          textTransform: "uppercase",
+          cursor: submitting ? "not-allowed" : "pointer",
+          transition: "all 0.2s",
+        }}>{submitting ? "Please wait…" : isSignup ? "Create Account" : "Sign In"}</button>
+      </form>
+
+      <div style={{ textAlign: "center", marginTop: 24, fontFamily: "'Rajdhani', sans-serif", fontSize: 15, color: "var(--text-secondary)" }}>
+        {isSignup ? "Already have an account? " : "Don't have an account? "}
+        <span onClick={() => navigate(otherPath)} style={{ color: "var(--red-primary)", cursor: "pointer", fontWeight: 600, textDecoration: "underline", textUnderlineOffset: 3 }}>
+          {isSignup ? "Sign in" : "Create one"}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// ─── Account Page (Profile + Order History) ───────────────────────────────────
+
+function AccountPage() {
+  const navigate = useNavigate();
+  const { user, profile, isLoggedIn, loading: authLoading, signOut, refreshProfile } = useAuth();
+  usePageMeta("My Account", "Manage your Tier One BioSystems profile and view your order history.");
+
+  const [form, setForm] = useState({ full_name: "", phone: "", address: "", city: "", state: "", zip: "" });
+  const [orders, setOrders] = useState(null); // null = loading
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 700);
+  useEffect(() => {
+    const h = () => setIsMobile(window.innerWidth < 700);
+    window.addEventListener("resize", h);
+    return () => window.removeEventListener("resize", h);
+  }, []);
+
+  // Guard: send anonymous visitors to sign in.
+  useEffect(() => {
+    if (!authLoading && !isLoggedIn) navigate("/login?redirect=/account", { replace: true });
+  }, [authLoading, isLoggedIn]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    // Populate the editable form once the profile loads from the DB.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (profile) setForm({
+      full_name: profile.full_name || "",
+      phone: profile.phone || "",
+      address: profile.address || "",
+      city: profile.city || "",
+      state: profile.state || "",
+      zip: profile.zip || "",
+    });
+  }, [profile]);
+
+  useEffect(() => {
+    if (!user) return;
+    supabase.from("orders").select("*").eq("user_id", user.id).order("created_at", { ascending: false })
+      .then(({ data, error }) => { if (error) console.error("Load orders error:", error); setOrders(data || []); });
+  }, [user]);
+
+  async function saveProfile(e) {
+    e.preventDefault();
+    setSaving(true); setSaved(false);
+    const { error } = await supabase.from("profiles").update(form).eq("id", user.id);
+    setSaving(false);
+    if (error) { console.error("Save profile error:", error); return; }
+    setSaved(true);
+    refreshProfile();
+    setTimeout(() => setSaved(false), 2500);
+  }
+
+  async function handleSignOut() {
+    await signOut();
+    navigate("/");
+  }
+
+  if (authLoading || !isLoggedIn) return null;
+
+  return (
+    <div style={{ maxWidth: 820, margin: "0 auto", padding: "120px 24px 80px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 12, marginBottom: 32 }}>
+        <div>
+          <div style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 11, fontWeight: 600, letterSpacing: "0.2em", color: "var(--red-primary)", marginBottom: 10 }}>MY ACCOUNT</div>
+          <h2 style={{ fontFamily: "'Orbitron', sans-serif", fontWeight: 800, fontSize: 28, color: "var(--text-primary)" }}>{profile?.full_name || user.email}</h2>
+        </div>
+        <button onClick={handleSignOut} style={{
+          padding: "10px 22px",
+          background: "transparent",
+          border: "1px solid var(--border)",
+          color: "var(--text-secondary)",
+          fontFamily: "'Orbitron', sans-serif",
+          fontWeight: 700,
+          fontSize: 11,
+          letterSpacing: "0.15em",
+          textTransform: "uppercase",
+          cursor: "pointer",
+          transition: "all 0.2s",
+        }}
+          onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--red-primary)"; e.currentTarget.style.color = "var(--red-primary)"; }}
+          onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.color = "var(--text-secondary)"; }}
+        >Sign Out</button>
+      </div>
+
+      {/* Profile / default shipping details */}
+      <div style={{ border: "1px solid var(--border)", background: "rgba(17,17,17,0.4)", padding: "28px", marginBottom: 32 }}>
+        <div style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 13, fontWeight: 700, letterSpacing: "0.12em", color: "var(--text-primary)", textTransform: "uppercase", marginBottom: 6 }}>Profile & Shipping</div>
+        <p style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 14, color: "var(--text-dim)", margin: "0 0 20px" }}>Saved here and pre-filled at checkout.</p>
+        <form onSubmit={saveProfile} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <div>
+            <label style={AUTH_LABEL_STYLE}>Full Name</label>
+            <input type="text" value={form.full_name} onChange={e => setForm(p => ({ ...p, full_name: e.target.value }))} style={AUTH_INPUT_STYLE} />
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 16 }}>
+            <div>
+              <label style={AUTH_LABEL_STYLE}>Email</label>
+              <input type="email" value={user.email} disabled style={{ ...AUTH_INPUT_STYLE, opacity: 0.6, cursor: "not-allowed" }} />
+            </div>
+            <div>
+              <label style={AUTH_LABEL_STYLE}>Phone</label>
+              <input type="tel" value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} style={AUTH_INPUT_STYLE} />
+            </div>
+          </div>
+          <div>
+            <label style={AUTH_LABEL_STYLE}>Street Address</label>
+            <input type="text" value={form.address} onChange={e => setForm(p => ({ ...p, address: e.target.value }))} style={AUTH_INPUT_STYLE} />
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: 16 }}>
+            <div>
+              <label style={AUTH_LABEL_STYLE}>City</label>
+              <input type="text" value={form.city} onChange={e => setForm(p => ({ ...p, city: e.target.value }))} style={AUTH_INPUT_STYLE} />
+            </div>
+            <div>
+              <label style={AUTH_LABEL_STYLE}>State</label>
+              <input type="text" value={form.state} onChange={e => setForm(p => ({ ...p, state: e.target.value }))} style={AUTH_INPUT_STYLE} />
+            </div>
+            <div>
+              <label style={AUTH_LABEL_STYLE}>Zip</label>
+              <input type="text" value={form.zip} onChange={e => setForm(p => ({ ...p, zip: e.target.value }))} style={AUTH_INPUT_STYLE} />
+            </div>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+            <button type="submit" disabled={saving} style={{
+              padding: "13px 32px",
+              background: saving ? "rgba(196,30,42,0.3)" : "var(--red-primary)",
+              border: "1px solid var(--red-primary)",
+              color: "#fff",
+              fontFamily: "'Orbitron', sans-serif",
+              fontWeight: 700,
+              fontSize: 12,
+              letterSpacing: "0.15em",
+              textTransform: "uppercase",
+              cursor: saving ? "not-allowed" : "pointer",
+              transition: "all 0.2s",
+            }}>{saving ? "Saving…" : "Save Changes"}</button>
+            {saved && <span style={{ color: "#22c55e", fontFamily: "'Rajdhani', sans-serif", fontSize: 15, fontWeight: 600 }}>✓ Saved</span>}
+          </div>
+        </form>
+      </div>
+
+      {/* Order history */}
+      <div style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 13, fontWeight: 700, letterSpacing: "0.12em", color: "var(--text-primary)", textTransform: "uppercase", marginBottom: 16 }}>Order History</div>
+      {orders === null ? (
+        <p style={{ fontFamily: "'Rajdhani', sans-serif", color: "var(--text-dim)" }}>Loading your orders…</p>
+      ) : orders.length === 0 ? (
+        <div style={{ border: "1px solid var(--border)", background: "rgba(17,17,17,0.4)", padding: "32px", textAlign: "center" }}>
+          <p style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 16, color: "var(--text-secondary)", margin: "0 0 16px" }}>You haven't placed any orders yet.</p>
+          <button onClick={() => navigate("/products")} style={{
+            padding: "12px 28px",
+            background: "var(--red-primary)",
+            border: "1px solid var(--red-primary)",
+            color: "#fff",
+            fontFamily: "'Orbitron', sans-serif",
+            fontWeight: 700,
+            fontSize: 12,
+            letterSpacing: "0.15em",
+            textTransform: "uppercase",
+            cursor: "pointer",
+          }}>Browse Products</button>
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          {orders.map(o => (
+            <div key={o.id} style={{ border: "1px solid var(--border)", background: "rgba(17,17,17,0.4)", padding: "20px 24px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8, marginBottom: 14, paddingBottom: 14, borderBottom: "1px solid var(--border)" }}>
+                <div>
+                  <div style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 16, fontWeight: 800, color: "var(--red-primary)", letterSpacing: "0.05em" }}>{o.order_number}</div>
+                  <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 13, color: "var(--text-dim)", marginTop: 2 }}>{formatOrderDate(o.created_at)}</div>
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  <span style={{
+                    display: "inline-block",
+                    padding: "4px 12px",
+                    border: "1px solid rgba(34,197,94,0.4)",
+                    background: "rgba(34,197,94,0.08)",
+                    color: "#22c55e",
+                    fontFamily: "'Orbitron', sans-serif",
+                    fontSize: 10,
+                    fontWeight: 700,
+                    letterSpacing: "0.12em",
+                    textTransform: "uppercase",
+                  }}>{o.status}</span>
+                  <div style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 18, fontWeight: 800, color: "var(--text-primary)", marginTop: 8 }}>${Number(o.total).toFixed(2)}</div>
+                </div>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {(o.items || []).map((it, i) => (
+                  <div key={i} style={{ display: "flex", justifyContent: "space-between", fontFamily: "'Rajdhani', sans-serif", fontSize: 15, color: "var(--text-secondary)" }}>
+                    <span>{it.name} {it.dose} <span style={{ color: "var(--text-dim)" }}>×{it.qty}</span></span>
+                    <span>${Number(it.lineTotal).toFixed(2)}</span>
+                  </div>
+                ))}
+              </div>
+              <div style={{ marginTop: 12, fontFamily: "'Rajdhani', sans-serif", fontSize: 13, color: "var(--text-dim)" }}>
+                Paid via {o.payment_method} · Ship to {o.ship_city}, {o.ship_state}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function formatOrderDate(iso) {
+  try {
+    return new Date(iso).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+  } catch {
+    return "";
+  }
 }
 
 // ─── Age Verification Gate ────────────────────────────────────────────────────
@@ -7025,6 +7568,9 @@ export default function App() {
         <Route path="/lab-results" element={<LabResultsPage />} />
         <Route path="/cart" element={<CartPage cart={cart} setCart={setCart} />} />
         <Route path="/checkout" element={<Navigate to="/cart" replace />} />
+        <Route path="/login" element={<AuthPage />} />
+        <Route path="/signup" element={<AuthPage />} />
+        <Route path="/account" element={<AccountPage />} />
         <Route path="/about" element={<AboutPage />} />
         <Route path="/faq" element={<FAQPage />} />
         <Route path="/testing-standards" element={<TestingStandardsPage />} />
