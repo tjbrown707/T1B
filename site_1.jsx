@@ -6048,9 +6048,19 @@ function AuthPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [phone, setPhone] = useState("");
+  const [address, setAddress] = useState("");
+  const [city, setCity] = useState("");
+  const [stateField, setStateField] = useState("");
+  const [zip, setZip] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 700);
+  useEffect(() => {
+    const h = () => setIsMobile(window.innerWidth < 700);
+    window.addEventListener("resize", h);
+    return () => window.removeEventListener("resize", h);
+  }, []);
 
   // Already signed in → skip straight to the intended destination.
   useEffect(() => {
@@ -6061,11 +6071,18 @@ function AuthPage() {
     e.preventDefault();
     setError(""); setNotice("");
     if (!email || !password) { setError("Enter your email and password."); return; }
-    if (isSignup && password.length < 6) { setError("Password must be at least 6 characters."); return; }
+    if (isSignup) {
+      if (password.length < 6) { setError("Password must be at least 6 characters."); return; }
+      if (!fullName || !phone || !address || !city || !stateField || !zip) {
+        setError("Please fill in all fields."); return;
+      }
+    }
     setSubmitting(true);
     try {
       if (isSignup) {
-        const { data, error } = await signUp(email, password, { full_name: fullName, phone });
+        const { data, error } = await signUp(email, password, {
+          full_name: fullName, phone, address, city, state: stateField, zip,
+        });
         if (error) setError(error.message);
         else if (data.session) navigate(redirectTo, { replace: true });
         else setNotice("Account created! Check your email to confirm your address, then sign in.");
@@ -6082,7 +6099,7 @@ function AuthPage() {
   const otherPath = (isSignup ? "/login" : "/signup") + (searchParams.get("redirect") ? `?redirect=${encodeURIComponent(redirectTo)}` : "");
 
   return (
-    <div style={{ maxWidth: 460, margin: "0 auto", padding: "120px 24px 80px" }}>
+    <div style={{ maxWidth: isSignup ? 700 : 460, margin: "0 auto", padding: "120px 24px 80px" }}>
       <div style={{ textAlign: "center", marginBottom: 32 }}>
         <div style={{
           fontFamily: "'Orbitron', sans-serif",
@@ -6101,25 +6118,61 @@ function AuthPage() {
       </div>
 
       <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-        {isSignup && (
-          <div>
-            <label style={AUTH_LABEL_STYLE}>Full Name</label>
-            <input type="text" value={fullName} onChange={e => setFullName(e.target.value)} style={AUTH_INPUT_STYLE} placeholder="John Doe" autoComplete="name" />
-          </div>
-        )}
-        <div>
-          <label style={AUTH_LABEL_STYLE}>Email *</label>
-          <input type="email" required value={email} onChange={e => setEmail(e.target.value)} style={AUTH_INPUT_STYLE} placeholder="john@example.com" autoComplete="email" />
-        </div>
-        <div>
-          <label style={AUTH_LABEL_STYLE}>Password *</label>
-          <input type="password" required value={password} onChange={e => setPassword(e.target.value)} style={AUTH_INPUT_STYLE} placeholder={isSignup ? "At least 6 characters" : "Your password"} autoComplete={isSignup ? "new-password" : "current-password"} />
-        </div>
-        {isSignup && (
-          <div>
-            <label style={AUTH_LABEL_STYLE}>Phone (optional)</label>
-            <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} style={AUTH_INPUT_STYLE} placeholder="(555) 123-4567" autoComplete="tel" />
-          </div>
+        {isSignup ? (
+          <>
+            {/* Mirrors the checkout shipping form so the experience stays consistent */}
+            <div>
+              <label style={AUTH_LABEL_STYLE}>Full Name *</label>
+              <input type="text" required value={fullName} onChange={e => setFullName(e.target.value)} style={AUTH_INPUT_STYLE} placeholder="John Doe" autoComplete="name" />
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 18 }}>
+              <div>
+                <label style={AUTH_LABEL_STYLE}>Email *</label>
+                <input type="email" required value={email} onChange={e => setEmail(e.target.value)} style={AUTH_INPUT_STYLE} placeholder="john@example.com" autoComplete="email" />
+              </div>
+              <div>
+                <label style={AUTH_LABEL_STYLE}>Phone *</label>
+                <input type="tel" required value={phone} onChange={e => setPhone(e.target.value)} style={AUTH_INPUT_STYLE} placeholder="(555) 123-4567" autoComplete="tel" />
+              </div>
+            </div>
+
+            <div>
+              <label style={AUTH_LABEL_STYLE}>Password *</label>
+              <input type="password" required value={password} onChange={e => setPassword(e.target.value)} style={AUTH_INPUT_STYLE} placeholder="At least 6 characters" autoComplete="new-password" />
+            </div>
+
+            <div>
+              <label style={AUTH_LABEL_STYLE}>Street Address *</label>
+              <input type="text" required value={address} onChange={e => setAddress(e.target.value)} style={AUTH_INPUT_STYLE} placeholder="123 Main St, Apt 4" autoComplete="street-address" />
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: 18 }}>
+              <div>
+                <label style={AUTH_LABEL_STYLE}>City *</label>
+                <input type="text" required value={city} onChange={e => setCity(e.target.value)} style={AUTH_INPUT_STYLE} placeholder="Austin" autoComplete="address-level2" />
+              </div>
+              <div>
+                <label style={AUTH_LABEL_STYLE}>State *</label>
+                <input type="text" required value={stateField} onChange={e => setStateField(e.target.value)} style={AUTH_INPUT_STYLE} placeholder="TX" autoComplete="address-level1" />
+              </div>
+              <div>
+                <label style={AUTH_LABEL_STYLE}>Zip Code *</label>
+                <input type="text" required value={zip} onChange={e => setZip(e.target.value)} style={AUTH_INPUT_STYLE} placeholder="78701" autoComplete="postal-code" />
+              </div>
+            </div>
+          </>
+        ) : (
+          <>
+            <div>
+              <label style={AUTH_LABEL_STYLE}>Email *</label>
+              <input type="email" required value={email} onChange={e => setEmail(e.target.value)} style={AUTH_INPUT_STYLE} placeholder="john@example.com" autoComplete="email" />
+            </div>
+            <div>
+              <label style={AUTH_LABEL_STYLE}>Password *</label>
+              <input type="password" required value={password} onChange={e => setPassword(e.target.value)} style={AUTH_INPUT_STYLE} placeholder="Your password" autoComplete="current-password" />
+            </div>
+          </>
         )}
 
         {error && (
