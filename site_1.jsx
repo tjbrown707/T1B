@@ -6067,6 +6067,20 @@ function AuthPage() {
     if (!authLoading && isLoggedIn) navigate(redirectTo, { replace: true });
   }, [authLoading, isLoggedIn]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Turn a raw auth error into something a customer can actually read.
+  function cleanAuthError(err) {
+    const raw = (err && typeof err.message === "string") ? err.message.trim() : "";
+    // A 504 gateway timeout surfaces as an empty "{}" body — almost always the
+    // confirmation email hanging on a misconfigured SMTP server.
+    if (!raw || raw === "{}" || /timed out|deadline exceeded|gateway|504/i.test(raw)) {
+      return "We couldn't finish creating your account just now — the server timed out. Please try again in a moment.";
+    }
+    if (/rate limit/i.test(raw)) {
+      return "Too many attempts right now. Please wait a minute and try again.";
+    }
+    return raw;
+  }
+
   async function handleSubmit(e) {
     e.preventDefault();
     setError(""); setNotice("");
@@ -6083,14 +6097,16 @@ function AuthPage() {
         const { data, error } = await signUp(email, password, {
           full_name: fullName, phone, address, city, state: stateField, zip,
         });
-        if (error) setError(error.message);
+        if (error) setError(cleanAuthError(error));
         else if (data.session) navigate(redirectTo, { replace: true });
         else setNotice("Account created! Check your email to confirm your address, then sign in.");
       } else {
         const { error } = await signIn(email, password);
-        if (error) setError(error.message);
+        if (error) setError(cleanAuthError(error));
         else navigate(redirectTo, { replace: true });
       }
+    } catch (err) {
+      setError(cleanAuthError(err));
     } finally {
       setSubmitting(false);
     }
