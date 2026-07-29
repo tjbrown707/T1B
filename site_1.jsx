@@ -4275,7 +4275,17 @@ function CartPage({ cart, setCart }) {
     const y = date.getFullYear().toString().slice(-2);
     const m = String(date.getMonth() + 1).padStart(2, "0");
     const d = String(date.getDate()).padStart(2, "0");
-    const rand = Math.floor(1000 + Math.random() * 9000);
+    // 6 crypto-random digits rather than 4 from Math.random(): with only 9,000
+    // possible values a same-day collision became likely at modest volume,
+    // which would mean two different orders sharing one reference number.
+    let rand;
+    if (typeof crypto !== "undefined" && crypto.getRandomValues) {
+      const buf = new Uint32Array(1);
+      crypto.getRandomValues(buf);
+      rand = 100000 + (buf[0] % 900000);
+    } else {
+      rand = Math.floor(100000 + Math.random() * 900000);
+    }
     return `T1B-${y}${m}${d}-${rand}`;
   }
 
