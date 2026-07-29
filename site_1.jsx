@@ -13,6 +13,14 @@ const SITEWIDE_SALE = {
   endDate: "2026-07-05",
 };
 function isSaleActive() { return !!(SITEWIDE_SALE && SITEWIDE_SALE.active); }
+
+// Canonical price lookup. NEVER trust price/bulk stored on a cart item — the
+// cart lives in localStorage and can be edited by the customer. Always resolve
+// the authoritative figures from the PRODUCTS catalog by product id.
+function catalogPrices(item) {
+  const p = PRODUCTS.find(x => x.id === item?.id);
+  return { price: p ? p.price : 0, bulk: p ? p.bulk : 0 };
+}
 function applySale(price) {
   if (!isSaleActive() || typeof price !== "number") return price;
   return Math.round(price * (100 - SITEWIDE_SALE.percentOff) / 100);
@@ -2306,11 +2314,13 @@ function CartPopup({ cart, visible, onClose }) {
   if (!visible || cart.length === 0) return null;
 
   const tieredPrice = (item) => {
+    // Resolved from the catalog, not from the (editable) stored cart item.
+    const { price, bulk } = catalogPrices(item);
     let base;
-    if (item.qty >= 25) base = Math.round(item.bulk * 0.90 * 100) / 100;
-    else if (item.qty >= 10) base = Math.round(item.bulk * 0.95 * 100) / 100;
-    else if (item.qty >= 5) base = item.bulk;
-    else base = item.price;
+    if (item.qty >= 25) base = Math.round(bulk * 0.90 * 100) / 100;
+    else if (item.qty >= 10) base = Math.round(bulk * 0.95 * 100) / 100;
+    else if (item.qty >= 5) base = bulk;
+    else base = price;
     return isSaleActive() ? applySale(base) : base;
   };
   const subtotal = cart.reduce((sum, item) => sum + tieredPrice(item) * item.qty, 0);
@@ -3981,6 +3991,7 @@ function ContactPage() {
     setSending(true);
     const formData = new URLSearchParams();
     formData.append("form-name", "contact");
+    formData.append("bot-field", "");
     formData.append("name", form.name);
     formData.append("email", form.email);
     formData.append("subject", form.subject);
@@ -4162,11 +4173,13 @@ function CartPage({ cart, setCart }) {
   // 1-4: regular price | 5-9: bulk | 10-24: bulk -5% | 25+: bulk -10%
   // Sitewide sale (if active) is applied on top of the resulting price.
   function getItemPrice(item) {
+    // Prices are resolved from the catalog, never from the stored cart item.
+    const { price, bulk } = catalogPrices(item);
     let base;
-    if (item.qty >= 25) base = Math.round(item.bulk * 0.90 * 100) / 100;
-    else if (item.qty >= 10) base = Math.round(item.bulk * 0.95 * 100) / 100;
-    else if (item.qty >= 5) base = item.bulk;
-    else base = item.price;
+    if (item.qty >= 25) base = Math.round(bulk * 0.90 * 100) / 100;
+    else if (item.qty >= 10) base = Math.round(bulk * 0.95 * 100) / 100;
+    else if (item.qty >= 5) base = bulk;
+    else base = price;
     return isSaleActive() ? applySale(base) : base;
   }
 
@@ -4290,6 +4303,7 @@ function CartPage({ cart, setCart }) {
     }).join("\n");
     const formData = new URLSearchParams();
     formData.append("form-name", "order");
+    formData.append("bot-field", "");
     formData.append("orderStatus", "PENDING_PAYMENT");
     formData.append("orderNumber", orderNumber);
     formData.append("customerName", name);
@@ -4391,6 +4405,7 @@ function CartPage({ cart, setCart }) {
     // Submit to Netlify Forms
     const formData = new URLSearchParams();
     formData.append("form-name", "order");
+    formData.append("bot-field", "");
     formData.append("orderStatus", "CONFIRMED");
     formData.append("orderNumber", orderNumber);
     formData.append("customerName", name);
@@ -5297,7 +5312,7 @@ function CartPage({ cart, setCart }) {
                         fontSize: 13,
                         color: "var(--text-dim)",
                         marginTop: 2,
-                      }}>Add {5 - item.qty} more for ${item.bulk}/vial</div>
+                      }}>Add {5 - item.qty} more for ${catalogPrices(item).bulk}/vial</div>
                     )}
                     {item.qty >= 5 && item.qty < 10 && (
                       <div style={{
@@ -6036,7 +6051,10 @@ function AuthPage() {
   const [searchParams] = useSearchParams();
   const { signIn, signUp, isLoggedIn, loading: authLoading } = useAuth();
   const isSignup = location.pathname === "/signup";
-  const redirectTo = searchParams.get("redirect") || "/account";
+  // Only allow same-site paths. A value like "//evil.com" or "https://evil.com"
+  // would otherwise send a just-authenticated customer off to a phishing page.
+  const rawRedirect = searchParams.get("redirect") || "/account";
+  const redirectTo = /^\/(?!\/)/.test(rawRedirect) ? rawRedirect : "/account";
   usePageMeta(
     isSignup ? "Create Account" : "Sign In",
     isSignup

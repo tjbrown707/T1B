@@ -5,3 +5,24 @@
 
 [functions]
   node_bundler = "esbuild"
+
+# ─── Security headers ────────────────────────────────────────────────────────
+# The five headers below are enforcing and cannot break the site.
+# Content-Security-Policy is deliberately Report-Only for now: it logs
+# violations to the browser console without blocking anything. Once the console
+# is confirmed clean on a real browse-through, rename it to
+# "Content-Security-Policy" to switch it from reporting to enforcing.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    # Stops the site being embedded in an iframe (clickjacking on checkout).
+    X-Frame-Options = "DENY"
+    # Stops browsers guessing file types (MIME sniffing).
+    X-Content-Type-Options = "nosniff"
+    # Don't leak full URLs to third-party sites in the Referer header.
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    # Explicitly disable device APIs the site never uses.
+    Permissions-Policy = "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+    # Force HTTPS for a year, including subdomains.
+    Strict-Transport-Security = "max-age=31536000; includeSubDomains; preload"
+    Content-Security-Policy-Report-Only = "default-src 'self'; script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://www.google-analytics.com; connect-src 'self' https://*.supabase.co https://api.emailjs.com https://www.google-analytics.com https://region1.google-analytics.com; img-src 'self' data: https:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; form-action 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'"
