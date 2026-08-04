@@ -6114,7 +6114,9 @@ function AuthPage() {
     setError(""); setNotice("");
     if (!email || !password) { setError("Enter your email and password."); return; }
     if (isSignup) {
-      if (password.length < 6) { setError("Password must be at least 6 characters."); return; }
+      // Mirrors the minimum length enforced by Supabase Auth. This check is for
+      // fast feedback only — the server-side setting is what actually enforces it.
+      if (password.length < 10) { setError("Password must be at least 10 characters."); return; }
       if (!fullName || !phone || !address || !city || !stateField || !zip) {
         setError("Please fill in all fields."); return;
       }
@@ -6183,7 +6185,7 @@ function AuthPage() {
 
             <div>
               <label style={AUTH_LABEL_STYLE}>Password *</label>
-              <input type="password" required value={password} onChange={e => setPassword(e.target.value)} style={AUTH_INPUT_STYLE} placeholder="At least 6 characters" autoComplete="new-password" />
+              <input type="password" required value={password} onChange={e => setPassword(e.target.value)} style={AUTH_INPUT_STYLE} placeholder="At least 10 characters" autoComplete="new-password" />
             </div>
 
             <div>
