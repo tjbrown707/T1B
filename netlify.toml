@@ -5,6 +5,10 @@
 
 [functions]
   node_bundler = "esbuild"
+  # send-welcome-email.js reads welcome-discount.html at runtime. esbuild only
+  # bundles what is imported, so without this the HTML is absent from the
+  # deployed function and the send fails.
+  included_files = ["email-templates/**"]
 
 # ─── Security headers ────────────────────────────────────────────────────────
 # All headers below are enforcing. The CSP ran in Report-Only mode first and

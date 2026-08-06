@@ -4222,9 +4222,17 @@ function CartPage({ cart, setCart }) {
     setDiscountLoading(true);
     setDiscountError("");
     try {
+      // Send the access token when signed in. Per-customer single-use codes
+      // (the welcome code) are bound to a user_id, so the function can only
+      // match one if it knows who is asking. Guests just get the sitewide list.
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
       const res = await fetch("/.netlify/functions/validate-discount", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
         body: JSON.stringify({ code }),
       });
       const data = await res.json().catch(() => ({ valid: false, error: "Could not reach discount service." }));
@@ -4410,6 +4418,26 @@ function CartPage({ cart, setCart }) {
         ship_state: state,
         ship_zip: zip,
       }).then(({ error }) => { if (error) console.error("Order DB save error:", error); });
+    }
+
+    // Burn a single-use code so it can't be applied to a second order. Runs
+    // after the order is placed, and deliberately never blocks or fails the
+    // checkout: the customer has already paid by this point, so a redemption
+    // that doesn't land is a bookkeeping problem, not a broken order.
+    // Sitewide codes aren't tracked and are a harmless no-op server-side.
+    if (user && appliedDiscount?.code) {
+      supabase.auth.getSession().then(({ data }) => {
+        const accessToken = data?.session?.access_token;
+        if (!accessToken) return;
+        return fetch("/.netlify/functions/redeem-discount", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify({ code: appliedDiscount.code, orderNumber }),
+        });
+      }).catch((err) => console.error("Discount redemption error:", err));
     }
 
     // Submit to Netlify Forms

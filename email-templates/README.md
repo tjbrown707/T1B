@@ -51,3 +51,88 @@ Once custom SMTP is on, you can also raise the rate limits under
 
 > Note: this same Resend domain + API key could later replace EmailJS for the order
 > emails too, consolidating everything onto one branded sender — optional, separate task.
+
+---
+
+## 3. Welcome email + single-use discount code
+
+`welcome-discount.html` is **not** a Supabase template. Supabase Auth has no
+"after confirmation" template slot, so this one is sent by our own code:
+`netlify/functions/send-welcome-email.js`, triggered when `email_confirmed_at`
+goes from null to a timestamp.
+
+Flow: customer confirms → webhook fires → function mints a code into
+`public.discount_codes` → Resend sends the email → customer redeems at checkout →
+`redeem-discount.js` marks it spent so it can't be used again.
+
+### 3a. Netlify environment variables
+
+**Site configuration → Environment variables.**
+
+| Variable | Value |
+|---|---|
+| `SUPABASE_URL` | `https://nmafhetkofrekabqawgb.supabase.co` |
+| `SUPABASE_SERVICE_ROLE_KEY` | service_role key, Supabase → Settings → API Keys |
+| `RESEND_API_KEY` | your Resend API key |
+| `WELCOME_WEBHOOK_SECRET` | any long random string you invent |
+| `WELCOME_DISCOUNT_PERCENT` | optional, defaults to `10` |
+| `WELCOME_DISCOUNT_DAYS` | optional, defaults to `30` |
+
+> The **service_role key is not the publishable key.** It bypasses Row-Level
+> Security, which is what lets the function write `discount_codes` — a table no
+> customer is allowed to write. It must never appear in the browser bundle or in
+> `supabaseClient.js`. Netlify env vars are server-side only, which is why it is
+> safe here and nowhere else.
+
+Generate a secret with:
+
+```
+openssl rand -hex 32
+```
+
+### 3b. The Supabase webhook
+
+Dashboard → **Database → Webhooks → Create a new hook**:
+
+- **Name:** `send_welcome_email`
+- **Table:** `auth.users`
+- **Events:** `UPDATE` only
+- **Type:** HTTP Request → `POST`
+- **URL:** `https://www.tierone.bio/.netlify/functions/send-welcome-email`
+- **HTTP Headers:** add `x-webhook-secret` = the same value as `WELCOME_WEBHOOK_SECRET`
+
+Every update to `auth.users` fires this — sign-ins, password changes, metadata
+edits. The function checks for the null → timestamp transition on
+`email_confirmed_at` and returns "skipped" for everything else, so the noise is
+expected and harmless.
+
+### 3c. Testing it
+
+1. Sign up with an address you control, then click the confirmation link.
+2. The welcome email should arrive within a few seconds.
+3. Confirm the code exists and is unspent:
+
+   ```sql
+   select code, value, expires_at, redeemed_at, order_number
+   from public.discount_codes order by created_at desc limit 5;
+   ```
+
+4. Apply the code at checkout while signed in, place the order, then re-run that
+   query — `redeemed_at` and `order_number` should now be populated.
+5. Try the same code again. It must fail with "This code has already been used."
+
+If no email arrives, check the function log under Netlify → Logs → Functions, and
+the webhook's delivery log in Supabase. A `401` there means the header secret and
+the env var don't match.
+
+### Known limits
+
+- **Codes only work for signed-in customers.** They are bound to a `user_id`, so
+  a guest checkout cannot redeem one. That is deliberate — it is what stops a
+  code from being shared and reused by strangers.
+- **Codes are disabled during a sitewide sale.** `isSaleActive()` in `site_1.jsx`
+  blocks all discount codes while a sale runs, welcome codes included. A customer
+  who confirms during a sale will hold a code they can't use until it ends — worth
+  remembering when scheduling one against the 30-day expiry.
+- **No stacking.** The checkout allows one discount code plus one free-shipping
+  code, so a welcome code can't be combined with another discount.

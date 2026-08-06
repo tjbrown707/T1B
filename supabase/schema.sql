@@ -172,6 +172,61 @@ alter table public.orders
 --   ships, so a forged row is a bookkeeping problem, not free product.
 
 
+-- ─── discount_codes ─────────────────────────────────────────────────────────
+-- Per-customer single-use codes. Currently only the welcome code, minted by
+-- netlify/functions/send-welcome-email.js when a customer confirms their email.
+--
+-- Applied to the live database on 2026-08-05 (migration: create_discount_codes),
+-- so unlike the tables above this block is VERIFIED, not reconstructed.
+--
+-- This is the "separate table with no user-writable policy" that the warning on
+-- profiles calls for. Value and redeemed_at are money fields: if they lived on
+-- profiles, the customer's own UPDATE policy would let them set their discount
+-- to 99% and un-redeem a spent code.
+
+create table if not exists public.discount_codes (
+  code         text primary key,
+  user_id      uuid not null references auth.users (id) on delete cascade,
+  type         text not null default 'percent' check (type in ('percent','fixed')),
+  value        numeric(10,2) not null check (value > 0),
+  label        text,
+  source       text not null default 'welcome',
+  expires_at   timestamptz,
+  redeemed_at  timestamptz,          -- null = unspent
+  order_number text,                 -- the order that consumed it
+  created_at   timestamptz not null default now()
+);
+
+alter table public.discount_codes enable row level security;
+
+-- Read-only to the owner. There are deliberately no INSERT, UPDATE or DELETE
+-- policies: under RLS a command with no policy is denied, so only the service
+-- role used by the Netlify Functions can mint a code or mark one redeemed.
+create policy "Discount codes are viewable by their owner"
+  on public.discount_codes for select
+  using (auth.uid() = user_id);
+
+-- One welcome code per customer. This constraint IS the idempotency guard —
+-- Supabase retries webhook deliveries, and the function relies on catching the
+-- 23505 from this index rather than on checking-then-inserting, which would
+-- race two concurrent deliveries.
+create unique index if not exists discount_codes_one_welcome_per_user
+  on public.discount_codes (user_id)
+  where source = 'welcome';
+
+create index if not exists discount_codes_user_id_idx
+  on public.discount_codes (user_id);
+
+-- REDEMPTION IS NOT TRANSACTIONAL WITH THE ORDER.
+--   The order row is inserted by the browser; the code is burned by a separate
+--   call to redeem-discount.js afterwards. Two checkouts racing in different
+--   tabs can therefore both place an order before either redemption lands.
+--   The `is redeemed_at null` filter in that function means only one UPDATE
+--   wins, so the ledger stays correct, but the second order still went through
+--   with the discount applied. Accepted for the same reason as the order-total
+--   caveat above: payment is confirmed manually before anything ships.
+
+
 -- ─── Verifying this file still matches production ───────────────────────────
 -- RLS must be true for both tables:
 --

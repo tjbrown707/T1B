@@ -1,7 +1,16 @@
 <!--
-  Supabase Auth → "Confirm signup" template
-  Suggested subject: Confirm your Tier One BioSystems account
-  Variables: {{ .ConfirmationURL }} (action link), {{ .Email }}
+  Welcome email — sent by our own code (Netlify Function + Resend) once a
+  customer confirms their email address. This is NOT a Supabase Auth template:
+  Supabase has no "after confirmation" template slot, so it cannot send this.
+  See email-templates/README.md for the trigger wiring.
+
+  Suggested subject: Welcome to Tier One — here's 10% off your first order
+
+  Placeholders (substituted by the sending function, not by Supabase):
+    {{FIRST_NAME}}      e.g. "Marcus"  — fall back to "there" if unknown
+    {{DISCOUNT_CODE}}   e.g. "T1B-WELCOME-7K4M2X"
+    {{DISCOUNT_LABEL}}  e.g. "10% off"
+    {{EXPIRY_DATE}}     e.g. "September 4, 2026"
 -->
 <!DOCTYPE html>
 <html>
@@ -20,7 +29,7 @@
 
   <!-- Preheader: shown in the inbox preview line, hidden in the body -->
   <div style="display:none;font-size:1px;color:#0a0a0a;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;">
-    Confirm your email to activate your Tier One BioSystems account.
+    Your account is active &mdash; here's {{DISCOUNT_LABEL}} your first order.
     &#8203;&#8203;&#8203;&#8203;&#8203;&#8203;&#8203;&#8203;&#8203;&#8203;&#8203;&#8203;&#8203;&#8203;&#8203;
   </div>
 
@@ -51,7 +60,7 @@
               <table role="presentation" cellpadding="0" cellspacing="0" border="0">
                 <tr>
                   <td style="background-color:#1a0d0e;border:1px solid #c41e2a;padding:8px 20px;">
-                    <span style="font-family:Arial,sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;color:#c41e2a;text-transform:uppercase;">Confirm Your Email</span>
+                    <span style="font-family:Arial,sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;color:#c41e2a;text-transform:uppercase;">Account Activated</span>
                   </td>
                 </tr>
               </table>
@@ -61,46 +70,58 @@
           <!-- Heading -->
           <tr>
             <td style="padding:12px 20px 6px;">
-              <h1 style="margin:0;font-family:Arial,sans-serif;font-size:22px;font-weight:700;color:#ffffff;text-align:center;">Verify your account</h1>
+              <h1 style="margin:0;font-family:Arial,sans-serif;font-size:22px;font-weight:700;color:#ffffff;text-align:center;">Welcome to Tier One, {{FIRST_NAME}}</h1>
             </td>
           </tr>
           <tr>
-            <td style="padding:0 20px 20px;">
+            <td style="padding:0 20px 28px;">
               <p style="margin:0;font-family:Arial,sans-serif;font-size:14px;color:#999999;text-align:center;line-height:1.6;">
-                Thanks for creating a Tier One BioSystems account. Confirm your email address below to activate your account and start tracking your orders.
+                Your email is confirmed and your account is live. You can now track orders, save your shipping details, and reorder in a couple of clicks.
               </p>
             </td>
           </tr>
 
-          <!-- Address being confirmed -->
+          <!-- Discount code card -->
           <tr>
-            <td align="center" style="padding:0 20px 28px;">
-              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:400px;">
+            <td align="center" style="padding:0 20px 8px;">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:420px;">
                 <tr>
-                  <td align="center" style="background-color:#121212;border:1px solid #222222;padding:14px 20px;">
-                    <p style="margin:0 0 4px;font-family:Arial,sans-serif;font-size:10px;font-weight:700;letter-spacing:1.5px;color:#666666;text-transform:uppercase;">Account Email</p>
-                    <p style="margin:0;font-family:Arial,sans-serif;font-size:14px;color:#ffffff;word-break:break-all;">{{ .Email }}</p>
+                  <td align="center" bgcolor="#121212" style="background-color:#121212;border:1px dashed #c41e2a;padding:28px 20px;">
+                    <p style="margin:0 0 10px;font-family:Arial,sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;color:#c41e2a;text-transform:uppercase;">{{DISCOUNT_LABEL}} Your First Order</p>
+                    <p style="margin:0 0 14px;font-family:'Courier New',Courier,monospace;font-size:24px;font-weight:700;letter-spacing:3px;color:#ffffff;word-break:break-all;">{{DISCOUNT_CODE}}</p>
+                    <p style="margin:0;font-family:Arial,sans-serif;font-size:11px;color:#666666;line-height:1.6;">
+                      Single use &middot; One per customer &middot; Expires {{EXPIRY_DATE}}
+                    </p>
                   </td>
                 </tr>
               </table>
             </td>
           </tr>
 
+          <!-- Redemption hint -->
+          <tr>
+            <td style="padding:14px 20px 26px;">
+              <p style="margin:0;font-family:Arial,sans-serif;font-size:12px;color:#666666;text-align:center;line-height:1.6;">
+                Enter it in the discount field at checkout.
+              </p>
+            </td>
+          </tr>
+
           <!-- CTA button (VML fallback keeps the fill solid in Outlook) -->
           <tr>
-            <td align="center" style="padding:0 20px 20px;">
+            <td align="center" style="padding:0 20px 30px;">
               <!--[if mso]>
               <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word"
-                href="{{ .ConfirmationURL }}" style="height:48px;v-text-anchor:middle;width:240px;" arcsize="0%" stroke="f" fillcolor="#c41e2a">
+                href="https://www.tierone.bio/#products" style="height:48px;v-text-anchor:middle;width:240px;" arcsize="0%" stroke="f" fillcolor="#c41e2a">
                 <w:anchorlock/>
-                <center style="color:#ffffff;font-family:Arial,sans-serif;font-size:14px;font-weight:bold;letter-spacing:2px;">CONFIRM EMAIL</center>
+                <center style="color:#ffffff;font-family:Arial,sans-serif;font-size:14px;font-weight:bold;letter-spacing:2px;">SHOP NOW</center>
               </v:roundrect>
               <![endif]-->
               <!--[if !mso]><!-- -->
               <table role="presentation" cellpadding="0" cellspacing="0" border="0">
                 <tr>
                   <td align="center" bgcolor="#c41e2a" style="background-color:#c41e2a;">
-                    <a href="{{ .ConfirmationURL }}" target="_blank" style="display:inline-block;padding:15px 44px;font-family:Arial,sans-serif;font-size:14px;font-weight:700;letter-spacing:2px;color:#ffffff;text-transform:uppercase;text-decoration:none;">Confirm Email</a>
+                    <a href="https://www.tierone.bio/#products" target="_blank" style="display:inline-block;padding:15px 44px;font-family:Arial,sans-serif;font-size:14px;font-weight:700;letter-spacing:2px;color:#ffffff;text-transform:uppercase;text-decoration:none;">Shop Now</a>
                   </td>
                 </tr>
               </table>
@@ -108,23 +129,13 @@
             </td>
           </tr>
 
-          <!-- Expiry note -->
+          <!-- Account links -->
           <tr>
-            <td style="padding:0 20px 28px;">
-              <p style="margin:0;font-family:Arial,sans-serif;font-size:12px;color:#666666;text-align:center;line-height:1.6;">
-                This link expires in 24 hours. If it lapses, request a new one from the sign-in page.
-              </p>
-            </td>
-          </tr>
-
-          <!-- Fallback link -->
-          <tr>
-            <td style="padding:0 20px 28px;">
-              <p style="margin:0 0 6px;font-family:Arial,sans-serif;font-size:12px;color:#666666;text-align:center;line-height:1.6;">
-                If the button doesn't work, copy and paste this link into your browser:
-              </p>
-              <p style="margin:0;font-family:Arial,sans-serif;font-size:12px;color:#c41e2a;text-align:center;line-height:1.6;word-break:break-all;">
-                <a href="{{ .ConfirmationURL }}" target="_blank" style="color:#c41e2a;text-decoration:underline;">{{ .ConfirmationURL }}</a>
+            <td align="center" style="padding:0 20px 30px;">
+              <p style="margin:0;font-family:Arial,sans-serif;font-size:12px;color:#666666;line-height:1.8;">
+                <a href="https://www.tierone.bio/#account" style="color:#999999;text-decoration:underline;">Your account</a>
+                &nbsp;&middot;&nbsp;
+                <a href="https://www.tierone.bio/#research" style="color:#999999;text-decoration:underline;">Research library</a>
               </p>
             </td>
           </tr>
@@ -143,7 +154,6 @@
                 Questions? Contact us at <a href="mailto:info@tierone.bio" style="color:#999999;text-decoration:underline;">info@tierone.bio</a>
               </p>
               <p style="margin:0;font-family:Arial,sans-serif;font-size:11px;color:#555555;line-height:1.6;">
-                If you didn't create this account, you can safely ignore this email.<br>
                 Tier One BioSystems &middot; All products sold for research use only. Not for human consumption.
               </p>
             </td>
