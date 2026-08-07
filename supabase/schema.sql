@@ -191,11 +191,19 @@ create table if not exists public.discount_codes (
   value        numeric(10,2) not null check (value > 0),
   label        text,
   source       text not null default 'welcome',
-  expires_at   timestamptz,
-  redeemed_at  timestamptz,          -- null = unspent
-  order_number text,                 -- the order that consumed it
-  created_at   timestamptz not null default now()
+  expires_at    timestamptz,
+  redeemed_at   timestamptz,          -- null = unspent
+  order_number  text,                 -- the order that consumed it
+  email_sent_at timestamptz,          -- null = minted but never delivered
+  created_at    timestamptz not null default now()
 );
+
+-- WHY email_sent_at EXISTS (added 2026-08-07, after it bit us in testing).
+--   "A code row exists" and "the customer knows about it" are different facts.
+--   Resend rejected the first live send with 401, the code row stayed, and the
+--   one-welcome-per-user index below made every retry skip -- leaving a
+--   customer holding a code nothing could ever tell them about. The send path
+--   now re-sends when this column is null and only skips once it is set.
 
 alter table public.discount_codes enable row level security;
 

@@ -121,9 +121,35 @@ expected and harmless.
    query — `redeemed_at` and `order_number` should now be populated.
 5. Try the same code again. It must fail with "This code has already been used."
 
-If no email arrives, check the function log under Netlify → Logs → Functions, and
-the webhook's delivery log in Supabase. A `401` there means the header secret and
-the env var don't match.
+### If no email arrives
+
+Run this first — it localises the failure without leaving the SQL editor:
+
+```sql
+select d.code, d.created_at, d.email_sent_at, r.status_code, r.content
+from public.discount_codes d
+left join net._http_response r on r.created between d.created_at - interval '5 seconds'
+                                              and d.created_at + interval '5 seconds'
+order by d.created_at desc limit 5;
+```
+
+| What you see | What it means |
+|---|---|
+| No code row at all | The trigger never fired. Check it exists on `auth.users`. |
+| Code row, `email_sent_at` null, `status_code` 502 | Trigger and webhook fine — the mail provider rejected it. `content` quotes the provider's own error. |
+| Code row with `email_sent_at` set | It sent. Check spam, and confirm which address the account actually used. |
+
+A `401` in `content` from *our* function means the `x-webhook-secret` header and the
+Netlify env var don't match. A `resend_status` of 401 inside the body means Resend
+rejected the API key — a different failure at a different hop, so read carefully
+which one it is.
+
+Re-sending is safe. A code whose `email_sent_at` is null gets re-sent as the *same*
+code; it never mints a second one. Codes cascade-delete with the user, so deleting a
+test account and signing up again is a clean way to re-test.
+
+**A live send failure is not self-healing.** Supabase does not retry the webhook, so
+once the underlying cause is fixed, the pending email needs one manual re-fire.
 
 ### Known limits
 
