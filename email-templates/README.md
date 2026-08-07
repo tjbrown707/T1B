@@ -73,10 +73,27 @@ Flow: customer confirms → webhook fires → function mints a code into
 |---|---|
 | `SUPABASE_URL` | `https://nmafhetkofrekabqawgb.supabase.co` |
 | `SUPABASE_SERVICE_ROLE_KEY` | service_role key, Supabase → Settings → API Keys |
-| `RESEND_API_KEY` | your Resend API key |
+| `RESEND_API_KEY` | a Resend API key — see the warning below |
 | `WELCOME_WEBHOOK_SECRET` | any long random string you invent |
 | `WELCOME_DISCOUNT_PERCENT` | optional, defaults to `10` |
 | `WELCOME_DISCOUNT_DAYS` | optional, defaults to `30` |
+
+> ### There are TWO Resend API keys, and they are not interchangeable
+>
+> | Key | Where it lives | What breaks if you revoke it |
+> |---|---|---|
+> | **Auth key** | Supabase → Authentication → SMTP Settings → Password | Signup confirmations, password resets, magic links — customers cannot create accounts or get back into them |
+> | **Welcome key** | Netlify → `RESEND_API_KEY` | The welcome + discount email only |
+>
+> They are deliberately separate so either can be rotated without taking down
+> the other half of your email. Resend shows a key's value only once at
+> creation, so neither can be read back from its dashboard — if you need to
+> know what one is, you replace it rather than look it up.
+>
+> **Before revoking any key in Resend, work out which of the two it is.**
+> Revoking the auth key locks new customers out of signing up, and the failure
+> is silent from the site's side: signup appears to succeed and the
+> confirmation email simply never arrives.
 
 > The **service_role key is not the publishable key.** It bypasses Row-Level
 > Security, which is what lets the function write `discount_codes` — a table no
