@@ -115,11 +115,16 @@ export const handler = async (event) => {
 
     const { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY } = process.env;
     if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-      console.error("validate-discount: Supabase env vars missing");
+      // Personal codes are not configured. send-welcome-email needs this same
+      // key to mint them, so if it is absent no personal code can exist and
+      // anything reaching here really is invalid — telling the customer the
+      // system is down would be wrong as well as alarming. Logged so the
+      // misconfiguration is still visible to us in the function log.
+      console.error("validate-discount: Supabase env vars missing — personal codes disabled");
       return {
-        statusCode: 500,
+        statusCode: 200,
         headers: corsHeaders(),
-        body: JSON.stringify({ valid: false, error: "Discount system unavailable." }),
+        body: JSON.stringify({ valid: false, error: "Invalid discount code." }),
       };
     }
 
