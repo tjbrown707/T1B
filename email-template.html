@@ -104,11 +104,27 @@
                     </table>
                   </td>
                 </tr>
+                <!--
+                  The code gets its own row rather than sitting in parentheses
+                  next to the amount. It is the field that has to be readable at
+                  a glance when reconciling an order against a discount, and a
+                  label decorating a number is not that.
+                -->
                 <tr>
                   <td style="padding:6px 16px 0;">
                     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
                       <tr>
-                        <td style="font-family:Arial,sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;color:#22c55e;text-transform:uppercase;">DISCOUNT ({{discountCode}})</td>
+                        <td style="font-family:Arial,sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;color:#666666;text-transform:uppercase;">Discount Code</td>
+                        <td align="right" style="font-family:'Courier New',Courier,monospace;font-size:14px;font-weight:700;letter-spacing:1px;color:#22c55e;word-break:break-all;">{{discountCode}}</td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:6px 16px 0;">
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td style="font-family:Arial,sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;color:#22c55e;text-transform:uppercase;">Discount</td>
                         <td align="right" style="font-family:Arial,sans-serif;font-size:14px;font-weight:700;color:#22c55e;">{{discountAmount}}</td>
                       </tr>
                     </table>
