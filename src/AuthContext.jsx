@@ -62,6 +62,14 @@ export function AuthProvider({ children }) {
       supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${window.location.origin}/account`,
       }),
+    // Send a fresh signup-confirmation email. Used when the original link
+    // expired — Supabase links are single-use and time-limited.
+    resendConfirmation: (email) =>
+      supabase.auth.resend({
+        type: "signup",
+        email,
+        options: { emailRedirectTo: `${window.location.origin}/login?confirmed=1` },
+      }),
     refreshProfile,
   };
 

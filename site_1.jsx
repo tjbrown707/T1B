@@ -6087,7 +6087,7 @@ function AuthPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
-  const { signIn, signUp, isLoggedIn, loading: authLoading } = useAuth();
+  const { signIn, signUp, resendConfirmation, isLoggedIn, loading: authLoading } = useAuth();
   const isSignup = location.pathname === "/signup";
   // Only allow same-site paths. A value like "//evil.com" or "https://evil.com"
   // would otherwise send a just-authenticated customer off to a phishing page.
@@ -6111,6 +6111,12 @@ function AuthPage() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [resending, setResending] = useState(false);
+  // Set when the customer arrived here from a dead confirmation link.
+  const authError = searchParams.get("auth_error");
+  const linkExpired = !!authError && /expired|invalid|access_denied/i.test(authError);
+  // Set when a resent confirmation link was followed successfully.
+  const justConfirmed = searchParams.get("confirmed") === "1";
   const [isMobile, setIsMobile] = useState(window.innerWidth < 700);
   useEffect(() => {
     const h = () => setIsMobile(window.innerWidth < 700);
@@ -6135,6 +6141,21 @@ function AuthPage() {
       return "Too many attempts right now. Please wait a minute and try again.";
     }
     return raw;
+  }
+
+  async function handleResend() {
+    if (resending || !email) return;
+    setResending(true);
+    setError(""); setNotice("");
+    try {
+      const { error } = await resendConfirmation(email.trim());
+      if (error) setError(cleanAuthError(error));
+      else setNotice("Sent. Check your inbox for a new confirmation link — it expires in a few hours, so try to click it soon.");
+    } catch (err) {
+      setError(cleanAuthError(err));
+    } finally {
+      setResending(false);
+    }
   }
 
   async function handleSubmit(e) {
@@ -6249,6 +6270,40 @@ function AuthPage() {
           </>
         )}
 
+        {justConfirmed && !notice && !error && (
+          <div style={{ padding: "10px 14px", border: "1px solid rgba(34,197,94,0.5)", background: "rgba(34,197,94,0.08)", color: "#22c55e", fontFamily: "'Rajdhani', sans-serif", fontSize: 14 }}>
+            Email confirmed. Sign in below to continue.
+          </div>
+        )}
+        {linkExpired && !notice && (
+          <div style={{ padding: "14px 16px", border: "1px solid rgba(196,30,42,0.5)", background: "rgba(196,30,42,0.08)", fontFamily: "'Rajdhani', sans-serif", fontSize: 14, lineHeight: 1.6 }}>
+            <div style={{ color: "#ff6b6b", fontWeight: 700, marginBottom: 6 }}>That confirmation link has expired</div>
+            <div style={{ color: "var(--text-secondary)", marginBottom: 12 }}>
+              Confirmation links are single-use and time-limited. Enter your email below and we&rsquo;ll send you a fresh one.
+            </div>
+            <button
+              type="button"
+              disabled={resending || !email}
+              onClick={handleResend}
+              style={{
+                padding: "10px 18px",
+                background: "transparent",
+                border: "1px solid var(--red-primary)",
+                color: "var(--red-primary)",
+                fontFamily: "'Orbitron', sans-serif",
+                fontWeight: 700,
+                fontSize: 11,
+                letterSpacing: "0.12em",
+                textTransform: "uppercase",
+                cursor: (resending || !email) ? "not-allowed" : "pointer",
+                opacity: (resending || !email) ? 0.5 : 1,
+              }}
+            >{resending ? "Sending…" : "Resend confirmation email"}</button>
+            {!email && (
+              <div style={{ color: "var(--text-dim)", fontSize: 13, marginTop: 8 }}>Enter your email address above first.</div>
+            )}
+          </div>
+        )}
         {error && (
           <div style={{ padding: "10px 14px", border: "1px solid rgba(196,30,42,0.5)", background: "rgba(196,30,42,0.08)", color: "#ff6b6b", fontFamily: "'Rajdhani', sans-serif", fontSize: 14 }}>{error}</div>
         )}
@@ -7578,6 +7633,20 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, [location.pathname]);
   useEffect(() => () => { if (cartPopupTimer.current) clearTimeout(cartPopupTimer.current); }, []);
+
+  // A dead confirmation link (expired or already used) still redirects here, to
+  // the Site URL, with the reason in the URL fragment. Without this the customer
+  // just lands on the homepage looking successful, then can't log in and has no
+  // idea why. Catch it, clear the fragment, and hand it to the login page.
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (!hash || !hash.includes("error")) return;
+    const params = new URLSearchParams(hash.replace(/^#/, ""));
+    const code = params.get("error_code") || params.get("error");
+    if (!code) return;
+    window.history.replaceState(null, "", window.location.pathname + window.location.search);
+    navigate(`/login?auth_error=${encodeURIComponent(code)}`, { replace: true });
+  }, [navigate]);
 
   function addToCart(product) {
     setCart(prev => {
