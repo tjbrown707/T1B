@@ -25,9 +25,16 @@
     &#8203;&#8203;&#8203;&#8203;&#8203;&#8203;&#8203;&#8203;&#8203;&#8203;&#8203;&#8203;&#8203;&#8203;&#8203;
   </div>
 
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#0a0a0a;margin:0;padding:0;">
+  <!--
+    Gmail's mobile apps ignore color-scheme and run their own colour inversion,
+    which flips this dark design to white. They do NOT repaint image pixels, so
+    the dark backdrop is painted with a tiled 20x20 solid #0a0a0a PNG. The
+    bgcolor attribute and background-color style stay as the fallback for any
+    client that blocks images.
+  -->
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#0a0a0a" background="https://www.tierone.bio/email-bg.png" style="background-color:#0a0a0a;background-image:url('https://www.tierone.bio/email-bg.png');background-repeat:repeat;margin:0;padding:0;">
     <tr>
-      <td align="center" valign="top" style="padding:24px 8px;">
+      <td align="center" valign="top" bgcolor="#0a0a0a" background="https://www.tierone.bio/email-bg.png" style="padding:24px 8px;background-color:#0a0a0a;background-image:url('https://www.tierone.bio/email-bg.png');background-repeat:repeat;">
         <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:560px;width:100%;">
 
           <!-- Header -->
