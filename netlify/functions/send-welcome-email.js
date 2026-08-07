@@ -188,9 +188,11 @@ export const handler = async (event) => {
   const label = `${percent}% off`;
 
   // Insert first, send second. If the insert loses the idempotency race we
-  // stop here rather than sending a second email with a code that was never
-  // stored. Retry only on a code collision, not on the one-per-user index.
+  // stop rather than sending a second email with a code that was never stored.
   let code = null;
+  let codeLabel = label;
+  let codeExpiresAt = expiresAt;
+
   for (let attempt = 0; attempt < 5; attempt++) {
     const candidate = generateCode();
     const { error } = await supabase.from("discount_codes").insert({
@@ -207,14 +209,38 @@ export const handler = async (event) => {
       code = candidate;
       break;
     }
+
     if (error.code === "23505") {
-      // Unique violation. Which one matters: the partial index means this user
-      // already has a welcome code, so the email already went out.
+      // Unique violation on the one-welcome-per-user index: this customer
+      // already has a code. That alone is NOT a reason to stop. If a previous
+      // attempt minted the code but the send failed, they are holding a code
+      // nobody ever told them about, and skipping here would make that
+      // permanent. email_sent_at is what distinguishes the two cases.
       if (String(error.message).includes("one_welcome_per_user")) {
-        return { statusCode: 200, body: JSON.stringify({ skipped: "welcome code already issued" }) };
+        const { data: existing, error: fetchErr } = await supabase
+          .from("discount_codes")
+          .select("code, label, expires_at, redeemed_at, email_sent_at")
+          .eq("user_id", userId)
+          .eq("source", "welcome")
+          .maybeSingle();
+
+        if (fetchErr || !existing) {
+          console.error("send-welcome-email: could not read existing code:", fetchErr);
+          return { statusCode: 500, body: JSON.stringify({ error: "Could not read existing code" }) };
+        }
+        if (existing.email_sent_at || existing.redeemed_at) {
+          return { statusCode: 200, body: JSON.stringify({ skipped: "welcome email already sent" }) };
+        }
+
+        // Minted but never delivered — re-send the same code.
+        code = existing.code;
+        codeLabel = existing.label || label;
+        codeExpiresAt = existing.expires_at ? new Date(existing.expires_at) : expiresAt;
+        break;
       }
       continue; // primary-key collision on the code itself — draw another
     }
+
     console.error("send-welcome-email: insert failed:", error);
     return { statusCode: 500, body: JSON.stringify({ error: "Could not create code" }) };
   }
@@ -227,8 +253,8 @@ export const handler = async (event) => {
   const html = renderTemplate(template, {
     FIRST_NAME: escapeHtml(firstNameFrom(authUser)),
     DISCOUNT_CODE: escapeHtml(code),
-    DISCOUNT_LABEL: escapeHtml(label),
-    EXPIRY_DATE: expiresAt.toLocaleDateString("en-US", {
+    DISCOUNT_LABEL: escapeHtml(codeLabel),
+    EXPIRY_DATE: codeExpiresAt.toLocaleDateString("en-US", {
       month: "long",
       day: "numeric",
       year: "numeric",
@@ -246,18 +272,34 @@ export const handler = async (event) => {
       from: "Tier One BioSystems <noreply@tierone.bio>",
       to: [email],
       reply_to: "info@tierone.bio",
-      subject: `Welcome to Tier One — here's ${label} your first order`,
+      subject: `Welcome to Tier One — here's ${codeLabel} your first order`,
       html,
     }),
   });
 
   if (!res.ok) {
-    const detail = await res.text().catch(() => "");
-    // The code row stays. The customer keeps a valid code even though the mail
-    // failed, and support can read it out of the table rather than re-mint.
+    const detail = (await res.text().catch(() => "")).slice(0, 300);
+    // The code row stays, with email_sent_at still null, so the next delivery
+    // re-sends this same code instead of skipping.
+    //
+    // The provider's own message is echoed back in the response body, not just
+    // written to the function log. Supabase records the webhook response in
+    // net._http_response, so a failure explains itself where the failure is
+    // visible instead of requiring a separate hunt through Netlify's logs.
+    // Resend does not echo the API key in errors, so this is safe to surface.
     console.error(`send-welcome-email: Resend returned ${res.status}: ${detail}`);
-    return { statusCode: 502, body: JSON.stringify({ error: "Email send failed" }) };
+    return {
+      statusCode: 502,
+      body: JSON.stringify({ error: "Email send failed", resend_status: res.status, resend_detail: detail }),
+    };
   }
 
-  return { statusCode: 200, body: JSON.stringify({ sent: true }) };
+  // Delivered. Record it so a duplicate webhook doesn't send a second copy.
+  const { error: markErr } = await supabase
+    .from("discount_codes")
+    .update({ email_sent_at: new Date().toISOString() })
+    .eq("code", code);
+  if (markErr) console.error("send-welcome-email: could not mark email_sent_at:", markErr);
+
+  return { statusCode: 200, body: JSON.stringify({ sent: true, code_issued: true }) };
 };
