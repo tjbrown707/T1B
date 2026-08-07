@@ -75,8 +75,14 @@ enabled. Anything genuinely secret belongs in Netlify environment variables.
 
 ## Verifying changes
 
-`npm run build` fails on this machine (a rolldown native-binding issue), so use ESLint
-as the check instead:
+`npm run build` works (the old rolldown native-binding failure is gone — verified
+2026-08-06). It does two things:
+
+1. `vite build`
+2. `node scripts/check-bundle-secrets.js` — scans `dist/` and **exits non-zero** if a
+   server-only secret made it into the browser bundle, which fails the Netlify deploy.
+
+Then run ESLint:
 
 ```
 node node_modules/eslint/bin/eslint.js site_1.jsx
@@ -85,6 +91,14 @@ node node_modules/eslint/bin/eslint.js site_1.jsx
 Baseline is 1 error (an intentional empty `catch`) and 1 warning. Anything beyond that
 is new and should be fixed before pushing. The `react-hooks` plugin here will catch the
 hook-ordering and nested-component mistakes described above.
+
+**If the secret check ever fails, the key is compromised — rotate it.** Do not just
+delete the line and rebuild. Anything that reached `dist/` also reached the build log.
+
+The most likely way to trip it: giving a server-only value a `VITE_` prefix. Vite inlines
+every `VITE_*` env var into the public bundle, so `VITE_SUPABASE_SERVICE_ROLE_KEY` would
+be world-readable while `SUPABASE_SERVICE_ROLE_KEY` stays server-side. Same dashboard,
+same-looking setting, opposite outcome.
 
 ## Debugging live problems
 
