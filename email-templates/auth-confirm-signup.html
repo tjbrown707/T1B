@@ -2,79 +2,72 @@
   Supabase Auth → "Confirm signup" template
   Suggested subject: Confirm your Tier One BioSystems account
   Variables: {{ .ConfirmationURL }} (action link), {{ .Email }}
+
+  LIGHT DESIGN — deliberate. Gmail's mobile apps ignore color-scheme and run
+  their own inversion, so a dark design there came back with white boxes, a
+  washed-out button, and an unreadable heading. A light design is what Gmail's
+  inversion is actually built for: it produces a clean dark rendering, while
+  every other client shows it light. Branding is carried by the dark logo band,
+  which is an image and a tiled background, neither of which Gmail repaints.
 -->
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="color-scheme" content="only dark">
-  <meta name="supported-color-schemes" content="only dark">
+  <meta name="color-scheme" content="light dark">
+  <meta name="supported-color-schemes" content="light dark">
   <style>
-    :root { color-scheme: only dark; supported-color-schemes: only dark; }
     body, table, td, div, p, h1, span, a, strong { -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
     table { border-collapse: collapse; mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
     img { border: 0; outline: none; text-decoration: none; -ms-interpolation-mode: bicubic; }
   </style>
 </head>
-<body style="margin:0;padding:0;background-color:#0a0a0a;font-family:Arial,Helvetica,sans-serif;width:100%;">
+<body style="margin:0;padding:0;background-color:#f4f4f5;font-family:Arial,Helvetica,sans-serif;width:100%;">
 
   <!-- Preheader: shown in the inbox preview line, hidden in the body -->
-  <div style="display:none;font-size:1px;color:#0a0a0a;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;">
+  <div style="display:none;font-size:1px;color:#f4f4f5;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;">
     Confirm your email to activate your Tier One BioSystems account.
     &#8203;&#8203;&#8203;&#8203;&#8203;&#8203;&#8203;&#8203;&#8203;&#8203;&#8203;&#8203;&#8203;&#8203;&#8203;
   </div>
 
-  <!--
-    Gmail's mobile apps ignore color-scheme and run their own colour inversion,
-    which flips this dark design to white. They do NOT repaint image pixels, so
-    the dark backdrop is painted with a tiled 20x20 solid #0a0a0a PNG. The
-    bgcolor attribute and background-color style stay as the fallback for any
-    client that blocks images.
-  -->
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#0a0a0a" background="https://www.tierone.bio/email-bg.png" style="background-color:#0a0a0a;background-image:url('https://www.tierone.bio/email-bg.png');background-repeat:repeat;margin:0;padding:0;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f4f4f5" style="background-color:#f4f4f5;margin:0;padding:0;">
     <tr>
-      <td align="center" valign="top" bgcolor="#0a0a0a" background="https://www.tierone.bio/email-bg.png" style="padding:24px 8px;background-color:#0a0a0a;background-image:url('https://www.tierone.bio/email-bg.png');background-repeat:repeat;">
-        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:560px;width:100%;">
+      <td align="center" valign="top" style="padding:24px 8px;">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:560px;width:100%;background-color:#ffffff;">
 
-          <!-- Header -->
+          <!--
+            Dark logo band. Tiled with a solid #0a0a0a PNG so Gmail cannot
+            invert it, and the logo's own backdrop is the same #0a0a0a, so the
+            two merge with no visible seam.
+          -->
           <tr>
-            <td align="center" style="padding:32px 0 24px;">
+            <td align="center" bgcolor="#0a0a0a" background="https://www.tierone.bio/email-bg.png" style="background-color:#0a0a0a;background-image:url('https://www.tierone.bio/email-bg.png');background-repeat:repeat;padding:28px 20px;">
               <img src="https://www.tierone.bio/logo-wide.png" alt="Tier One BioSystems" width="240" style="display:block;width:240px;max-width:240px;height:auto;" />
             </td>
           </tr>
 
-          <!-- Red divider -->
+          <!-- Red divider, tiled so the brand red survives inversion -->
           <tr>
-            <td style="padding:0 20px;">
-              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-                <tr><td style="height:1px;background-color:#c41e2a;font-size:1px;line-height:1px;">&nbsp;</td></tr>
-              </table>
-            </td>
+            <td bgcolor="#c41e2a" background="https://www.tierone.bio/email-btn.png" style="height:3px;background-color:#c41e2a;background-image:url('https://www.tierone.bio/email-btn.png');background-repeat:repeat;font-size:1px;line-height:3px;">&nbsp;</td>
           </tr>
 
-          <!-- Eyebrow chip -->
+          <!-- Eyebrow -->
           <tr>
-            <td align="center" style="padding:28px 20px 12px;">
-              <table role="presentation" cellpadding="0" cellspacing="0" border="0">
-                <tr>
-                  <td bgcolor="#1a0d0e" background="https://www.tierone.bio/email-badge.png" style="background-color:#1a0d0e;background-image:url('https://www.tierone.bio/email-badge.png');background-repeat:repeat;border:1px solid #c41e2a;padding:8px 20px;">
-                    <span style="font-family:Arial,sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;color:#c41e2a;text-transform:uppercase;">Confirm Your Email</span>
-                  </td>
-                </tr>
-              </table>
+            <td align="center" style="padding:32px 24px 0;">
+              <span style="font-family:Arial,sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;color:#c41e2a;text-transform:uppercase;">Confirm Your Email</span>
             </td>
           </tr>
 
           <!-- Heading -->
           <tr>
-            <td style="padding:12px 20px 6px;">
-              <h1 style="margin:0;font-family:Arial,sans-serif;font-size:22px;font-weight:700;color:#ffffff;text-align:center;">Verify your account</h1>
+            <td style="padding:10px 24px 6px;">
+              <h1 style="margin:0;font-family:Arial,sans-serif;font-size:24px;font-weight:700;color:#111111;text-align:center;">Verify your account</h1>
             </td>
           </tr>
           <tr>
-            <td style="padding:0 20px 20px;">
-              <p style="margin:0;font-family:Arial,sans-serif;font-size:14px;color:#999999;text-align:center;line-height:1.6;">
+            <td style="padding:0 24px 24px;">
+              <p style="margin:0;font-family:Arial,sans-serif;font-size:15px;color:#555555;text-align:center;line-height:1.65;">
                 Thanks for creating a Tier One BioSystems account. Confirm your email address below to activate your account and start tracking your orders.
               </p>
             </td>
@@ -82,12 +75,12 @@
 
           <!-- Address being confirmed -->
           <tr>
-            <td align="center" style="padding:0 20px 28px;">
+            <td align="center" style="padding:0 24px 28px;">
               <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:400px;">
                 <tr>
-                  <td align="center" bgcolor="#121212" background="https://www.tierone.bio/email-card.png" style="background-color:#121212;background-image:url('https://www.tierone.bio/email-card.png');background-repeat:repeat;border:1px solid #222222;padding:14px 20px;">
-                    <p style="margin:0 0 4px;font-family:Arial,sans-serif;font-size:10px;font-weight:700;letter-spacing:1.5px;color:#666666;text-transform:uppercase;">Account Email</p>
-                    <p style="margin:0;font-family:Arial,sans-serif;font-size:14px;color:#ffffff;word-break:break-all;">{{ .Email }}</p>
+                  <td align="center" bgcolor="#f7f7f8" style="background-color:#f7f7f8;border:1px solid #e4e4e7;padding:14px 20px;">
+                    <p style="margin:0 0 4px;font-family:Arial,sans-serif;font-size:10px;font-weight:700;letter-spacing:1.5px;color:#71717a;text-transform:uppercase;">Account Email</p>
+                    <p style="margin:0;font-family:Arial,sans-serif;font-size:15px;color:#111111;word-break:break-all;">{{ .Email }}</p>
                   </td>
                 </tr>
               </table>
@@ -96,7 +89,7 @@
 
           <!-- CTA button (VML fallback keeps the fill solid in Outlook) -->
           <tr>
-            <td align="center" style="padding:0 20px 20px;">
+            <td align="center" style="padding:0 24px 24px;">
               <!--[if mso]>
               <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word"
                 href="{{ .ConfirmationURL }}" style="height:48px;v-text-anchor:middle;width:240px;" arcsize="0%" stroke="f" fillcolor="#c41e2a">
@@ -118,8 +111,8 @@
 
           <!-- Expiry note -->
           <tr>
-            <td style="padding:0 20px 28px;">
-              <p style="margin:0;font-family:Arial,sans-serif;font-size:12px;color:#666666;text-align:center;line-height:1.6;">
+            <td style="padding:0 24px 24px;">
+              <p style="margin:0;font-family:Arial,sans-serif;font-size:13px;color:#71717a;text-align:center;line-height:1.6;">
                 This link expires in 24 hours. If it lapses, request a new one from the sign-in page.
               </p>
             </td>
@@ -127,11 +120,11 @@
 
           <!-- Fallback link -->
           <tr>
-            <td style="padding:0 20px 28px;">
-              <p style="margin:0 0 6px;font-family:Arial,sans-serif;font-size:12px;color:#666666;text-align:center;line-height:1.6;">
+            <td style="padding:0 24px 28px;">
+              <p style="margin:0 0 6px;font-family:Arial,sans-serif;font-size:12px;color:#71717a;text-align:center;line-height:1.6;">
                 If the button doesn't work, copy and paste this link into your browser:
               </p>
-              <p style="margin:0;font-family:Arial,sans-serif;font-size:12px;color:#c41e2a;text-align:center;line-height:1.6;word-break:break-all;">
+              <p style="margin:0;font-family:Arial,sans-serif;font-size:12px;text-align:center;line-height:1.6;word-break:break-all;">
                 <a href="{{ .ConfirmationURL }}" target="_blank" style="color:#c41e2a;text-decoration:underline;">{{ .ConfirmationURL }}</a>
               </p>
             </td>
@@ -139,18 +132,18 @@
 
           <!-- Footer -->
           <tr>
-            <td style="padding:0 20px;">
+            <td style="padding:0 24px;">
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-                <tr><td style="height:1px;background-color:#222222;font-size:1px;line-height:1px;">&nbsp;</td></tr>
+                <tr><td bgcolor="#e4e4e7" style="height:1px;background-color:#e4e4e7;font-size:1px;line-height:1px;">&nbsp;</td></tr>
               </table>
             </td>
           </tr>
           <tr>
-            <td align="center" style="padding:24px 20px 40px;">
-              <p style="margin:0 0 6px;font-family:Arial,sans-serif;font-size:12px;color:#666666;line-height:1.6;">
-                Questions? Contact us at <a href="mailto:info@tierone.bio" style="color:#999999;text-decoration:underline;">info@tierone.bio</a>
+            <td align="center" style="padding:22px 24px 32px;">
+              <p style="margin:0 0 6px;font-family:Arial,sans-serif;font-size:12px;color:#71717a;line-height:1.6;">
+                Questions? Contact us at <a href="mailto:info@tierone.bio" style="color:#c41e2a;text-decoration:underline;">info@tierone.bio</a>
               </p>
-              <p style="margin:0;font-family:Arial,sans-serif;font-size:11px;color:#555555;line-height:1.6;">
+              <p style="margin:0;font-family:Arial,sans-serif;font-size:11px;color:#a1a1aa;line-height:1.6;">
                 If you didn't create this account, you can safely ignore this email.<br>
                 Tier One BioSystems &middot; All products sold for research use only. Not for human consumption.
               </p>
