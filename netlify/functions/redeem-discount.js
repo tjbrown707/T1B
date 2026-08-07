@@ -44,8 +44,11 @@ export const handler = async (event) => {
     };
   }
 
-  const code = String(body.code || "").trim().toUpperCase();
-  const orderNumber = String(body.orderNumber || "").trim() || null;
+  // Both fields are client-supplied. Cap them: the code is a fixed-width
+  // format, and order_number is only ever written here, so an unbounded string
+  // from the browser would be stored verbatim in the database.
+  const code = String(body.code || "").trim().toUpperCase().slice(0, 64);
+  const orderNumber = String(body.orderNumber || "").trim().slice(0, 32) || null;
   if (!code) {
     return {
       statusCode: 200,

@@ -83,13 +83,17 @@ function escapeHtml(str) {
     .replace(/'/g, "&#39;");
 }
 
+// The name is whatever the customer typed at signup, so it is untrusted input
+// on two axes: it is escaped before going into the HTML, and it is capped so a
+// pathologically long "name" can't bloat the email or blow the greeting layout.
 function firstNameFrom(record) {
   const full =
     record?.raw_user_meta_data?.full_name ||
     record?.user_metadata?.full_name ||
     "";
   const first = String(full).trim().split(/\s+/)[0];
-  return first || "there";
+  if (!first) return "there";
+  return first.length > 40 ? first.slice(0, 40) : first;
 }
 
 export const handler = async (event) => {
@@ -118,28 +122,70 @@ export const handler = async (event) => {
   const record = payload.record || {};
   const oldRecord = payload.old_record || {};
 
-  // Only the null → timestamp transition counts. Every other update to
-  // auth.users (password change, metadata edit, last_sign_in_at bump) also
-  // fires this webhook, and none of them should mint a code.
+  // The hook is configured on auth.users. Anything else is a misconfigured
+  // webhook or a forged body, and its record shape can't be trusted.
+  if (payload.schema && payload.table && !(payload.schema === "auth" && payload.table === "users")) {
+    return { statusCode: 200, body: JSON.stringify({ skipped: "unexpected table" }) };
+  }
+
+  // Cheap pre-filter: only the null → timestamp transition is interesting.
+  // Every other update to auth.users (password change, metadata edit,
+  // last_sign_in_at bump) also fires this webhook.
   const justConfirmed = !oldRecord.email_confirmed_at && !!record.email_confirmed_at;
   if (!justConfirmed) {
     return { statusCode: 200, body: JSON.stringify({ skipped: "not a confirmation event" }) };
   }
 
   const userId = record.id;
-  const email = record.email;
-  if (!userId || !email) {
-    return { statusCode: 200, body: JSON.stringify({ skipped: "no user id or email" }) };
+  if (!userId) {
+    return { statusCode: 200, body: JSON.stringify({ skipped: "no user id" }) };
   }
-
-  const percent = Number(process.env.WELCOME_DISCOUNT_PERCENT || 10);
-  const days = Number(process.env.WELCOME_DISCOUNT_DAYS || 30);
-  const expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
-  const label = `${percent}% off`;
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
+
+  // Re-read the user from the database instead of trusting the request body.
+  // The shared secret is the only thing between this endpoint and the open
+  // internet. If it ever leaks, a forged body must not be able to turn this
+  // into a spam relay — without this lookup, an attacker could name any
+  // recipient they liked and have it sent from noreply@tierone.bio, burning
+  // the domain's sending reputation. Recipient and confirmed-state now come
+  // from Postgres; the payload only supplies which user to look up.
+  const { data: authData, error: authErr } = await supabase.auth.admin.getUserById(userId);
+  const authUser = authData?.user;
+  if (authErr || !authUser) {
+    console.error("send-welcome-email: user lookup failed:", authErr);
+    return { statusCode: 200, body: JSON.stringify({ skipped: "unknown user" }) };
+  }
+  if (!authUser.email_confirmed_at) {
+    return { statusCode: 200, body: JSON.stringify({ skipped: "email not confirmed" }) };
+  }
+  const email = authUser.email;
+  if (!email) {
+    return { statusCode: 200, body: JSON.stringify({ skipped: "no email on record" }) };
+  }
+
+  // Load the template before minting anything. If the HTML is missing from the
+  // deployed bundle this fails — and because the one-per-user index is what
+  // makes retries idempotent, a code inserted first would permanently block the
+  // retry that would otherwise have delivered the email.
+  let template;
+  try {
+    template = loadTemplate();
+  } catch (err) {
+    console.error("send-welcome-email:", err.message);
+    return { statusCode: 500, body: JSON.stringify({ error: "Template unavailable" }) };
+  }
+
+  // A typo'd env var must not mint a NaN discount that fails the value > 0
+  // check on every signup, or a 900% one that pays customers to order.
+  const rawPercent = Number(process.env.WELCOME_DISCOUNT_PERCENT || 10);
+  const percent = Number.isFinite(rawPercent) && rawPercent > 0 && rawPercent <= 50 ? rawPercent : 10;
+  const rawDays = Number(process.env.WELCOME_DISCOUNT_DAYS || 30);
+  const days = Number.isFinite(rawDays) && rawDays > 0 && rawDays <= 365 ? rawDays : 30;
+  const expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+  const label = `${percent}% off`;
 
   // Insert first, send second. If the insert loses the idempotency race we
   // stop here rather than sending a second email with a code that was never
@@ -178,8 +224,8 @@ export const handler = async (event) => {
     return { statusCode: 500, body: JSON.stringify({ error: "Could not create code" }) };
   }
 
-  const html = renderTemplate(loadTemplate(), {
-    FIRST_NAME: escapeHtml(firstNameFrom(record)),
+  const html = renderTemplate(template, {
+    FIRST_NAME: escapeHtml(firstNameFrom(authUser)),
     DISCOUNT_CODE: escapeHtml(code),
     DISCOUNT_LABEL: escapeHtml(label),
     EXPIRY_DATE: expiresAt.toLocaleDateString("en-US", {
