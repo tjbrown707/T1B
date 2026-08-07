@@ -2061,8 +2061,39 @@ const ARTICLES = [
   },
 ];
 
+// ─── Scheduled publishing ────────────────────────────────────────────────────
+// An article whose `date` is in the future is written and shipped in the bundle
+// but not yet public. The check below runs in the browser on every visit, so an
+// article goes live by itself on its own date — no deploy, no build, no cron.
+// Queue articles with staggered dates and the page publishes on its own.
+//
+// Every read of ARTICLES must go through publishedArticles() or
+// getArticleBySlug(). Reading the raw array anywhere else would leak a queued
+// article early — the whole queue is in the bundle, so the date check is the
+// only thing keeping unpublished articles out of sight.
+function todayISO() {
+  const d = new Date();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${month}-${day}`;
+}
+
+// Dates are ISO (YYYY-MM-DD), so a string comparison is a date comparison.
+// An article with no date at all is treated as published rather than hidden
+// forever, so a missing field can never silently bury a finished article.
+function isPublished(article) {
+  return !article?.date || article.date <= todayISO();
+}
+
+function publishedArticles() {
+  return ARTICLES.filter(isPublished);
+}
+
 function getArticleBySlug(slug) {
-  return ARTICLES.find(a => a.slug === slug) || null;
+  const article = ARTICLES.find(a => a.slug === slug) || null;
+  // Queued articles 404 rather than render. Slugs are guessable, and a draft
+  // reachable by typing its URL is not scheduled — it is just published early.
+  return article && isPublished(article) ? article : null;
 }
 
 // ─── Scroll Reveal Hook ──────────────────────────────────────────────────────
@@ -6936,7 +6967,7 @@ function ResearchPage() {
   );
   const navigate = useNavigate();
   const isMobile = window.innerWidth < 700;
-  const sorted = [...ARTICLES].sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+  const sorted = publishedArticles().sort((a, b) => (b.date || "").localeCompare(a.date || ""));
   return (
     <>
       <div style={{ maxWidth: 1100, margin: "0 auto", padding: "120px 24px 80px" }}>
