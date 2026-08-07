@@ -271,7 +271,7 @@ export const handler = async (event) => {
     body: JSON.stringify({
       from: "Tier One BioSystems <noreply@tierone.bio>",
       to: [email],
-      reply_to: "info@tierone.bio",
+      reply_to: "admin@tierone.bio",
       subject: `Welcome to Tier One — here's ${codeLabel} your first order`,
       html,
     }),

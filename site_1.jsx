@@ -4996,7 +4996,7 @@ function CartPage({ cart, setCart }) {
           lineHeight: 1.6,
         }}>
           Orders are processed within 24 hours of payment confirmation.
-          <br />If you have questions, contact us at info@tierone.bio
+          <br />If you have questions, contact us at sales@tierone.bio
         </div>
       </div>
     );
