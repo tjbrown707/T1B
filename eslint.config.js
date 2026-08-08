@@ -27,7 +27,8 @@ export default defineConfig([
     },
   },
   {
-    files: ['netlify/functions/**/*.js'],
+    // Server-side and build-time code: Node globals, not browser ones.
+    files: ['netlify/functions/**/*.js', 'scripts/**/*.js'],
     languageOptions: {
       globals: globals.node,
     },
