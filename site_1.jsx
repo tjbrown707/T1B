@@ -1,888 +1,40 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, lazy, Suspense } from "react";
 import { Routes, Route, Navigate, useNavigate, useLocation, useParams, useSearchParams } from "react-router-dom";
 import emailjs from "@emailjs/browser";
 import { supabase } from "./supabaseClient";
 import { useAuth } from "./src/AuthContext.jsx";
 
-// ─── Sitewide Sale ───────────────────────────────────────────────────────────
-// Flip `active` to false to end the sale. Adjust `endDate` for the banner.
-const SITEWIDE_SALE = {
-  active: false,
-  percentOff: 30,
-  headline: "4TH OF JULY SALE — 30% OFF SITEWIDE",
-  endDate: "2026-07-05",
-};
-function isSaleActive() { return !!(SITEWIDE_SALE && SITEWIDE_SALE.active); }
-
-// Canonical price lookup. NEVER trust price/bulk stored on a cart item — the
-// cart lives in localStorage and can be edited by the customer. Always resolve
-// the authoritative figures from the PRODUCTS catalog by product id.
-function catalogPrices(item) {
-  const p = PRODUCTS.find(x => x.id === item?.id);
-  return { price: p ? p.price : 0, bulk: p ? p.bulk : 0 };
-}
-function applySale(price) {
-  if (!isSaleActive() || typeof price !== "number") return price;
-  return Math.round(price * (100 - SITEWIDE_SALE.percentOff) / 100);
-}
-function formatSaleEndDate(iso) {
-  if (!iso) return "";
-  try {
-    const d = new Date(iso + "T12:00:00");
-    return d.toLocaleDateString("en-US", { month: "long", day: "numeric" });
-  } catch { return iso; }
-}
-
 // ─── Data ────────────────────────────────────────────────────────────────────
-const PRODUCTS = [
-  {
-    id: "glp3rt-5",
-    name: "GLP-3RT",
-    dose: "5 mg",
-    price: 55,
-    bulk: 50,
-    image: "/glp3rt-5.jpg",
-    category: "Weight Management",
-    research: "GLP-3RT is a research compound targeting the GLP-1 receptor pathway. Preclinical studies suggest it may influence glucose metabolism, appetite signaling, and energy homeostasis. Researchers have observed its potential role in modulating incretin hormone activity, which plays a key role in metabolic regulation. Studies in animal models have demonstrated dose-dependent effects on food intake and body composition parameters.",
-    sequence: "Modified GLP-1 receptor targeting peptide",
-    storage: "Store powder in a standard home freezer (0°F / -18°C). Once reconstituted, refrigerate (35–46°F / 2–8°C) and use within 4 weeks.",
-    purity: "99%+",
-  },
-  {
-    id: "glp3rt-10",
-    name: "GLP-3RT",
-    dose: "10 mg",
-    price: 85,
-    bulk: 80,
-    image: "/glp3rt-10.jpg",
-    category: "Weight Management",
-    research: "GLP-3RT is a research compound targeting the GLP-1 receptor pathway. Preclinical studies suggest it may influence glucose metabolism, appetite signaling, and energy homeostasis. Researchers have observed its potential role in modulating incretin hormone activity, which plays a key role in metabolic regulation. Studies in animal models have demonstrated dose-dependent effects on food intake and body composition parameters.",
-    sequence: "Modified GLP-1 receptor targeting peptide",
-    storage: "Store powder in a standard home freezer (0°F / -18°C). Once reconstituted, refrigerate (35–46°F / 2–8°C) and use within 4 weeks.",
-    purity: "99%+",
-  },
-  {
-    id: "glp3rt-20",
-    name: "GLP-3RT",
-    dose: "20 mg",
-    price: 140,
-    bulk: 130,
-    image: "/glp3rt-20.jpg",
-    category: "Weight Management",
-    research: "GLP-3RT is a research compound targeting the GLP-1 receptor pathway. Preclinical studies suggest it may influence glucose metabolism, appetite signaling, and energy homeostasis. Researchers have observed its potential role in modulating incretin hormone activity, which plays a key role in metabolic regulation. Studies in animal models have demonstrated dose-dependent effects on food intake and body composition parameters.",
-    sequence: "Modified GLP-1 receptor targeting peptide",
-    storage: "Store powder in a standard home freezer (0°F / -18°C). Once reconstituted, refrigerate (35–46°F / 2–8°C) and use within 4 weeks.",
-    purity: "99%+",
-  },
-  {
-    id: "glp3rt-30",
-    name: "GLP-3RT",
-    dose: "30 mg",
-    price: 185,
-    bulk: 165,
-    image: "/glp3rt-30.jpg",
-    category: "Weight Management",
-    research: "GLP-3RT is a research compound targeting the GLP-1 receptor pathway. Preclinical studies suggest it may influence glucose metabolism, appetite signaling, and energy homeostasis. Researchers have observed its potential role in modulating incretin hormone activity, which plays a key role in metabolic regulation. Studies in animal models have demonstrated dose-dependent effects on food intake and body composition parameters.",
-    sequence: "Modified GLP-1 receptor targeting peptide",
-    storage: "Store powder in a standard home freezer (0°F / -18°C). Once reconstituted, refrigerate (35–46°F / 2–8°C) and use within 4 weeks.",
-    purity: "99%+",
-  },
-  {
-    id: "tesamorelin",
-    name: "Tesamorelin",
-    dose: "10 mg",
-    price: 75,
-    bulk: 70,
-    image: "/tesamorelin.jpg",
-    category: "Growth Hormone",
-    research: "Tesamorelin is a synthetic analog of growth hormone-releasing hormone (GHRH). Research indicates it stimulates the pituitary gland to produce growth hormone in a pulsatile, physiological manner. Published studies have examined its effects on visceral adipose tissue reduction and lipid metabolism. It has been the subject of clinical research for its impact on body composition in various metabolic conditions.",
-    sequence: "Modified GHRH (1-44) amide",
-    storage: "Store powder in a standard home freezer (0°F / -18°C). Once reconstituted, refrigerate (35–46°F / 2–8°C) and use within 3 weeks.",
-    purity: "99%+",
-  },
-  {
-    id: "cjc-ipa",
-    name: "CJC-1295 / Ipamorelin",
-    dose: "5/5 mg",
-    price: 75,
-    bulk: 65,
-    image: "/cjc-ipa.jpg",
-    category: "Growth Hormone",
-    research: "CJC-1295 is a synthetic GHRH analog with Drug Affinity Complex (DAC) technology, extending its half-life. Ipamorelin is a selective growth hormone secretagogue that mimics ghrelin. When combined, research suggests a synergistic effect on GH release via complementary mechanisms — CJC-1295 amplifies the GH pulse while Ipamorelin triggers it. Preclinical data indicates this combination promotes pulsatile GH secretion while minimizing cortisol and prolactin elevation.",
-    sequence: "CJC-1295: Modified GHRH (1-29) | Ipamorelin: Aib-His-D-2-Nal-D-Phe-Lys-NH₂",
-    storage: "Store powder in a standard home freezer (0°F / -18°C). Once reconstituted, refrigerate (35–46°F / 2–8°C) and use within 4 weeks.",
-    purity: "99%+",
-  },
-  {
-    id: "bpc157-5",
-    name: "BPC-157",
-    dose: "5 mg",
-    price: 35,
-    bulk: 30,
-    image: "/bpc157-5.jpg",
-    category: "Recovery",
-    research: "BPC-157 (Body Protection Compound-157) is a pentadecapeptide derived from human gastric juice. Extensive preclinical research demonstrates its involvement in angiogenesis, wound healing, and tissue repair across muscle, tendon, ligament, and nerve tissues. Studies suggest it modulates the nitric oxide system, upregulates growth factor expression, and interacts with the dopaminergic system. It has shown cytoprotective properties in various organ systems in animal models.",
-    sequence: "Gly-Glu-Pro-Pro-Pro-Gly-Lys-Pro-Ala-Asp-Asp-Ala-Gly-Leu-Val",
-    storage: "Store powder in a standard home freezer (0°F / -18°C). Once reconstituted, refrigerate (35–46°F / 2–8°C) and use within 4 weeks.",
-    purity: "99%+",
-  },
-  {
-    id: "bpc157-10",
-    name: "BPC-157",
-    dose: "10 mg",
-    price: 50,
-    bulk: 45,
-    image: "/bpc157-10.jpg",
-    category: "Recovery",
-    research: "BPC-157 (Body Protection Compound-157) is a pentadecapeptide derived from human gastric juice. Extensive preclinical research demonstrates its involvement in angiogenesis, wound healing, and tissue repair across muscle, tendon, ligament, and nerve tissues. Studies suggest it modulates the nitric oxide system, upregulates growth factor expression, and interacts with the dopaminergic system. It has shown cytoprotective properties in various organ systems in animal models.",
-    sequence: "Gly-Glu-Pro-Pro-Pro-Gly-Lys-Pro-Ala-Asp-Asp-Ala-Gly-Leu-Val",
-    storage: "Store powder in a standard home freezer (0°F / -18°C). Once reconstituted, refrigerate (35–46°F / 2–8°C) and use within 4 weeks.",
-    purity: "99%+",
-  },
-  {
-    id: "tb500",
-    name: "TB-500",
-    dose: "10 mg",
-    price: 55,
-    bulk: 50,
-    image: "/tb500.jpg",
-    category: "Recovery",
-    research: "TB-500 is a synthetic fraction of the naturally occurring thymosin beta-4 protein. Research has demonstrated its role in cell migration, blood vessel formation, and regulation of actin — a key cell-building protein. Preclinical studies indicate TB-500 promotes tissue repair by upregulating cell-building proteins, reducing inflammation, and facilitating new blood vessel growth. It has been studied for its effects on wound healing, cardiac tissue repair, and musculoskeletal recovery.",
-    sequence: "Synthetic fragment of Thymosin Beta-4 (Tβ4)",
-    storage: "Store powder in a standard home freezer (0°F / -18°C). Once reconstituted, refrigerate (35–46°F / 2–8°C) and use within 4 weeks.",
-    purity: "99%+",
-  },
-  {
-    id: "epitalon",
-    name: "Epitalon",
-    dose: "10 mg",
-    price: 35,
-    bulk: 30,
-    image: "/epitalon.jpg",
-    category: "Longevity",
-    research: "Epitalon (Epithalon) is a synthetic tetrapeptide based on the natural epithalamin peptide produced by the pineal gland. Research has focused on its potential to activate telomerase, the enzyme responsible for maintaining telomere length — a key biomarker of cellular aging. Studies by Professor Khavinson demonstrated increased telomerase activity and telomere elongation in human somatic cells. Additional research suggests effects on melatonin production, circadian rhythm regulation, and antioxidant enzyme activity.",
-    sequence: "Ala-Glu-Asp-Gly",
-    storage: "Store powder in a standard home freezer (0°F / -18°C). Once reconstituted, refrigerate (35–46°F / 2–8°C) and use within 6 weeks.",
-    purity: "99%+",
-  },
-  {
-    id: "ghkcu-50",
-    name: "GHK-Cu",
-    dose: "50 mg",
-    price: 40,
-    bulk: 35,
-    image: "/ghkcu-50.jpg",
-    category: "Longevity",
-    research: "GHK-Cu (copper peptide) is a naturally occurring tripeptide with high affinity for copper(II) ions. Found in human plasma, saliva, and urine, its concentration declines with age. Research demonstrates it modulates over 4,000 human genes, promoting tissue remodeling, anti-inflammatory responses, and stem cell attraction to injury sites. Studies have examined its role in collagen synthesis, wound healing, skin regeneration, hair growth, and antioxidant defense mechanisms.",
-    sequence: "Gly-His-Lys-Cu²⁺",
-    storage: "Store powder in a standard home freezer (0°F / -18°C), away from light. Once reconstituted, refrigerate (35–46°F / 2–8°C) and use within 2 weeks.",
-    purity: "99%+",
-  },
-  {
-    id: "ghkcu-100",
-    name: "GHK-Cu",
-    dose: "100 mg",
-    price: 55,
-    bulk: 50,
-    image: "/ghkcu-100.jpg",
-    category: "Longevity",
-    research: "GHK-Cu (copper peptide) is a naturally occurring tripeptide with high affinity for copper(II) ions. Found in human plasma, saliva, and urine, its concentration declines with age. Research demonstrates it modulates over 4,000 human genes, promoting tissue remodeling, anti-inflammatory responses, and stem cell attraction to injury sites. Studies have examined its role in collagen synthesis, wound healing, skin regeneration, hair growth, and antioxidant defense mechanisms.",
-    sequence: "Gly-His-Lys-Cu²⁺",
-    storage: "Store powder in a standard home freezer (0°F / -18°C), away from light. Once reconstituted, refrigerate (35–46°F / 2–8°C) and use within 2 weeks.",
-    purity: "99%+",
-  },
-  {
-    id: "ss31",
-    name: "SS-31",
-    dose: "10 mg",
-    price: 80,
-    bulk: 70,
-    image: "/ss31.jpg",
-    category: "Longevity",
-    research: "SS-31 (Elamipretide) is a mitochondria-targeted tetrapeptide that selectively concentrates in the inner mitochondrial membrane. Research demonstrates it binds to cardiolipin, stabilizing the electron transport chain and reducing reactive oxygen species production. Preclinical studies show improved mitochondrial function, enhanced ATP production, and reduced oxidative stress. It has been investigated for age-related mitochondrial dysfunction, cardiac and renal conditions, and neurodegenerative research models.",
-    sequence: "D-Arg-Dmt-Lys-Phe-NH₂",
-    storage: "Store powder in a standard home freezer (0°F / -18°C). Once reconstituted, refrigerate (35–46°F / 2–8°C) and use within 4 weeks.",
-    purity: "99%+",
-  },
-  {
-    id: "ipamorelin",
-    name: "Ipamorelin",
-    dose: "5 mg",
-    price: 35,
-    bulk: 30,
-    image: "/ipamorelin.jpg",
-    category: "Growth Hormone",
-    research: "Ipamorelin is a selective growth hormone secretagogue receptor (GHS-R) agonist and one of the most selective GH-releasing peptides studied. Unlike other GHRPs, research indicates it does not significantly elevate cortisol, acetylcholine, prolactin, or aldosterone levels at effective doses. Studies demonstrate dose-dependent GH release with a favorable selectivity profile. It has been researched for its effects on bone density, body composition, and growth hormone pulsatility.",
-    sequence: "Aib-His-D-2-Nal-D-Phe-Lys-NH₂",
-    storage: "Store powder in a standard home freezer (0°F / -18°C). Once reconstituted, refrigerate (35–46°F / 2–8°C) and use within 4 weeks.",
-    purity: "99%+",
-  },
-  {
-    id: "kisspeptin",
-    name: "Kisspeptin",
-    dose: "10 mg",
-    price: 55,
-    bulk: 45,
-    image: "/kisspeptin.jpg",
-    category: "Hormonal",
-    research: "Kisspeptin is a neuropeptide encoded by the KISS1 gene and is a key regulator of the hypothalamic-pituitary-gonadal (HPG) axis. Research demonstrates it stimulates GnRH neurons, triggering the release of luteinizing hormone (LH) and follicle-stimulating hormone (FSH). Studies have examined its role in puberty onset, reproductive function, and as a diagnostic tool for reproductive disorders. It has been investigated for its effects on testosterone production and fertility markers.",
-    sequence: "Kisspeptin-10 (KISS1 derived)",
-    storage: "Store powder in a standard home freezer (0°F / -18°C). Once reconstituted, refrigerate (35–46°F / 2–8°C) and use within 3 weeks.",
-    purity: "99%+",
-  },
-  {
-    id: "motsc",
-    name: "MOTS-c",
-    dose: "10 mg",
-    price: 60,
-    bulk: 55,
-    image: "/motsc.jpg",
-    category: "Longevity",
-    research: "MOTS-c (Mitochondrial Open Reading Frame of the Twelve S rRNA type-c) is a mitochondrial-derived peptide. Research led by Dr. Pinchas Cohen identified it as a key regulator of metabolic homeostasis. Studies demonstrate it activates AMPK, enhances glucose uptake, improves insulin sensitivity, and regulates fatty acid metabolism. It has been described as an exercise mimetic, with research showing it translocates to the nucleus during metabolic stress to regulate adaptive gene expression.",
-    sequence: "16-amino acid mitochondrial-derived peptide",
-    storage: "Store powder in a standard home freezer (0°F / -18°C). Once reconstituted, refrigerate (35–46°F / 2–8°C) and use within 4 weeks.",
-    purity: "99%+",
-  },
-  {
-    id: "selank",
-    name: "Selank",
-    dose: "10 mg",
-    price: 55,
-    bulk: 45,
-    image: "/selank.jpg",
-    category: "Cognitive",
-    research: "Selank is a synthetic analog of the immunomodulatory peptide tuftsin, developed at the Institute of Molecular Genetics of the Russian Academy of Sciences. Research indicates it influences the expression of brain-derived neurotrophic factor (BDNF), modulates the balance of T-helper cell cytokines, and affects enkephalin degradation. Studies have examined its anxiolytic, nootropic, and immunomodulatory properties. It is approved in Russia as an anxiolytic medication.",
-    sequence: "Thr-Lys-Pro-Arg-Pro-Gly-Pro (Tuftsin analog with Gly-Pro extension)",
-    storage: "Store powder in a standard home freezer (0°F / -18°C). Once reconstituted, refrigerate (35–46°F / 2–8°C) and use within 4 weeks.",
-    purity: "99%+",
-  },
-  {
-    id: "semax",
-    name: "Semax",
-    dose: "10 mg",
-    price: 55,
-    bulk: 45,
-    image: "/semax.jpg",
-    category: "Cognitive",
-    research: "Semax is a synthetic peptide derived from a fragment of adrenocorticotropic hormone (ACTH 4-10). Developed at the Institute of Molecular Genetics, Russian Academy of Sciences, research demonstrates it increases BDNF and its signaling receptor TrkB in the hippocampus. Studies indicate neuroprotective, nootropic, and neurogenic properties. It has been investigated for cognitive enhancement, cerebrovascular conditions, and optic nerve health. Approved in Russia as a nootropic medication.",
-    sequence: "Met-Glu-His-Phe-Pro-Gly-Pro (ACTH 4-10 with Pro-Gly-Pro extension)",
-    storage: "Store powder in a standard home freezer (0°F / -18°C). Once reconstituted, refrigerate (35–46°F / 2–8°C) and use within 4 weeks.",
-    purity: "99%+",
-  },
-  {
-    id: "glow",
-    name: "GLOW",
-    dose: "70 mg",
-    price: 160,
-    bulk: 140,
-    image: "/glow.jpg",
-    category: "Blends",
-    research: "GLOW is a proprietary peptide blend formulated by Tier One BioSystems for research applications targeting skin health and rejuvenation pathways. This 70 mg complex combines multiple bioactive peptides selected for their studied effects on collagen synthesis, cellular turnover, and tissue regeneration. The blend is designed for researchers investigating multi-pathway approaches to dermal matrix remodeling and growth factor signaling cascades.",
-    sequence: "Proprietary multi-peptide blend",
-    storage: "Store powder in a standard home freezer (0°F / -18°C). Once reconstituted, refrigerate (35–46°F / 2–8°C) and use within 2 weeks.",
-    purity: "99%+",
-  },
-  {
-    id: "klow",
-    name: "KLOW",
-    dose: "80 mg",
-    price: 165,
-    bulk: 145,
-    image: "/klow.jpg",
-    category: "Blends",
-    research: "KLOW is a proprietary peptide blend developed by Tier One BioSystems for advanced metabolic research. This 80 mg formulation combines targeted peptides selected for their studied effects on metabolic signaling, energy homeostasis, and body composition regulation. The blend is designed for researchers investigating synergistic multi-pathway approaches to metabolic optimization and weight management signaling cascades.",
-    sequence: "Proprietary multi-peptide blend",
-    storage: "Store powder in a standard home freezer (0°F / -18°C). Once reconstituted, refrigerate (35–46°F / 2–8°C) and use within 2 weeks.",
-    purity: "99%+",
-  },
-  {
-    id: "hcg",
-    name: "HCG",
-    dose: "5000 IU",
-    price: 65,
-    bulk: 55,
-    image: "/hcg.jpg",
-    category: "Hormonal",
-    research: "Human Chorionic Gonadotropin (HCG) is a glycoprotein hormone composed of alpha and beta subunits. Research demonstrates it mimics luteinizing hormone (LH) activity by binding to LH/CG receptors. Studies have extensively examined its role in stimulating Leydig cell testosterone production, supporting spermatogenesis, and maintaining testicular function. It is widely used in clinical research relating to hypogonadism, fertility protocols, and hormonal axis regulation.",
-    sequence: "Glycoprotein hormone (α and β subunits, ~237 amino acids total)",
-    storage: "Store powder in the refrigerator (35–46°F / 2–8°C). Once reconstituted, keep refrigerated and use within 30 days.",
-    purity: "99%+",
-  },
-  {
-    id: "mt1",
-    name: "MT-1",
-    dose: "10 mg",
-    price: 40,
-    bulk: 35,
-    image: "/mt1.jpg",
-    category: "Tanning",
-    research: "Melanotan I (Afamelanotide) is a synthetic analog of alpha-melanocyte stimulating hormone (α-MSH). Research demonstrates it binds to the MC1R melanocortin receptor, stimulating melanogenesis — the production of melanin pigment. Studies have examined its photoprotective properties and its potential to increase eumelanin production in skin cells. It has been the subject of clinical research for conditions involving photosensitivity and has been investigated as a potential UV-protective compound.",
-    sequence: "Ac-Ser-Tyr-Ser-Nle-Glu-His-D-Phe-Arg-Trp-Gly-Lys-Pro-Val-NH₂",
-    storage: "Store powder in a standard home freezer (0°F / -18°C), away from light. Once reconstituted, refrigerate (35–46°F / 2–8°C) and use within 4 weeks.",
-    purity: "99%+",
-  },
-  {
-    id: "mt2",
-    name: "MT-2",
-    dose: "10 mg",
-    price: 40,
-    bulk: 35,
-    image: "/mt2.jpg",
-    category: "Tanning",
-    research: "Melanotan II is a cyclic heptapeptide analog of α-MSH that acts as a non-selective agonist at melanocortin receptors (MC1R-MC5R). Research demonstrates broader receptor activity compared to MT-1, with studies examining its effects on melanogenesis, appetite, and libido through MC3R and MC4R activation. Preclinical research has investigated its dual melanotropic and aphrodisiac properties. Its cyclic structure provides enhanced metabolic stability compared to linear analogs.",
-    sequence: "Ac-Nle-c[Asp-His-D-Phe-Arg-Trp-Lys]-NH₂",
-    storage: "Store powder in a standard home freezer (0°F / -18°C), away from light. Once reconstituted, refrigerate (35–46°F / 2–8°C) and use within 4 weeks.",
-    purity: "99%+",
-  },
-  {
-    id: "ta1",
-    name: "Thymosin Alpha 1",
-    dose: "10 mg",
-    price: 95,
-    bulk: 80,
-    image: "/ta1.jpg",
-    category: "Immune",
-    research: "Thymosin Alpha 1 (Tα1) is a peptide naturally produced by the thymus gland, first isolated by Dr. Allan Goldstein. Research demonstrates it enhances T-cell maturation, dendritic cell function, and antibody responses. Studies indicate it modulates both innate and adaptive immunity by activating toll-like receptors (TLR2 and TLR9). It is approved in over 35 countries for various clinical applications and has been extensively studied for immune modulation in immunocompromised subjects.",
-    sequence: "28-amino acid peptide (Ac-SDAAVDTSSEITTKDLKEKKEVVEEAEN-OH)",
-    storage: "Store powder in a standard home freezer (0°F / -18°C). Once reconstituted, refrigerate (35–46°F / 2–8°C) and use within 4 weeks.",
-    purity: "99%+",
-  },
-  {
-    id: "nad",
-    name: "NAD+",
-    dose: "500 mg",
-    price: 70,
-    bulk: 65,
-    image: "/nad.jpg",
-    category: "Longevity",
-    research: "Nicotinamide adenine dinucleotide (NAD+) is a critical coenzyme found in every living cell. Research demonstrates it is essential for mitochondrial function, DNA repair via PARP enzymes, sirtuin activation, and cellular energy metabolism. NAD+ levels decline significantly with age, and this decline has been linked to metabolic dysfunction and age-related conditions. Studies have examined direct NAD+ supplementation for its effects on cellular energy production, circadian rhythm regulation, and genomic stability.",
-    sequence: "C₂₁H₂₇N₇O₁₄P₂ (dinucleotide coenzyme)",
-    storage: "Store powder in a standard home freezer (0°F / -18°C), away from light and moisture. Once reconstituted, use promptly.",
-    purity: "99%+",
-  },
-  {
-    id: "igf1lr3",
-    name: "IGF-1 LR3",
-    dose: "1 mg",
-    price: 105,
-    bulk: 90,
-    image: "/igf1lr3.jpg",
-    category: "Growth Hormone",
-    research: "IGF-1 LR3 (Long R3 Insulin-like Growth Factor-1) is an 83-amino acid analog of human IGF-1 with an arginine substitution at position 3 and a 13-amino acid N-terminal extension. This modification dramatically reduces binding to IGF binding proteins (IGFBPs), resulting in enhanced bioavailability and a significantly longer half-life. Research demonstrates it activates the IGF-1 receptor, promoting cell proliferation, differentiation, and survival signaling via the PI3K/Akt and MAPK/ERK pathways.",
-    sequence: "83-amino acid modified IGF-1 (Arg³ substitution + N-terminal extension)",
-    storage: "Store powder in a standard home freezer (0°F / -18°C). Once reconstituted, refrigerate (35–46°F / 2–8°C) and use within 2 weeks. Reconstitute using 0.1M acetic acid.",
-    purity: "99%+",
-  },
-  {
-    id: "kpv",
-    name: "KPV",
-    dose: "10 mg",
-    price: 60,
-    bulk: 50,
-    image: "/kpv.jpg",
-    category: "Immune",
-    research: "KPV is a naturally occurring tripeptide derived from the C-terminal end of alpha-melanocyte stimulating hormone (α-MSH). Research demonstrates potent anti-inflammatory activity through inhibition of NF-κB signaling, a master regulator of inflammatory gene expression. Studies have examined its effects on gut inflammation, skin inflammatory conditions, and wound healing. Unlike full-length α-MSH, KPV retains anti-inflammatory properties without melanotropic activity, making it a focused research tool.",
-    sequence: "Lys-Pro-Val",
-    storage: "Store powder in a standard home freezer (0°F / -18°C). Once reconstituted, refrigerate (35–46°F / 2–8°C) and use within 4 weeks.",
-    purity: "99%+",
-  },
-];
+// The catalog, the lab summaries and the article metadata are plain data and
+// now live in src/data/ so the build can import the very same values the app
+// renders — see scripts/generate-seo-assets.js and scripts/prerender.js. Only
+// the article bodies (JSX) stayed behind in this file.
+import { PRODUCTS } from "./src/data/catalog.js";
+import { LAB_RESULTS } from "./src/data/lab-results.js";
+import { ARTICLE_META } from "./src/data/articles.js";
+import { SITE_DOMAIN, CONTACT_EMAIL, DEFAULT_TITLE, TITLE_SUFFIX } from "./src/data/site.js";
+import {
+  routeMeta,
+  productMeta,
+  articleMeta,
+  canonicalUrl,
+  isPublished,
+} from "./src/data/routes.js";
+import { productGraph, articleGraph } from "./src/data/structured-data.js";
 
-// ─── Lab Results (Certificate of Analysis) ───────────────────────────────────
-const LAB_RESULTS = {
-  "GLP-3RT 5 mg": {
-    lotNumber: "T1B-GLP3-5-2026-0412",
-    dateAnalyzed: "2026-03-18",
-    molecularWeight: "3421.8 Da",
-    tests: [
-      { test: "Appearance", method: "Visual", specification: "White to off-white lyophilized powder", result: "White lyophilized powder", pass: true },
-      { test: "Labeled Peptide Content", method: "Gravimetric", specification: "5.00 mg/vial", result: "5.00 mg/vial", pass: true },
-      { test: "Actual Peptide Content", method: "RP-HPLC Quantitation", specification: "4.50–5.50 mg/vial", result: "5.27 mg/vial", pass: true },
-      { test: "Purity (HPLC)", method: "RP-HPLC", specification: "≥ 99.0%", result: "99.47%", pass: true },
-      { test: "Mass Confirmation", method: "ESI-MS", specification: "3421.8 ± 1.0 Da", result: "3421.6 Da", pass: true },
-      { test: "Amino Acid Analysis", method: "AAA", specification: "Consistent with structure", result: "Consistent", pass: true },
-      { test: "Peptide Content", method: "Nitrogen Analysis", specification: "≥ 80%", result: "87.3%", pass: true },
-      { test: "Water Content", method: "Karl Fischer", specification: "≤ 8.0%", result: "4.2%", pass: true },
-      { test: "Acetate Content", method: "Ion Chromatography", specification: "≤ 15.0%", result: "8.1%", pass: true },
-      { test: "Bacterial Endotoxins", method: "LAL", specification: "< 5 EU/mg", result: "< 1 EU/mg", pass: true },
-      { test: "Residual Solvents", method: "GC-HS", specification: "Meets USP <467>", result: "Within limits", pass: true },
-    ],
-  },
-  "GLP-3RT 10 mg": {
-    lotNumber: "T1B-GLP3-10-2026-0413",
-    dateAnalyzed: "2026-03-18",
-    molecularWeight: "3421.8 Da",
-    tests: [
-      { test: "Appearance", method: "Visual", specification: "White to off-white lyophilized powder", result: "White lyophilized powder", pass: true },
-      { test: "Labeled Peptide Content", method: "Gravimetric", specification: "10.00 mg/vial", result: "10.00 mg/vial", pass: true },
-      { test: "Actual Peptide Content", method: "RP-HPLC Quantitation", specification: "9.00–11.00 mg/vial", result: "10.41 mg/vial", pass: true },
-      { test: "Purity (HPLC)", method: "RP-HPLC", specification: "≥ 99.0%", result: "99.52%", pass: true },
-      { test: "Mass Confirmation", method: "ESI-MS", specification: "3421.8 ± 1.0 Da", result: "3421.7 Da", pass: true },
-      { test: "Amino Acid Analysis", method: "AAA", specification: "Consistent with structure", result: "Consistent", pass: true },
-      { test: "Peptide Content", method: "Nitrogen Analysis", specification: "≥ 80%", result: "88.1%", pass: true },
-      { test: "Water Content", method: "Karl Fischer", specification: "≤ 8.0%", result: "3.9%", pass: true },
-      { test: "Acetate Content", method: "Ion Chromatography", specification: "≤ 15.0%", result: "7.6%", pass: true },
-      { test: "Bacterial Endotoxins", method: "LAL", specification: "< 5 EU/mg", result: "< 1 EU/mg", pass: true },
-      { test: "Residual Solvents", method: "GC-HS", specification: "Meets USP <467>", result: "Within limits", pass: true },
-    ],
-  },
-  "GLP-3RT 20 mg": {
-    lotNumber: "T1B-GLP3-20-2026-0414",
-    dateAnalyzed: "2026-03-19",
-    molecularWeight: "3421.8 Da",
-    tests: [
-      { test: "Appearance", method: "Visual", specification: "White to off-white lyophilized powder", result: "White lyophilized powder", pass: true },
-      { test: "Labeled Peptide Content", method: "Gravimetric", specification: "20.00 mg/vial", result: "20.00 mg/vial", pass: true },
-      { test: "Actual Peptide Content", method: "RP-HPLC Quantitation", specification: "18.00–22.00 mg/vial", result: "20.74 mg/vial", pass: true },
-      { test: "Purity (HPLC)", method: "RP-HPLC", specification: "≥ 99.0%", result: "99.46%", pass: true },
-      { test: "Mass Confirmation", method: "ESI-MS", specification: "3421.8 ± 1.0 Da", result: "3421.8 Da", pass: true },
-      { test: "Amino Acid Analysis", method: "AAA", specification: "Consistent with structure", result: "Consistent", pass: true },
-      { test: "Peptide Content", method: "Nitrogen Analysis", specification: "≥ 80%", result: "87.4%", pass: true },
-      { test: "Water Content", method: "Karl Fischer", specification: "≤ 8.0%", result: "4.1%", pass: true },
-      { test: "Acetate Content", method: "Ion Chromatography", specification: "≤ 15.0%", result: "7.9%", pass: true },
-      { test: "Bacterial Endotoxins", method: "LAL", specification: "< 5 EU/mg", result: "< 1 EU/mg", pass: true },
-      { test: "Residual Solvents", method: "GC-HS", specification: "Meets USP <467>", result: "Within limits", pass: true },
-    ],
-  },
-  "GLP-3RT 30 mg": {
-    lotNumber: "T1B-GLP3-30-2026-0414",
-    dateAnalyzed: "2026-03-19",
-    molecularWeight: "3421.8 Da",
-    tests: [
-      { test: "Appearance", method: "Visual", specification: "White to off-white lyophilized powder", result: "White lyophilized powder", pass: true },
-      { test: "Labeled Peptide Content", method: "Gravimetric", specification: "30.00 mg/vial", result: "30.00 mg/vial", pass: true },
-      { test: "Actual Peptide Content", method: "RP-HPLC Quantitation", specification: "27.00–33.00 mg/vial", result: "31.18 mg/vial", pass: true },
-      { test: "Purity (HPLC)", method: "RP-HPLC", specification: "≥ 99.0%", result: "99.39%", pass: true },
-      { test: "Mass Confirmation", method: "ESI-MS", specification: "3421.8 ± 1.0 Da", result: "3421.9 Da", pass: true },
-      { test: "Amino Acid Analysis", method: "AAA", specification: "Consistent with structure", result: "Consistent", pass: true },
-      { test: "Peptide Content", method: "Nitrogen Analysis", specification: "≥ 80%", result: "86.5%", pass: true },
-      { test: "Water Content", method: "Karl Fischer", specification: "≤ 8.0%", result: "4.6%", pass: true },
-      { test: "Acetate Content", method: "Ion Chromatography", specification: "≤ 15.0%", result: "8.8%", pass: true },
-      { test: "Bacterial Endotoxins", method: "LAL", specification: "< 5 EU/mg", result: "< 1 EU/mg", pass: true },
-      { test: "Residual Solvents", method: "GC-HS", specification: "Meets USP <467>", result: "Within limits", pass: true },
-    ],
-  },
-  "Tesamorelin": {
-    lotNumber: "T1B-TESA-2026-0389",
-    dateAnalyzed: "2026-03-15",
-    molecularWeight: "5135.9 Da",
-    tests: [
-      { test: "Appearance", method: "Visual", specification: "White to off-white lyophilized powder", result: "White lyophilized powder", pass: true },
-      { test: "Labeled Peptide Content", method: "Gravimetric", specification: "5.00 mg/vial", result: "5.00 mg/vial", pass: true },
-      { test: "Actual Peptide Content", method: "RP-HPLC Quantitation", specification: "4.50–5.50 mg/vial", result: "5.14 mg/vial", pass: true },
-      { test: "Purity (HPLC)", method: "RP-HPLC", specification: "≥ 99.0%", result: "99.31%", pass: true },
-      { test: "Mass Confirmation", method: "ESI-MS", specification: "5135.9 ± 1.5 Da", result: "5135.7 Da", pass: true },
-      { test: "Amino Acid Analysis", method: "AAA", specification: "Consistent with structure", result: "Consistent", pass: true },
-      { test: "Peptide Content", method: "Nitrogen Analysis", specification: "≥ 80%", result: "85.9%", pass: true },
-      { test: "Water Content", method: "Karl Fischer", specification: "≤ 8.0%", result: "5.1%", pass: true },
-      { test: "Acetate Content", method: "Ion Chromatography", specification: "≤ 15.0%", result: "9.4%", pass: true },
-      { test: "Bacterial Endotoxins", method: "LAL", specification: "< 5 EU/mg", result: "< 1 EU/mg", pass: true },
-      { test: "Residual Solvents", method: "GC-HS", specification: "Meets USP <467>", result: "Within limits", pass: true },
-    ],
-  },
-  "CJC-1295 / Ipamorelin": {
-    lotNumber: "T1B-CJCI-2026-0401",
-    dateAnalyzed: "2026-03-20",
-    molecularWeight: "CJC: 3367.9 Da / Ipa: 711.9 Da",
-    tests: [
-      { test: "Appearance", method: "Visual", specification: "White to off-white lyophilized powder", result: "White lyophilized powder", pass: true },
-      { test: "Labeled Peptide Content", method: "Gravimetric", specification: "12.00 mg/vial", result: "12.00 mg/vial", pass: true },
-      { test: "Actual Peptide Content", method: "RP-HPLC Quantitation", specification: "10.80–13.20 mg/vial", result: "12.53 mg/vial", pass: true },
-      { test: "Purity — CJC-1295 (HPLC)", method: "RP-HPLC", specification: "≥ 99.0%", result: "99.52%", pass: true },
-      { test: "Purity — Ipamorelin (HPLC)", method: "RP-HPLC", specification: "≥ 99.0%", result: "99.38%", pass: true },
-      { test: "Mass Confirmation — CJC-1295", method: "ESI-MS", specification: "3367.9 ± 1.0 Da", result: "3368.1 Da", pass: true },
-      { test: "Mass Confirmation — Ipamorelin", method: "ESI-MS", specification: "711.9 ± 0.5 Da", result: "711.8 Da", pass: true },
-      { test: "Peptide Content", method: "Nitrogen Analysis", specification: "≥ 80%", result: "86.7%", pass: true },
-      { test: "Water Content", method: "Karl Fischer", specification: "≤ 8.0%", result: "3.8%", pass: true },
-      { test: "Bacterial Endotoxins", method: "LAL", specification: "< 5 EU/mg", result: "< 1 EU/mg", pass: true },
-      { test: "Residual Solvents", method: "GC-HS", specification: "Meets USP <467>", result: "Within limits", pass: true },
-    ],
-  },
-  "BPC-157 5 mg": {
-    lotNumber: "T1B-BPC-5-2026-0377",
-    dateAnalyzed: "2026-03-12",
-    molecularWeight: "1419.5 Da",
-    tests: [
-      { test: "Appearance", method: "Visual", specification: "White to off-white lyophilized powder", result: "White lyophilized powder", pass: true },
-      { test: "Labeled Peptide Content", method: "Gravimetric", specification: "5.00 mg/vial", result: "5.00 mg/vial", pass: true },
-      { test: "Actual Peptide Content", method: "RP-HPLC Quantitation", specification: "4.50–5.50 mg/vial", result: "5.19 mg/vial", pass: true },
-      { test: "Purity (HPLC)", method: "RP-HPLC", specification: "≥ 99.0%", result: "99.61%", pass: true },
-      { test: "Mass Confirmation", method: "ESI-MS", specification: "1419.5 ± 0.5 Da", result: "1419.4 Da", pass: true },
-      { test: "Amino Acid Analysis", method: "AAA", specification: "Consistent with structure", result: "Consistent", pass: true },
-      { test: "Peptide Content", method: "Nitrogen Analysis", specification: "≥ 80%", result: "88.2%", pass: true },
-      { test: "Water Content", method: "Karl Fischer", specification: "≤ 8.0%", result: "3.6%", pass: true },
-      { test: "Acetate Content", method: "Ion Chromatography", specification: "≤ 15.0%", result: "7.8%", pass: true },
-      { test: "Bacterial Endotoxins", method: "LAL", specification: "< 5 EU/mg", result: "< 1 EU/mg", pass: true },
-      { test: "Residual Solvents", method: "GC-HS", specification: "Meets USP <467>", result: "Within limits", pass: true },
-    ],
-  },
-  "BPC-157 10 mg": {
-    lotNumber: "T1B-BPC-10-2026-0378",
-    dateAnalyzed: "2026-03-13",
-    molecularWeight: "1419.5 Da",
-    tests: [
-      { test: "Appearance", method: "Visual", specification: "White to off-white lyophilized powder", result: "White lyophilized powder", pass: true },
-      { test: "Labeled Peptide Content", method: "Gravimetric", specification: "10.00 mg/vial", result: "10.00 mg/vial", pass: true },
-      { test: "Actual Peptide Content", method: "RP-HPLC Quantitation", specification: "9.00–11.00 mg/vial", result: "10.38 mg/vial", pass: true },
-      { test: "Purity (HPLC)", method: "RP-HPLC", specification: "≥ 99.0%", result: "99.57%", pass: true },
-      { test: "Mass Confirmation", method: "ESI-MS", specification: "1419.5 ± 0.5 Da", result: "1419.5 Da", pass: true },
-      { test: "Amino Acid Analysis", method: "AAA", specification: "Consistent with structure", result: "Consistent", pass: true },
-      { test: "Peptide Content", method: "Nitrogen Analysis", specification: "≥ 80%", result: "87.6%", pass: true },
-      { test: "Water Content", method: "Karl Fischer", specification: "≤ 8.0%", result: "3.9%", pass: true },
-      { test: "Acetate Content", method: "Ion Chromatography", specification: "≤ 15.0%", result: "8.2%", pass: true },
-      { test: "Bacterial Endotoxins", method: "LAL", specification: "< 5 EU/mg", result: "< 1 EU/mg", pass: true },
-      { test: "Residual Solvents", method: "GC-HS", specification: "Meets USP <467>", result: "Within limits", pass: true },
-    ],
-  },
-  "TB-500": {
-    lotNumber: "T1B-TB5-2026-0395",
-    dateAnalyzed: "2026-03-17",
-    molecularWeight: "4963.5 Da",
-    tests: [
-      { test: "Appearance", method: "Visual", specification: "White to off-white lyophilized powder", result: "White lyophilized powder", pass: true },
-      { test: "Labeled Peptide Content", method: "Gravimetric", specification: "10.00 mg/vial", result: "10.00 mg/vial", pass: true },
-      { test: "Actual Peptide Content", method: "RP-HPLC Quantitation", specification: "9.00–11.00 mg/vial", result: "10.64 mg/vial", pass: true },
-      { test: "Purity (HPLC)", method: "RP-HPLC", specification: "≥ 99.0%", result: "99.28%", pass: true },
-      { test: "Mass Confirmation", method: "ESI-MS", specification: "4963.5 ± 1.5 Da", result: "4963.3 Da", pass: true },
-      { test: "Amino Acid Analysis", method: "AAA", specification: "Consistent with structure", result: "Consistent", pass: true },
-      { test: "Peptide Content", method: "Nitrogen Analysis", specification: "≥ 80%", result: "84.5%", pass: true },
-      { test: "Water Content", method: "Karl Fischer", specification: "≤ 8.0%", result: "5.7%", pass: true },
-      { test: "Acetate Content", method: "Ion Chromatography", specification: "≤ 15.0%", result: "10.2%", pass: true },
-      { test: "Bacterial Endotoxins", method: "LAL", specification: "< 5 EU/mg", result: "< 1 EU/mg", pass: true },
-      { test: "Residual Solvents", method: "GC-HS", specification: "Meets USP <467>", result: "Within limits", pass: true },
-    ],
-  },
-  "Epitalon": {
-    lotNumber: "T1B-EPI-2026-0408",
-    dateAnalyzed: "2026-03-22",
-    molecularWeight: "390.3 Da",
-    tests: [
-      { test: "Appearance", method: "Visual", specification: "White to off-white lyophilized powder", result: "White lyophilized powder", pass: true },
-      { test: "Labeled Peptide Content", method: "Gravimetric", specification: "20.00 mg/vial", result: "20.00 mg/vial", pass: true },
-      { test: "Actual Peptide Content", method: "RP-HPLC Quantitation", specification: "18.00–22.00 mg/vial", result: "20.73 mg/vial", pass: true },
-      { test: "Purity (HPLC)", method: "RP-HPLC", specification: "≥ 99.0%", result: "99.72%", pass: true },
-      { test: "Mass Confirmation", method: "ESI-MS", specification: "390.3 ± 0.5 Da", result: "390.3 Da", pass: true },
-      { test: "Amino Acid Analysis", method: "AAA", specification: "Consistent with structure", result: "Consistent", pass: true },
-      { test: "Peptide Content", method: "Nitrogen Analysis", specification: "≥ 80%", result: "91.0%", pass: true },
-      { test: "Water Content", method: "Karl Fischer", specification: "≤ 8.0%", result: "2.9%", pass: true },
-      { test: "Bacterial Endotoxins", method: "LAL", specification: "< 5 EU/mg", result: "< 1 EU/mg", pass: true },
-      { test: "Residual Solvents", method: "GC-HS", specification: "Meets USP <467>", result: "Within limits", pass: true },
-    ],
-  },
-  "GHK-Cu 50 mg": {
-    lotNumber: "T1B-GHK50-2026-0416",
-    dateAnalyzed: "2026-03-25",
-    molecularWeight: "403.9 Da",
-    tests: [
-      { test: "Appearance", method: "Visual", specification: "Blue lyophilized powder", result: "Blue lyophilized powder", pass: true },
-      { test: "Labeled Peptide Content", method: "Gravimetric", specification: "50.00 mg/vial", result: "50.00 mg/vial", pass: true },
-      { test: "Actual Peptide Content", method: "RP-HPLC Quantitation", specification: "45.00–55.00 mg/vial", result: "51.57 mg/vial", pass: true },
-      { test: "Purity (HPLC)", method: "RP-HPLC", specification: "≥ 99.0%", result: "99.68%", pass: true },
-      { test: "Mass Confirmation", method: "ESI-MS", specification: "403.9 ± 0.5 Da", result: "403.9 Da", pass: true },
-      { test: "Copper Content", method: "ICP-MS", specification: "15.0–16.5%", result: "15.5%", pass: true },
-      { test: "Amino Acid Analysis", method: "AAA", specification: "Consistent with structure", result: "Consistent", pass: true },
-      { test: "Peptide Content", method: "Nitrogen Analysis", specification: "≥ 80%", result: "87.6%", pass: true },
-      { test: "Water Content", method: "Karl Fischer", specification: "≤ 8.0%", result: "3.4%", pass: true },
-      { test: "Bacterial Endotoxins", method: "LAL", specification: "< 5 EU/mg", result: "< 1 EU/mg", pass: true },
-      { test: "Residual Solvents", method: "GC-HS", specification: "Meets USP <467>", result: "Within limits", pass: true },
-    ],
-  },
-  "GHK-Cu 100 mg": {
-    lotNumber: "T1B-GHK-2026-0415",
-    dateAnalyzed: "2026-03-25",
-    molecularWeight: "403.9 Da",
-    tests: [
-      { test: "Appearance", method: "Visual", specification: "Blue lyophilized powder", result: "Blue lyophilized powder", pass: true },
-      { test: "Labeled Peptide Content", method: "Gravimetric", specification: "100.00 mg/vial", result: "100.00 mg/vial", pass: true },
-      { test: "Actual Peptide Content", method: "RP-HPLC Quantitation", specification: "90.00–110.00 mg/vial", result: "103.47 mg/vial", pass: true },
-      { test: "Purity (HPLC)", method: "RP-HPLC", specification: "≥ 99.0%", result: "99.55%", pass: true },
-      { test: "Mass Confirmation", method: "ESI-MS", specification: "403.9 ± 0.5 Da", result: "403.8 Da", pass: true },
-      { test: "Copper Content", method: "ICP-MS", specification: "15.0–16.5%", result: "15.8%", pass: true },
-      { test: "Amino Acid Analysis", method: "AAA", specification: "Consistent with structure", result: "Consistent", pass: true },
-      { test: "Peptide Content", method: "Nitrogen Analysis", specification: "≥ 80%", result: "89.4%", pass: true },
-      { test: "Water Content", method: "Karl Fischer", specification: "≤ 8.0%", result: "3.1%", pass: true },
-      { test: "Bacterial Endotoxins", method: "LAL", specification: "< 5 EU/mg", result: "< 1 EU/mg", pass: true },
-      { test: "Residual Solvents", method: "GC-HS", specification: "Meets USP <467>", result: "Within limits", pass: true },
-    ],
-  },
-  "SS-31": {
-    lotNumber: "T1B-SS31-2026-0421",
-    dateAnalyzed: "2026-03-26",
-    molecularWeight: "639.8 Da",
-    tests: [
-      { test: "Appearance", method: "Visual", specification: "White to off-white lyophilized powder", result: "White lyophilized powder", pass: true },
-      { test: "Labeled Peptide Content", method: "Gravimetric", specification: "15.00 mg/vial", result: "15.00 mg/vial", pass: true },
-      { test: "Actual Peptide Content", method: "RP-HPLC Quantitation", specification: "13.50–16.50 mg/vial", result: "15.82 mg/vial", pass: true },
-      { test: "Purity (HPLC)", method: "RP-HPLC", specification: "≥ 99.0%", result: "99.34%", pass: true },
-      { test: "Mass Confirmation", method: "ESI-MS", specification: "639.8 ± 0.5 Da", result: "639.7 Da", pass: true },
-      { test: "Amino Acid Analysis", method: "AAA", specification: "Consistent with structure", result: "Consistent", pass: true },
-      { test: "Peptide Content", method: "Nitrogen Analysis", specification: "≥ 80%", result: "86.1%", pass: true },
-      { test: "Water Content", method: "Karl Fischer", specification: "≤ 8.0%", result: "4.5%", pass: true },
-      { test: "Bacterial Endotoxins", method: "LAL", specification: "< 5 EU/mg", result: "< 1 EU/mg", pass: true },
-      { test: "Residual Solvents", method: "GC-HS", specification: "Meets USP <467>", result: "Within limits", pass: true },
-    ],
-  },
-  "Ipamorelin": {
-    lotNumber: "T1B-IPA-2026-0383",
-    dateAnalyzed: "2026-03-14",
-    molecularWeight: "711.9 Da",
-    tests: [
-      { test: "Appearance", method: "Visual", specification: "White to off-white lyophilized powder", result: "White lyophilized powder", pass: true },
-      { test: "Labeled Peptide Content", method: "Gravimetric", specification: "5.00 mg/vial", result: "5.00 mg/vial", pass: true },
-      { test: "Actual Peptide Content", method: "RP-HPLC Quantitation", specification: "4.50–5.50 mg/vial", result: "5.11 mg/vial", pass: true },
-      { test: "Purity (HPLC)", method: "RP-HPLC", specification: "≥ 99.0%", result: "99.44%", pass: true },
-      { test: "Mass Confirmation", method: "ESI-MS", specification: "711.9 ± 0.5 Da", result: "711.8 Da", pass: true },
-      { test: "Amino Acid Analysis", method: "AAA", specification: "Consistent with structure", result: "Consistent", pass: true },
-      { test: "Peptide Content", method: "Nitrogen Analysis", specification: "≥ 80%", result: "87.6%", pass: true },
-      { test: "Water Content", method: "Karl Fischer", specification: "≤ 8.0%", result: "4.0%", pass: true },
-      { test: "Acetate Content", method: "Ion Chromatography", specification: "≤ 15.0%", result: "8.9%", pass: true },
-      { test: "Bacterial Endotoxins", method: "LAL", specification: "< 5 EU/mg", result: "< 1 EU/mg", pass: true },
-      { test: "Residual Solvents", method: "GC-HS", specification: "Meets USP <467>", result: "Within limits", pass: true },
-    ],
-  },
-  "Kisspeptin": {
-    lotNumber: "T1B-KISS-2026-0427",
-    dateAnalyzed: "2026-03-28",
-    molecularWeight: "1302.5 Da",
-    tests: [
-      { test: "Appearance", method: "Visual", specification: "White to off-white lyophilized powder", result: "White lyophilized powder", pass: true },
-      { test: "Labeled Peptide Content", method: "Gravimetric", specification: "5.00 mg/vial", result: "5.00 mg/vial", pass: true },
-      { test: "Actual Peptide Content", method: "RP-HPLC Quantitation", specification: "4.50–5.50 mg/vial", result: "4.87 mg/vial", pass: true },
-      { test: "Purity (HPLC)", method: "RP-HPLC", specification: "≥ 99.0%", result: "99.19%", pass: true },
-      { test: "Mass Confirmation", method: "ESI-MS", specification: "1302.5 ± 0.5 Da", result: "1302.4 Da", pass: true },
-      { test: "Amino Acid Analysis", method: "AAA", specification: "Consistent with structure", result: "Consistent", pass: true },
-      { test: "Peptide Content", method: "Nitrogen Analysis", specification: "≥ 80%", result: "85.3%", pass: true },
-      { test: "Water Content", method: "Karl Fischer", specification: "≤ 8.0%", result: "5.2%", pass: true },
-      { test: "Bacterial Endotoxins", method: "LAL", specification: "< 5 EU/mg", result: "< 1 EU/mg", pass: true },
-      { test: "Residual Solvents", method: "GC-HS", specification: "Meets USP <467>", result: "Within limits", pass: true },
-    ],
-  },
-  "MOTS-c": {
-    lotNumber: "T1B-MOT-2026-0430",
-    dateAnalyzed: "2026-03-29",
-    molecularWeight: "2174.6 Da",
-    tests: [
-      { test: "Appearance", method: "Visual", specification: "White to off-white lyophilized powder", result: "White lyophilized powder", pass: true },
-      { test: "Labeled Peptide Content", method: "Gravimetric", specification: "10.00 mg/vial", result: "10.00 mg/vial", pass: true },
-      { test: "Actual Peptide Content", method: "RP-HPLC Quantitation", specification: "9.00–11.00 mg/vial", result: "10.29 mg/vial", pass: true },
-      { test: "Purity (HPLC)", method: "RP-HPLC", specification: "≥ 99.0%", result: "99.25%", pass: true },
-      { test: "Mass Confirmation", method: "ESI-MS", specification: "2174.6 ± 1.0 Da", result: "2174.5 Da", pass: true },
-      { test: "Amino Acid Analysis", method: "AAA", specification: "Consistent with structure", result: "Consistent", pass: true },
-      { test: "Peptide Content", method: "Nitrogen Analysis", specification: "≥ 80%", result: "86.8%", pass: true },
-      { test: "Water Content", method: "Karl Fischer", specification: "≤ 8.0%", result: "4.7%", pass: true },
-      { test: "Bacterial Endotoxins", method: "LAL", specification: "< 5 EU/mg", result: "< 1 EU/mg", pass: true },
-      { test: "Residual Solvents", method: "GC-HS", specification: "Meets USP <467>", result: "Within limits", pass: true },
-    ],
-  },
-  "Selank": {
-    lotNumber: "T1B-SEL-2026-0392",
-    dateAnalyzed: "2026-03-16",
-    molecularWeight: "751.9 Da",
-    tests: [
-      { test: "Appearance", method: "Visual", specification: "White to off-white lyophilized powder", result: "White lyophilized powder", pass: true },
-      { test: "Labeled Peptide Content", method: "Gravimetric", specification: "5.00 mg/vial", result: "5.00 mg/vial", pass: true },
-      { test: "Actual Peptide Content", method: "RP-HPLC Quantitation", specification: "4.50–5.50 mg/vial", result: "5.33 mg/vial", pass: true },
-      { test: "Purity (HPLC)", method: "RP-HPLC", specification: "≥ 99.0%", result: "99.58%", pass: true },
-      { test: "Mass Confirmation", method: "ESI-MS", specification: "751.9 ± 0.5 Da", result: "751.8 Da", pass: true },
-      { test: "Amino Acid Analysis", method: "AAA", specification: "Consistent with structure", result: "Consistent", pass: true },
-      { test: "Peptide Content", method: "Nitrogen Analysis", specification: "≥ 80%", result: "88.9%", pass: true },
-      { test: "Water Content", method: "Karl Fischer", specification: "≤ 8.0%", result: "3.4%", pass: true },
-      { test: "Bacterial Endotoxins", method: "LAL", specification: "< 5 EU/mg", result: "< 1 EU/mg", pass: true },
-      { test: "Residual Solvents", method: "GC-HS", specification: "Meets USP <467>", result: "Within limits", pass: true },
-    ],
-  },
-  "Semax": {
-    lotNumber: "T1B-SEM-2026-0398",
-    dateAnalyzed: "2026-03-19",
-    molecularWeight: "813.9 Da",
-    tests: [
-      { test: "Appearance", method: "Visual", specification: "White to off-white lyophilized powder", result: "White lyophilized powder", pass: true },
-      { test: "Labeled Peptide Content", method: "Gravimetric", specification: "10.00 mg/vial", result: "10.00 mg/vial", pass: true },
-      { test: "Actual Peptide Content", method: "RP-HPLC Quantitation", specification: "9.00–11.00 mg/vial", result: "10.52 mg/vial", pass: true },
-      { test: "Purity (HPLC)", method: "RP-HPLC", specification: "≥ 99.0%", result: "99.41%", pass: true },
-      { test: "Mass Confirmation", method: "ESI-MS", specification: "813.9 ± 0.5 Da", result: "813.8 Da", pass: true },
-      { test: "Amino Acid Analysis", method: "AAA", specification: "Consistent with structure", result: "Consistent", pass: true },
-      { test: "Peptide Content", method: "Nitrogen Analysis", specification: "≥ 80%", result: "87.2%", pass: true },
-      { test: "Water Content", method: "Karl Fischer", specification: "≤ 8.0%", result: "4.3%", pass: true },
-      { test: "Bacterial Endotoxins", method: "LAL", specification: "< 5 EU/mg", result: "< 1 EU/mg", pass: true },
-      { test: "Residual Solvents", method: "GC-HS", specification: "Meets USP <467>", result: "Within limits", pass: true },
-    ],
-  },
-  "GLOW": {
-    lotNumber: "T1B-GLW-2026-0435",
-    dateAnalyzed: "2026-03-30",
-    molecularWeight: "Proprietary blend",
-    tests: [
-      { test: "Appearance", method: "Visual", specification: "White to off-white lyophilized powder", result: "White lyophilized powder", pass: true },
-      { test: "Labeled Peptide Content", method: "Gravimetric", specification: "70.00 mg/vial", result: "70.00 mg/vial", pass: true },
-      { test: "Actual Peptide Content", method: "RP-HPLC Quantitation", specification: "63.00–77.00 mg/vial", result: "72.41 mg/vial", pass: true },
-      { test: "Purity (HPLC)", method: "RP-HPLC", specification: "≥ 99.0%", result: "99.33%", pass: true },
-      { test: "Component Verification", method: "LC-MS/MS", specification: "All components confirmed", result: "All confirmed", pass: true },
-      { test: "Peptide Content", method: "Nitrogen Analysis", specification: "≥ 80%", result: "85.6%", pass: true },
-      { test: "Water Content", method: "Karl Fischer", specification: "≤ 8.0%", result: "4.9%", pass: true },
-      { test: "Bacterial Endotoxins", method: "LAL", specification: "< 5 EU/mg", result: "< 1 EU/mg", pass: true },
-      { test: "Residual Solvents", method: "GC-HS", specification: "Meets USP <467>", result: "Within limits", pass: true },
-    ],
-  },
-  "KLOW": {
-    lotNumber: "T1B-KLW-2026-0438",
-    dateAnalyzed: "2026-03-31",
-    molecularWeight: "Proprietary blend",
-    tests: [
-      { test: "Appearance", method: "Visual", specification: "White to off-white lyophilized powder", result: "White lyophilized powder", pass: true },
-      { test: "Labeled Peptide Content", method: "Gravimetric", specification: "80.00 mg/vial", result: "80.00 mg/vial", pass: true },
-      { test: "Actual Peptide Content", method: "RP-HPLC Quantitation", specification: "72.00–88.00 mg/vial", result: "83.16 mg/vial", pass: true },
-      { test: "Purity (HPLC)", method: "RP-HPLC", specification: "≥ 99.0%", result: "99.27%", pass: true },
-      { test: "Component Verification", method: "LC-MS/MS", specification: "All components confirmed", result: "All confirmed", pass: true },
-      { test: "Peptide Content", method: "Nitrogen Analysis", specification: "≥ 80%", result: "84.8%", pass: true },
-      { test: "Water Content", method: "Karl Fischer", specification: "≤ 8.0%", result: "5.3%", pass: true },
-      { test: "Bacterial Endotoxins", method: "LAL", specification: "< 5 EU/mg", result: "< 1 EU/mg", pass: true },
-      { test: "Residual Solvents", method: "GC-HS", specification: "Meets USP <467>", result: "Within limits", pass: true },
-    ],
-  },
-  "HCG": {
-    lotNumber: "T1B-HCG-2026-0405",
-    dateAnalyzed: "2026-03-21",
-    molecularWeight: "~25,700 Da",
-    tests: [
-      { test: "Appearance", method: "Visual", specification: "White to off-white lyophilized powder", result: "White lyophilized powder", pass: true },
-      { test: "Labeled Content", method: "Gravimetric", specification: "5,000 IU/vial", result: "5,000 IU/vial", pass: true },
-      { test: "Actual Content", method: "Bioassay", specification: "4,500–5,500 IU/vial", result: "5,210 IU/vial", pass: true },
-      { test: "Purity (HPLC)", method: "RP-HPLC", specification: "≥ 99.0%", result: "99.15%", pass: true },
-      { test: "Identity Confirmation", method: "SDS-PAGE / Western Blot", specification: "Consistent with HCG", result: "Confirmed", pass: true },
-      { test: "Biological Activity", method: "Bioassay", specification: "≥ 5,000 IU/mg", result: "5,420 IU/mg", pass: true },
-      { test: "Protein Content", method: "Bradford Assay", specification: "≥ 80%", result: "86.2%", pass: true },
-      { test: "Water Content", method: "Karl Fischer", specification: "≤ 8.0%", result: "5.8%", pass: true },
-      { test: "Bacterial Endotoxins", method: "LAL", specification: "< 5 EU/mg", result: "< 1 EU/mg", pass: true },
-      { test: "Residual Solvents", method: "GC-HS", specification: "Meets USP <467>", result: "Within limits", pass: true },
-    ],
-  },
-  "MT-1": {
-    lotNumber: "T1B-MT1-2026-0418",
-    dateAnalyzed: "2026-03-24",
-    molecularWeight: "1646.9 Da",
-    tests: [
-      { test: "Appearance", method: "Visual", specification: "White to off-white lyophilized powder", result: "White lyophilized powder", pass: true },
-      { test: "Labeled Peptide Content", method: "Gravimetric", specification: "10.00 mg/vial", result: "10.00 mg/vial", pass: true },
-      { test: "Actual Peptide Content", method: "RP-HPLC Quantitation", specification: "9.00–11.00 mg/vial", result: "10.17 mg/vial", pass: true },
-      { test: "Purity (HPLC)", method: "RP-HPLC", specification: "≥ 99.0%", result: "99.39%", pass: true },
-      { test: "Mass Confirmation", method: "ESI-MS", specification: "1646.9 ± 0.5 Da", result: "1646.8 Da", pass: true },
-      { test: "Amino Acid Analysis", method: "AAA", specification: "Consistent with structure", result: "Consistent", pass: true },
-      { test: "Peptide Content", method: "Nitrogen Analysis", specification: "≥ 80%", result: "87.1%", pass: true },
-      { test: "Water Content", method: "Karl Fischer", specification: "≤ 8.0%", result: "3.9%", pass: true },
-      { test: "Bacterial Endotoxins", method: "LAL", specification: "< 5 EU/mg", result: "< 1 EU/mg", pass: true },
-      { test: "Residual Solvents", method: "GC-HS", specification: "Meets USP <467>", result: "Within limits", pass: true },
-    ],
-  },
-  "MT-2": {
-    lotNumber: "T1B-MT2-2026-0419",
-    dateAnalyzed: "2026-03-24",
-    molecularWeight: "1024.2 Da",
-    tests: [
-      { test: "Appearance", method: "Visual", specification: "White to off-white lyophilized powder", result: "White lyophilized powder", pass: true },
-      { test: "Labeled Peptide Content", method: "Gravimetric", specification: "10.00 mg/vial", result: "10.00 mg/vial", pass: true },
-      { test: "Actual Peptide Content", method: "RP-HPLC Quantitation", specification: "9.00–11.00 mg/vial", result: "9.83 mg/vial", pass: true },
-      { test: "Purity (HPLC)", method: "RP-HPLC", specification: "≥ 99.0%", result: "99.46%", pass: true },
-      { test: "Mass Confirmation", method: "ESI-MS", specification: "1024.2 ± 0.5 Da", result: "1024.1 Da", pass: true },
-      { test: "Amino Acid Analysis", method: "AAA", specification: "Consistent with structure", result: "Consistent", pass: true },
-      { test: "Peptide Content", method: "Nitrogen Analysis", specification: "≥ 80%", result: "88.5%", pass: true },
-      { test: "Water Content", method: "Karl Fischer", specification: "≤ 8.0%", result: "3.2%", pass: true },
-      { test: "Bacterial Endotoxins", method: "LAL", specification: "< 5 EU/mg", result: "< 1 EU/mg", pass: true },
-      { test: "Residual Solvents", method: "GC-HS", specification: "Meets USP <467>", result: "Within limits", pass: true },
-    ],
-  },
-  "Thymosin Alpha 1": {
-    lotNumber: "T1B-TA1-2026-0424",
-    dateAnalyzed: "2026-03-27",
-    molecularWeight: "3108.3 Da",
-    tests: [
-      { test: "Appearance", method: "Visual", specification: "White to off-white lyophilized powder", result: "White lyophilized powder", pass: true },
-      { test: "Labeled Peptide Content", method: "Gravimetric", specification: "5.00 mg/vial", result: "5.00 mg/vial", pass: true },
-      { test: "Actual Peptide Content", method: "RP-HPLC Quantitation", specification: "4.50–5.50 mg/vial", result: "5.22 mg/vial", pass: true },
-      { test: "Purity (HPLC)", method: "RP-HPLC", specification: "≥ 99.0%", result: "99.37%", pass: true },
-      { test: "Mass Confirmation", method: "ESI-MS", specification: "3108.3 ± 1.0 Da", result: "3108.2 Da", pass: true },
-      { test: "Amino Acid Analysis", method: "AAA", specification: "Consistent with structure", result: "Consistent", pass: true },
-      { test: "Peptide Content", method: "Nitrogen Analysis", specification: "≥ 80%", result: "86.4%", pass: true },
-      { test: "Water Content", method: "Karl Fischer", specification: "≤ 8.0%", result: "4.8%", pass: true },
-      { test: "Bacterial Endotoxins", method: "LAL", specification: "< 5 EU/mg", result: "< 1 EU/mg", pass: true },
-      { test: "Residual Solvents", method: "GC-HS", specification: "Meets USP <467>", result: "Within limits", pass: true },
-    ],
-  },
-  "NAD+": {
-    lotNumber: "T1B-NAD-2026-0410",
-    dateAnalyzed: "2026-03-23",
-    molecularWeight: "663.4 Da",
-    tests: [
-      { test: "Appearance", method: "Visual", specification: "White to off-white lyophilized powder", result: "White lyophilized powder", pass: true },
-      { test: "Labeled Content", method: "Gravimetric", specification: "500.00 mg/vial", result: "500.00 mg/vial", pass: true },
-      { test: "Actual Content", method: "UV Quantitation", specification: "450.00–550.00 mg/vial", result: "518.40 mg/vial", pass: true },
-      { test: "Purity (HPLC)", method: "RP-HPLC", specification: "≥ 99.0%", result: "99.62%", pass: true },
-      { test: "Mass Confirmation", method: "ESI-MS", specification: "663.4 ± 0.5 Da", result: "663.4 Da", pass: true },
-      { test: "Identity Confirmation", method: "UV/Vis Spectroscopy", specification: "λmax 259 nm", result: "λmax 259 nm", pass: true },
-      { test: "Content Assay", method: "UV Quantitation", specification: "≥ 95%", result: "97.8%", pass: true },
-      { test: "Water Content", method: "Karl Fischer", specification: "≤ 8.0%", result: "3.0%", pass: true },
-      { test: "Bacterial Endotoxins", method: "LAL", specification: "< 5 EU/mg", result: "< 1 EU/mg", pass: true },
-      { test: "Residual Solvents", method: "GC-HS", specification: "Meets USP <467>", result: "Within limits", pass: true },
-    ],
-  },
-  "BAC Water": {
-    lotNumber: "T1B-BAC-2026-0440",
-    dateAnalyzed: "2026-03-31",
-    molecularWeight: "N/A",
-    tests: [
-      { test: "Appearance", method: "Visual", specification: "Clear, colorless solution", result: "Clear, colorless", pass: true },
-      { test: "Labeled Volume", method: "Gravimetric", specification: "30.00 mL/vial", result: "30.00 mL/vial", pass: true },
-      { test: "Actual Volume", method: "Volumetric", specification: "29.50–30.50 mL/vial", result: "30.21 mL/vial", pass: true },
-      { test: "pH", method: "Potentiometric", specification: "4.5–7.0", result: "5.4", pass: true },
-      { test: "Benzyl Alcohol Content", method: "GC-FID", specification: "0.85–0.95%", result: "0.90%", pass: true },
-      { test: "Particulate Matter", method: "USP <788>", specification: "Meets USP requirements", result: "Within limits", pass: true },
-      { test: "Sterility", method: "USP <71>", specification: "No growth", result: "No growth", pass: true },
-      { test: "Bacterial Endotoxins", method: "LAL", specification: "< 0.25 EU/mL", result: "< 0.1 EU/mL", pass: true },
-    ],
-  },
-  "IGF-1 LR3": {
-    lotNumber: "T1B-IGF-2026-0433",
-    dateAnalyzed: "2026-03-29",
-    molecularWeight: "9111.4 Da",
-    tests: [
-      { test: "Appearance", method: "Visual", specification: "White to off-white lyophilized powder", result: "White lyophilized powder", pass: true },
-      { test: "Labeled Peptide Content", method: "Gravimetric", specification: "1.00 mg/vial", result: "1.00 mg/vial", pass: true },
-      { test: "Actual Peptide Content", method: "RP-HPLC Quantitation", specification: "0.90–1.10 mg/vial", result: "1.06 mg/vial", pass: true },
-      { test: "Purity (HPLC)", method: "RP-HPLC", specification: "≥ 99.0%", result: "99.21%", pass: true },
-      { test: "Mass Confirmation", method: "MALDI-TOF", specification: "9111.4 ± 5.0 Da", result: "9112.1 Da", pass: true },
-      { test: "Amino Acid Analysis", method: "AAA", specification: "Consistent with structure", result: "Consistent", pass: true },
-      { test: "Peptide Content", method: "Nitrogen Analysis", specification: "≥ 80%", result: "83.7%", pass: true },
-      { test: "Water Content", method: "Karl Fischer", specification: "≤ 8.0%", result: "5.9%", pass: true },
-      { test: "Bacterial Endotoxins", method: "LAL", specification: "< 5 EU/mg", result: "< 1 EU/mg", pass: true },
-      { test: "Residual Solvents", method: "GC-HS", specification: "Meets USP <467>", result: "Within limits", pass: true },
-    ],
-  },
-  "KPV": {
-    lotNumber: "T1B-KPV-2026-0437",
-    dateAnalyzed: "2026-03-30",
-    molecularWeight: "342.4 Da",
-    tests: [
-      { test: "Appearance", method: "Visual", specification: "White to off-white lyophilized powder", result: "White lyophilized powder", pass: true },
-      { test: "Labeled Peptide Content", method: "Gravimetric", specification: "10.00 mg/vial", result: "10.00 mg/vial", pass: true },
-      { test: "Actual Peptide Content", method: "RP-HPLC Quantitation", specification: "9.00–11.00 mg/vial", result: "10.44 mg/vial", pass: true },
-      { test: "Purity (HPLC)", method: "RP-HPLC", specification: "≥ 99.0%", result: "99.68%", pass: true },
-      { test: "Mass Confirmation", method: "ESI-MS", specification: "342.4 ± 0.5 Da", result: "342.4 Da", pass: true },
-      { test: "Amino Acid Analysis", method: "AAA", specification: "Consistent with structure", result: "Consistent", pass: true },
-      { test: "Peptide Content", method: "Nitrogen Analysis", specification: "≥ 80%", result: "90.2%", pass: true },
-      { test: "Water Content", method: "Karl Fischer", specification: "≤ 8.0%", result: "2.7%", pass: true },
-      { test: "Bacterial Endotoxins", method: "LAL", specification: "< 5 EU/mg", result: "< 1 EU/mg", pass: true },
-      { test: "Residual Solvents", method: "GC-HS", specification: "Meets USP <467>", result: "Within limits", pass: true },
-    ],
-  },
-};
-
-function getLabResults(productName, dose) {
-  // Check for dose-specific entry first (e.g., "GLP-3RT 5 mg")
-  const doseKey = dose ? `${productName} ${dose}` : productName;
-  if (LAB_RESULTS[doseKey]) return LAB_RESULTS[doseKey];
-  if (LAB_RESULTS[productName]) return LAB_RESULTS[productName];
-  return null;
-}
+// The thirteen article bodies are about a fifth of the application by weight
+// and are only ever needed on /research/:slug. Loading them lazily keeps them
+// out of the bundle that the homepage, the catalog and the checkout download.
+const ArticleBody = lazy(() => import("./src/ArticleBody.jsx"));
+import {
+  SITEWIDE_SALE,
+  isSaleActive,
+  applySale,
+  catalogPrices,
+  formatSaleEndDate,
+} from "./src/data/pricing.js";
+import { getLabResults, isLabResultWithheld } from "./src/data/lab-integrity.js";
+import { readStoredCart, clampQuantity, MAX_CART_QUANTITY } from "./src/data/cart.js";
 
 // ─── Molecular Profiles (per compound) ────────────────────────────────────────
 const MOLECULAR_PROFILES = {
@@ -1231,890 +383,10 @@ function getReferences(productName) {
 // markers to decide which lines an automated article PR is allowed to touch.
 // Bracket-matching the array would be fooled by brackets inside JSX and
 // strings; a literal sentinel cannot be.
-const ARTICLES = [
-  {
-    slug: "bpc-157-mechanism-of-action",
-    title: "BPC-157: Mechanism of Action and Research Applications",
-    excerpt: "An evidence-based research review of BPC-157 — its discovery, molecular structure, proposed mechanisms of action, and the major findings across musculoskeletal, gastrointestinal, and neurological applications.",
-    date: "2026-06-27",
-    author: "Tier One Research Team",
-    tags: ["BPC-157", "Recovery", "Mechanism"],
-    readingTimeMinutes: 9,
-    heroImage: "/bpc157-10.jpg",
-    metaTitle: "BPC-157 Mechanism of Action: Research Review (2026)",
-    metaDescription: "Evidence-based research review of BPC-157 covering its discovery, molecular structure, proposed mechanisms (angiogenesis, nitric oxide, growth hormone receptor), and applications in musculoskeletal, gastrointestinal, and neurological research models.",
-    content: () => (<>
-      <h2>Quick Summary</h2>
-      <ul>
-        <li>BPC-157 is a synthetic 15-amino-acid peptide derived from a protective protein found in human gastric juice.</li>
-        <li>Preclinical research suggests it promotes angiogenesis, modulates the nitric oxide system, and accelerates tissue repair.</li>
-        <li>The strongest body of evidence is in musculoskeletal models (tendon, ligament, muscle) and gastrointestinal protection.</li>
-        <li>BPC-157 demonstrates a notably favorable safety profile in animal toxicology studies, but it is not approved by the FDA or other major regulatory bodies for human therapeutic use.</li>
-      </ul>
-
-      <h2>What Is BPC-157?</h2>
-      <p>BPC-157 — short for <strong>Body Protection Compound-157</strong> — is a synthetic pentadecapeptide (a chain of 15 amino acids) derived from a fragment of a larger protective protein originally identified in human gastric juice. The peptide was first characterized by Croatian researcher Predrag Sikiric and colleagues in 1993, and the three decades since have produced an extensive (if predominantly preclinical) body of research investigating its biological effects.</p>
-      <p>The full amino acid sequence is <strong>Gly-Glu-Pro-Pro-Pro-Gly-Lys-Pro-Ala-Asp-Asp-Ala-Gly-Leu-Val</strong>, with a molecular weight of approximately 1,419.55 g/mol and the molecular formula C₆₂H₉₈N₁₆O₂₂. Unlike many therapeutic peptides, BPC-157 demonstrates unusual stability in both aqueous solutions and gastric acid, which has made it a subject of interest for researchers investigating both oral and parenteral administration routes.</p>
-      <p><em>In plain terms:</em> BPC-157 is a small protein-like molecule originally isolated from the stomach. Researchers believe the body produces it (in larger precursor forms) as part of a tissue-protective defense system, which is where the name "body protection compound" comes from.</p>
-
-      <h2>Proposed Mechanisms of Action</h2>
-      <p>BPC-157's mechanism of action remains incompletely characterized, but preclinical research has identified several distinct pathways through which it appears to produce its biological effects. The convergent evidence across studies suggests a multi-pathway mechanism rather than a single receptor target — a profile consistent with its broad range of reported effects across organ systems.</p>
-
-      <h3>Angiogenesis and the VEGF Pathway</h3>
-      <p>One of the most consistent findings across BPC-157 research is the upregulation of <strong>vascular endothelial growth factor receptor 2 (VEGFR2)</strong> expression on endothelial cells. VEGF and its receptors are central to angiogenesis — the formation of new blood vessels from existing vasculature. Enhanced angiogenesis at injury sites accelerates oxygen and nutrient delivery to regenerating tissue, which appears to be a major factor in BPC-157's reported wound-healing effects across multiple tissue types.</p>
-
-      <h3>Nitric Oxide System Modulation</h3>
-      <p>BPC-157 appears to modulate the <strong>nitric oxide (NO) system</strong> through multiple parallel mechanisms. In studies using L-NAME (a nitric oxide synthase inhibitor) and L-arginine (a NO precursor), BPC-157 administration restores normal NO-dependent vascular and gastrointestinal function. This has implications across cardiovascular, gastrointestinal, and wound-healing contexts where NO signaling is rate-limiting for repair processes.</p>
-
-      <h3>Growth Hormone Receptor Upregulation</h3>
-      <p>Preclinical work suggests BPC-157 <strong>upregulates growth hormone receptor expression</strong> in fibroblasts and other repair-active cell populations. This effect sensitizes target tissues to circulating growth hormone, providing one explanation for the synergy researchers have observed when BPC-157 is studied alongside growth-hormone-stimulating peptides.</p>
-
-      <h3>Dopaminergic and Serotonergic Modulation</h3>
-      <p>Animal studies have documented BPC-157's interactions with both <strong>dopaminergic and serotonergic systems</strong> in the central nervous system. This has driven research interest in neurological models, including traumatic brain injury, cuprizone-induced demyelination paradigms, and various behavioral models of depression and anxiety.</p>
-
-      <h2>Research Applications</h2>
-
-      <h3>Musculoskeletal: Tendon, Ligament, and Muscle Repair</h3>
-      <p>The largest single body of BPC-157 research is in <strong>musculoskeletal tissue repair models</strong>. Studies in rats demonstrate accelerated healing of transected Achilles tendons, with measurably increased tensile strength, faster fibroblast outgrowth, and improved collagen organization compared to controls. Similar findings have been reported in medial collateral ligament transection models and in crushed-muscle injury paradigms. The effect appears robust across multiple research groups and administration routes.</p>
-
-      <h3>Gastrointestinal Protection</h3>
-      <p>Given BPC-157's origin in gastric juice, much of the earliest research focused on <strong>gastrointestinal applications</strong>. Multiple studies have demonstrated protective effects against NSAID-induced gastric ulceration, alcohol-induced gastric lesions, and various models of inflammatory bowel disease. The proposed mechanism involves preservation of GI mucosal blood flow, modulation of the gut microbiome composition, and direct cytoprotective effects on intestinal epithelial cells.</p>
-
-      <h3>Neuroprotection</h3>
-      <p>Preclinical research has investigated BPC-157 in models of <strong>traumatic brain injury, spinal cord injury, and various neurodegenerative paradigms</strong>. Reported outcomes have included reduced lesion volumes, improved functional recovery scores, and modulation of neuroinflammatory marker expression. The peptide appears to cross the blood-brain barrier, though the extent and mechanism of CNS penetration are still being characterized.</p>
-
-      <h3>Cardiovascular Research</h3>
-      <p>Animal studies have examined BPC-157 in models of myocardial infarction, vascular occlusion, and various forms of vasculopathy. Findings include preserved cardiac function, accelerated collateral vessel formation, and protection against ischemia-reperfusion injury — broadly consistent with the peptide's apparent effects on angiogenesis and NO signaling.</p>
-
-      <h2>BPC-157 in Research Settings</h2>
-      <p>Research-grade BPC-157 is supplied as a lyophilized (freeze-dried) powder in glass vials for laboratory reconstitution. Reconstitution is most commonly performed with bacteriostatic water for injection, with reconstituted solutions stored under refrigeration. Lyophilized powder remains stable for extended periods under standard freezer conditions away from light and moisture.</p>
-      <p>Detailed handling, reconstitution, and storage information specific to our research-grade BPC-157 — including third-party Certificate of Analysis data — is available on the product pages linked below.</p>
-
-      <h2>Safety and Regulatory Status</h2>
-      <p>In animal toxicology studies, BPC-157 has demonstrated a notably <strong>favorable safety profile</strong>, with no LD50 having been established at tested doses and minimal reported off-target effects. Human safety data remain limited, however, and the peptide has not been approved by the FDA, EMA, or any other major regulatory body for therapeutic use.</p>
-      <p>BPC-157 is included on the <strong>World Anti-Doping Agency (WADA) Prohibited List</strong>, classified as a non-approved substance under category S0. Researchers working with BPC-157 should be aware of the regulatory landscape in their jurisdiction.</p>
-
-      <h2>Conclusion</h2>
-      <p>BPC-157 represents one of the most thoroughly characterized synthetic peptides in the preclinical research space. The convergent evidence across angiogenesis, nitric oxide signaling, growth hormone receptor sensitization, and tissue repair models points to a multi-pathway mechanism that may explain the wide range of physiological systems in which it has demonstrated activity. Continued translational research will be needed to establish whether preclinical findings extend reliably to human applications.</p>
-    </>),
-    references: [
-      { journal: "PHARMACEUTICALS", title: "Multifunctionality and Possible Medical Application of the BPC 157 Peptide — Literature and Patent Review", year: 2025, identifier: "PMC11859134", url: "https://pmc.ncbi.nlm.nih.gov/articles/PMC11859134/" },
-      { journal: "FRONT PHARMACOL", title: "Stable Gastric Pentadecapeptide BPC 157 and Wound Healing", year: 2021, identifier: "PMID: 34267654", authors: "Seiwerth S et al.", url: "https://pubmed.ncbi.nlm.nih.gov/34267654/" },
-      { journal: "PHARMACEUTICS", title: "BPC-157 as an Investigational Peptide Therapeutic: Biopharmaceutical Challenges, Formulation Strategies, and Translational Development Barriers", year: 2025, identifier: "DOI: 10.3390/pharmaceutics18050625", url: "https://doi.org/10.3390/pharmaceutics18050625" },
-      { journal: "INFLAMMOPHARMACOLOGY", title: "Concerning BPC-157, a natural pentadecapeptide, that acts as a cytoprotectant and is believed to protect the gastro-intestinal tract", year: 2025, identifier: "PMID: 40759852", authors: "Whitehouse M", url: "https://pubmed.ncbi.nlm.nih.gov/40759852/" },
-      { journal: "MEDICINA (KAUNAS)", title: "Protective Effects of BPC 157 on Liver, Kidney, and Lung Distant Organ Damage in Rats with Experimental Lower-Extremity Ischemia-Reperfusion Injury", year: 2025, identifier: "PMC11857380", authors: "Demirtaş H et al.", url: "https://pmc.ncbi.nlm.nih.gov/articles/PMC11857380/" },
-      { journal: "PUBCHEM", title: "BPC-157 — CID 9941957", identifier: "CID 9941957", url: "https://pubchem.ncbi.nlm.nih.gov/compound/9941957" },
-    ],
-    relatedProductIds: ["bpc157-5", "bpc157-10"],
-  },
-  {
-    slug: "retatrutide-vs-tirzepatide-vs-semaglutide",
-    title: "Retatrutide vs Tirzepatide vs Semaglutide: A Research Comparison",
-    excerpt: "An evidence-based comparison of the three leading incretin-based weight management compounds — covering mechanism (single, dual, and triple receptor agonism), reported efficacy in clinical research, and key safety findings.",
-    date: "2026-06-28",
-    author: "Tier One Research Team",
-    tags: ["GLP-3RT", "Retatrutide", "Weight Management", "Comparison"],
-    readingTimeMinutes: 11,
-    heroImage: "/glp3rt-10.jpg",
-    metaTitle: "Retatrutide vs Tirzepatide vs Semaglutide: Research Comparison (2026)",
-    metaDescription: "Side-by-side research comparison of retatrutide (GLP-3RT), tirzepatide, and semaglutide — mechanism of action, reported weight loss percentages from published trials, comparative efficacy data, and safety profile across the three leading incretin receptor agonists.",
-    content: () => (<>
-      <h2>Quick Summary</h2>
-      <ul>
-        <li><strong>Semaglutide</strong> is a single-receptor agonist targeting GLP-1; phase 3 STEP trials reported mean weight loss around 15% from baseline in non-diabetic adults with obesity.</li>
-        <li><strong>Tirzepatide</strong> is a dual GLP-1 / GIP receptor agonist; the SURMOUNT-1 trial reported mean weight loss of approximately 20.9% at the 15 mg dose.</li>
-        <li><strong>Retatrutide (GLP-3RT)</strong> is a triple GLP-1 / GIP / glucagon receptor agonist; phase 2 data reported mean weight loss of approximately 24.2% at 48 weeks with the 12 mg dose — the highest efficacy reported for any incretin-based compound to date.</li>
-        <li>Side effect profiles are broadly similar (predominantly gastrointestinal), but tolerability and rare events differ by compound and dose.</li>
-      </ul>
-
-      <h2>Background: The Incretin System</h2>
-      <p>The incretin system refers to a group of gut-derived peptide hormones — primarily <strong>glucagon-like peptide-1 (GLP-1)</strong> and <strong>glucose-dependent insulinotropic polypeptide (GIP)</strong> — that amplify insulin secretion in response to food intake, slow gastric emptying, and modulate appetite signaling in the central nervous system. <strong>Glucagon</strong>, although classically opposed to insulin's actions, contributes to energy expenditure when activated peripherally.</p>
-      <p>The therapeutic concept behind semaglutide, tirzepatide, and retatrutide is straightforward: pharmacologically mimicking and prolonging incretin signaling produces sustained reductions in appetite and body weight. The three compounds differ in how many of these receptors they engage simultaneously.</p>
-      <p><em>In plain terms:</em> these three peptides all work by mimicking gut hormones that tell your brain you're full and your pancreas to release insulin. The difference is how many of those signals each one activates at once.</p>
-
-      <h2>Semaglutide: The Single Agonist</h2>
-      <p>Semaglutide is a GLP-1 receptor agonist with a 94% amino acid sequence homology to native GLP-1. It carries a fatty acid side chain that binds reversibly to serum albumin, extending its half-life to approximately one week and enabling once-weekly subcutaneous administration.</p>
-      <p>In the <strong>STEP-1 trial</strong> (New England Journal of Medicine, 2021), adults with obesity but without diabetes who received 2.4 mg weekly semaglutide for 68 weeks lost an average of 14.9% of baseline body weight, compared to 2.4% in the placebo group. Subsequent STEP trials replicated these findings across populations including adolescents and adults with type 2 diabetes.</p>
-
-      <h2>Tirzepatide: The Dual Agonist</h2>
-      <p>Tirzepatide combines GLP-1 and GIP receptor activity in a single molecule. The GIP component is hypothesized to contribute additional weight-reducing effects through enhanced energy expenditure and adipocyte sensitivity, though the precise mechanism remains an active area of investigation.</p>
-      <p>The <strong>SURMOUNT-1 trial</strong> (New England Journal of Medicine, 2022) reported mean weight loss of 15.0%, 19.5%, and 20.9% with the 5 mg, 10 mg, and 15 mg once-weekly doses respectively in non-diabetic adults with obesity at 72 weeks. Subsequent SURMOUNT trials (-2 through -5) extended these findings into type 2 diabetes, weight loss maintenance, obstructive sleep apnea, and intensive-lifestyle-program populations.</p>
-
-      <h2>Retatrutide (GLP-3RT): The Triple Agonist</h2>
-      <p>Retatrutide adds glucagon receptor activity to the GLP-1 / GIP combination. The glucagon component is thought to contribute weight reduction through increased basal energy expenditure and hepatic fatty acid oxidation, partially offsetting the appetite-driven mechanism shared with the other two compounds.</p>
-      <p>The <strong>retatrutide phase 2 obesity trial</strong> (Jastreboff et al., New England Journal of Medicine, 2023) reported mean weight loss percentages of 8.7%, 17.1%, 22.8%, and 24.2% at the 1, 4, 8, and 12 mg once-weekly doses respectively after 48 weeks of treatment — the largest reductions reported for any single-agent incretin therapy to date. A separate phase 2 trial in type 2 diabetes (Rosenstock et al., The Lancet, 2023) demonstrated robust glycemic improvements alongside the weight loss.</p>
-      <p>More recently, a <strong>coadministration study</strong> (Garvey et al., New England Journal of Medicine, 2025) examined retatrutide combined with semaglutide and reported additional weight-loss benefits compared with either monotherapy.</p>
-
-      <h2>Head-to-Head Considerations</h2>
-
-      <h3>Efficacy Ranking</h3>
-      <p>Based on currently published trials, the rank order of mean reported weight loss at maximum-tolerated doses is: <strong>Retatrutide (~24%) &gt; Tirzepatide (~21%) &gt; Semaglutide (~15%)</strong>. Direct head-to-head trials between the three are limited; rankings rely on cross-trial comparison, which can be confounded by population, trial duration, and baseline characteristics.</p>
-
-      <h3>Mechanism Complexity</h3>
-      <p>The compounds reflect a clear evolution in receptor engagement: semaglutide (single) → tirzepatide (dual) → retatrutide (triple). Each additional receptor introduces both potential efficacy gain and potential off-target effects.</p>
-
-      <h3>Safety and Tolerability</h3>
-      <p>Across all three compounds, the most commonly reported adverse events in clinical research are gastrointestinal — nausea, diarrhea, constipation, and vomiting — typically dose-related and most prominent during titration. Discontinuation rates from adverse events have generally been in the single digits in published trials. Less common but more serious events have included gallbladder disease, pancreatitis, and (with the FDA's class-wide warning) thyroid C-cell hyperplasia in rodent models. Retatrutide's glucagon receptor activity has additionally been associated with modest increases in heart rate and, in some participants, transient blood-pressure changes.</p>
-
-      <h2>Conclusion</h2>
-      <p>The progression from semaglutide to tirzepatide to retatrutide reflects a stepwise expansion of incretin-system pharmacology. Retatrutide currently leads on reported efficacy, but published human data remain phase 2-level; phase 3 readouts and longer-term safety data will be required to fully position it against tirzepatide and semaglutide. For researchers and clinicians, the three compounds offer overlapping but distinguishable tools for studying body composition, glycemic control, and energy metabolism.</p>
-    </>),
-    references: [
-      { journal: "NEW ENGLAND JOURNAL OF MEDICINE", title: "Triple–Hormone-Receptor Agonist Retatrutide for Obesity — A Phase 2 Trial", year: 2023, identifier: "DOI: 10.1056/NEJMoa2301972", authors: "Jastreboff AM et al.", url: "https://www.nejm.org/doi/10.1056/NEJMoa2301972" },
-      { journal: "NEW ENGLAND JOURNAL OF MEDICINE", title: "Coadministered Retatrutide and Semaglutide in Adults with Overweight or Obesity", year: 2025, identifier: "DOI: 10.1056/NEJMoa2502081", authors: "Garvey WT et al.", url: "https://www.nejm.org/doi/10.1056/NEJMoa2502081" },
-      { journal: "THE LANCET", title: "Retatrutide, a GIP/GLP-1/glucagon receptor agonist, for people with type 2 diabetes: a randomised, double-blind, placebo and active-controlled, phase 2 trial", year: 2023, identifier: "DOI: 10.1016/S0140-6736(23)01053-X", authors: "Rosenstock J et al.", url: "https://www.thelancet.com/journals/lancet/article/PIIS0140-6736(23)01053-X/fulltext" },
-      { journal: "NEW ENGLAND JOURNAL OF MEDICINE", title: "Tirzepatide Once Weekly for the Treatment of Obesity (SURMOUNT-1)", year: 2022, identifier: "DOI: 10.1056/NEJMoa2206038", authors: "Jastreboff AM et al.", url: "https://www.nejm.org/doi/10.1056/NEJMoa2206038" },
-      { journal: "NEW ENGLAND JOURNAL OF MEDICINE", title: "Once-Weekly Semaglutide in Adults with Overweight or Obesity (STEP-1)", year: 2021, identifier: "DOI: 10.1056/NEJMoa2032183", authors: "Wilding JPH et al.", url: "https://www.nejm.org/doi/10.1056/NEJMoa2032183" },
-      { journal: "WIKIPEDIA", title: "Retatrutide", url: "https://en.wikipedia.org/wiki/Retatrutide" },
-    ],
-    relatedProductIds: ["glp3rt-5", "glp3rt-10", "glp3rt-20", "glp3rt-30"],
-  },
-  {
-    slug: "ghk-cu-copper-peptide-research",
-    title: "GHK-Cu Copper Peptide: Research Overview and Mechanisms",
-    excerpt: "An evidence-based overview of GHK-Cu — the naturally occurring copper-binding tripeptide. Covers its mechanism via gene expression modulation, applications in skin, hair, and wound healing research, and the most-cited published studies.",
-    date: "2026-06-28",
-    author: "Tier One Research Team",
-    tags: ["GHK-Cu", "Longevity", "Skin", "Mechanism"],
-    readingTimeMinutes: 9,
-    heroImage: "/ghkcu-100.jpg",
-    metaTitle: "GHK-Cu Copper Peptide: Research, Mechanism & Applications (2026)",
-    metaDescription: "Comprehensive research review of GHK-Cu (copper tripeptide-1) covering its mechanism of action, gene expression effects, applications in skin regeneration, hair growth, wound healing, and the peer-reviewed studies behind it.",
-    content: () => (<>
-      <h2>Quick Summary</h2>
-      <ul>
-        <li>GHK-Cu is a naturally occurring tripeptide (Gly-His-Lys) coordinated with a copper(II) ion.</li>
-        <li>It modulates the expression of over 4,000 human genes — one of the broadest gene-regulatory profiles documented for any small peptide.</li>
-        <li>Research applications span skin regeneration, hair growth, wound healing, and anti-inflammatory effects.</li>
-        <li>Endogenous GHK-Cu levels decline significantly with age, which has driven interest in supplementation research.</li>
-      </ul>
-
-      <h2>What Is GHK-Cu?</h2>
-      <p><strong>GHK-Cu</strong> — also known as <strong>Copper Tripeptide-1</strong> — is a small peptide consisting of three amino acids (Glycine-Histidine-Lysine) bound to a copper(II) ion. The peptide was first isolated from human plasma in 1973 by Loren Pickart, who observed that albumin from younger donors stimulated tissue regeneration in liver cell cultures while albumin from older donors did not. The active component was identified as GHK, which binds copper with high affinity to form the GHK-Cu complex.</p>
-      <p>The molecular weight of the Cu²⁺ complex is approximately 403.9 g/mol, with molecular formula C₁₄H₂₂CuN₆O₄. Unlike free copper (which can be cytotoxic), GHK-Cu delivers copper into cells in a controlled, physiologically active form.</p>
-      <p><em>In plain terms:</em> GHK-Cu is a tiny three-amino-acid molecule paired with a copper atom. It naturally circulates in your blood, but levels drop substantially as you age — and research suggests restoring it has wide-ranging regenerative effects.</p>
-
-      <h2>Mechanism of Action: Gene Expression Modulation</h2>
-      <p>The defining characteristic of GHK-Cu is its remarkably broad effect on gene expression. A landmark 2010 study using the Broad Institute's Connectivity Map database identified GHK as one of the most potent gene-expression-modulating molecules ever profiled, affecting the expression of <strong>4,192 human genes</strong> at concentrations as low as 1 nanomolar. The pattern of modulation broadly favored "youthful" gene expression — upregulating DNA repair, stem cell maintenance, and tissue remodeling pathways while downregulating inflammatory and oncogenic ones.</p>
-      <p>The molecular mechanism behind this breadth is still being characterized, but appears to involve copper delivery to enzymes and transcription factors, modulation of antioxidant defenses (notably SOD activity), and direct interactions with extracellular matrix components.</p>
-
-      <h2>Research Applications</h2>
-
-      <h3>Skin Regeneration and Collagen Synthesis</h3>
-      <p>The largest body of GHK-Cu research focuses on <strong>skin</strong>. Published studies have documented increased synthesis of collagen, elastin, glycosaminoglycans, and proteoglycans in dermal fibroblast cultures exposed to GHK-Cu. Human clinical research has examined improvements in skin density, elasticity, fine line depth, and barrier function with topical GHK-Cu formulations — though formulation and delivery vehicle vary widely across studies.</p>
-
-      <h3>Wound Healing</h3>
-      <p>GHK-Cu was originally noted for its <strong>wound healing</strong> effects. Animal studies have documented accelerated closure of incisional and excisional wounds, with histological evidence of better-organized collagen deposition and faster re-epithelialization. The mechanism appears to involve both direct stimulation of fibroblast and keratinocyte activity and recruitment of repair cells to the wound site.</p>
-
-      <h3>Hair Growth Research</h3>
-      <p>Research on GHK-Cu and <strong>hair follicles</strong> has demonstrated stimulation of dermal papilla cell proliferation, enlargement of follicles, and prolongation of the anagen (growth) phase. The compound is occasionally combined with other hair-research compounds in formulation studies.</p>
-
-      <h3>Cognitive and Neurological Research</h3>
-      <p>A 2017 analysis by Pickart and colleagues in the International Journal of Molecular Sciences identified GHK's effects on genes relevant to <strong>nervous system function and cognitive decline</strong> — including those involved in neurotrophin signaling, synaptic plasticity, and neurogenesis. This has driven follow-on research into GHK-Cu's potential in models of cognitive aging and neuroprotection.</p>
-
-      <h3>Anti-Inflammatory Effects</h3>
-      <p>GHK-Cu modulates expression of multiple inflammatory pathway genes, including downregulation of TNF-α, IL-6, and NF-κB signaling components. Animal models of acute and chronic inflammation have demonstrated reduced inflammatory infiltrate and faster resolution with GHK-Cu administration.</p>
-
-      <h2>Safety and Aging-Related Decline</h2>
-      <p>Endogenous GHK levels in plasma decline substantially with age — from approximately 200 ng/mL at age 20 to roughly 80 ng/mL by age 60. This natural decline has been hypothesized to contribute to age-related deterioration in tissue repair capacity, providing the rationale for exogenous supplementation research.</p>
-      <p>Safety data from animal toxicology and human topical studies suggest a favorable profile, with no significant adverse effects reported at typical research doses. As with all copper-containing compounds, dosing exceeding physiological copper requirements would not be expected to confer benefit and could theoretically cause copper-related toxicity.</p>
-
-      <h2>Conclusion</h2>
-      <p>GHK-Cu's exceptionally broad gene expression effects, paired with its endogenous status and well-characterized age-related decline, have made it one of the most thoroughly studied small peptides in regenerative biology. The research base spans skin, hair, wound, and neurological domains and continues to expand. For researchers working on tissue regeneration, aging biology, or copper-dependent enzymatic processes, GHK-Cu represents a well-characterized and commercially accessible tool compound.</p>
-    </>),
-    references: [
-      { journal: "COSMETICS", title: "GHK-Cu may Prevent Oxidative Stress in Skin by Regulating Copper and Modifying Expression of Numerous Antioxidant Genes", year: 2015, identifier: "DOI: 10.3390/cosmetics2030236", authors: "Pickart L, Vasquez-Soltero JM, Margolina A", url: "https://doi.org/10.3390/cosmetics2030236" },
-      { journal: "BRAIN SCI", title: "The Effect of the Human Peptide GHK on Gene Expression Relevant to Nervous System Function and Cognitive Decline", year: 2017, identifier: "PMID: 28212278", authors: "Pickart L, Vasquez-Soltero JM, Margolina A", url: "https://pubmed.ncbi.nlm.nih.gov/28212278/" },
-      { journal: "NAT NEW BIOL", title: "Tripeptide in human serum which prolongs survival of normal liver cells and stimulates growth in neoplastic liver", year: 1973, identifier: "PMID: 4349963", authors: "Pickart L, Thaler MM", url: "https://pubmed.ncbi.nlm.nih.gov/4349963/" },
-      { journal: "WIKIPEDIA", title: "Copper peptide GHK-Cu", url: "https://en.wikipedia.org/wiki/Copper_peptide_GHK-Cu" },
-      { journal: "PUBCHEM", title: "GHK-Cu Copper Tripeptide — CID 73587", identifier: "CID 73587", url: "https://pubchem.ncbi.nlm.nih.gov/compound/73587" },
-    ],
-    relatedProductIds: ["ghkcu-50", "ghkcu-100"],
-  },
-  {
-    slug: "tesamorelin-growth-hormone-research",
-    title: "Tesamorelin and Growth Hormone Research: Mechanism and Findings",
-    excerpt: "An evidence-based research review of tesamorelin — a synthetic GHRH analog approved for HIV-associated lipodystrophy. Covers its mechanism, pituitary axis effects, published clinical findings, and comparison with other GH-stimulating peptides.",
-    date: "2026-06-28",
-    author: "Tier One Research Team",
-    tags: ["Tesamorelin", "Growth Hormone", "Mechanism"],
-    readingTimeMinutes: 8,
-    heroImage: "/tesamorelin.jpg",
-    metaTitle: "Tesamorelin Research: GHRH Analog Mechanism & Findings (2026)",
-    metaDescription: "Research review of tesamorelin — synthetic growth hormone-releasing hormone (GHRH) analog. Covers mechanism of action, pituitary GH/IGF-1 axis effects, published clinical trial findings, and comparison with sermorelin, CJC-1295, and ipamorelin.",
-    content: () => (<>
-      <h2>Quick Summary</h2>
-      <ul>
-        <li>Tesamorelin is a synthetic analog of growth hormone-releasing hormone (GHRH) with an N-terminal modification that extends its half-life.</li>
-        <li>It is the only FDA-approved GHRH analog (approved for HIV-associated lipodystrophy in 2010).</li>
-        <li>Mechanism: stimulates the pituitary to secrete growth hormone in a pulsatile, physiological manner, which in turn elevates IGF-1.</li>
-        <li>Research applications extend beyond its approved indication to body composition, cognition, and metabolic research.</li>
-      </ul>
-
-      <h2>What Is Tesamorelin?</h2>
-      <p><strong>Tesamorelin</strong> is a synthetic 44-amino-acid peptide structurally based on the endogenous hypothalamic peptide <strong>growth hormone-releasing hormone (GHRH)</strong>. The key structural modification — addition of a <em>trans</em>-3-hexenoyl group to the N-terminal tyrosine — confers resistance to enzymatic degradation by dipeptidyl peptidase-4 (DPP-4), substantially extending its biological half-life compared to native GHRH.</p>
-      <p>The peptide carries a molecular weight of approximately 5,135.9 g/mol (free base; ~5,196 g/mol as the acetate salt typically supplied for research) with the molecular formula C₂₂₁H₃₆₆N₇₂O₆₇S. It is supplied as a lyophilized powder for laboratory reconstitution.</p>
-      <p><em>In plain terms:</em> Tesamorelin is a modified copy of a natural brain hormone that tells the pituitary gland to release growth hormone. The modification just makes the body break it down slower than the natural version.</p>
-
-      <h2>Mechanism of Action: The GH/IGF-1 Axis</h2>
-      <p>Tesamorelin binds to GHRH receptors on the anterior pituitary, stimulating the release of <strong>growth hormone (GH)</strong>. The released GH then circulates and induces hepatic production of <strong>insulin-like growth factor 1 (IGF-1)</strong>, the primary mediator of most of GH's downstream effects on tissue.</p>
-      <p>Critically, tesamorelin's mechanism preserves the body's natural pulsatile pattern of GH release and the normal negative feedback regulation of the GH/IGF-1 axis. This distinguishes it from direct GH administration, which produces sustained supraphysiological GH levels and can suppress the body's own GH production.</p>
-
-      <h2>Research Applications</h2>
-
-      <h3>HIV-Associated Lipodystrophy (Approved Indication)</h3>
-      <p>Tesamorelin's FDA approval came from the pivotal clinical trials reported by <strong>Falutz et al. (New England Journal of Medicine, 2007)</strong>, which demonstrated significant reductions in <strong>visceral adipose tissue (VAT)</strong> in HIV-positive patients with abnormal abdominal fat accumulation. The 2 mg daily subcutaneous regimen produced approximately 15-18% reductions in VAT over 26 weeks compared to placebo.</p>
-      <p>Follow-up safety and durability studies have generally supported the original findings, with the visceral fat reduction effect maintained on continued treatment and gradually reversing on discontinuation.</p>
-
-      <h3>Body Composition Research</h3>
-      <p>Beyond the HIV-specific indication, tesamorelin has been studied in research contexts examining visceral adiposity in metabolic syndrome, non-alcoholic fatty liver disease (NAFLD), and age-related body composition changes. Published findings have suggested benefits to visceral fat reduction and lipid profile improvements consistent with the GH/IGF-1 mechanism.</p>
-
-      <h3>Cognitive Research</h3>
-      <p>Smaller exploratory research has examined tesamorelin's effects on cognition in older adults and in HIV-positive individuals with neurocognitive complaints. GH and IGF-1 signaling both have established roles in synaptic plasticity and neuronal maintenance, providing biological plausibility for cognitive research applications.</p>
-
-      <h2>Comparison with Other GH-Stimulating Peptides</h2>
-      <p>Several other peptides target the GH/IGF-1 axis through related but distinct mechanisms:</p>
-      <ul>
-        <li><strong>Sermorelin</strong> — the unmodified GHRH(1-29) fragment. Active but very short half-life (~10 minutes).</li>
-        <li><strong>CJC-1295</strong> — also a GHRH analog. The "no-DAC" version (Mod GRF 1-29) has a similar profile to sermorelin; the "with-DAC" version uses an albumin-binding tail for week-long half-life.</li>
-        <li><strong>Ipamorelin, GHRP-2, GHRP-6, Hexarelin</strong> — growth hormone secretagogues acting on the ghrelin receptor rather than GHRH receptor. Often combined with GHRH analogs for synergistic GH release.</li>
-        <li><strong>Tesamorelin</strong> — uniquely combines GHRH receptor specificity, extended half-life, and FDA-approved efficacy data.</li>
-      </ul>
-
-      <h2>Safety Considerations</h2>
-      <p>The most commonly reported adverse events in tesamorelin clinical trials are injection-site reactions, myalgia, and modest elevations in IGF-1 (typically within or just above the normal range). Less common events have included peripheral edema, paresthesia, and rare glucose intolerance attributable to GH's counter-regulatory effect on insulin. The safety profile in approved populations is generally considered favorable.</p>
-
-      <h2>Conclusion</h2>
-      <p>Tesamorelin occupies a unique position among GH-stimulating peptides: it is the only GHRH analog with FDA approval, the only one supported by phase 3 trial data in its primary indication, and one of the most thoroughly characterized peptides in the GH/IGF-1 axis. For researchers working on visceral adiposity, GH pulsatility, or IGF-1-mediated processes, tesamorelin offers a well-defined and clinically validated research tool.</p>
-    </>),
-    references: [
-      { journal: "NEW ENGLAND JOURNAL OF MEDICINE", title: "Effects of Tesamorelin (TH9507), a Growth Hormone-Releasing Factor Analog, in HIV-Infected Patients with Excess Abdominal Fat", year: 2007, identifier: "DOI: 10.1056/NEJMoa073538", authors: "Falutz J et al.", url: "https://www.nejm.org/doi/10.1056/NEJMoa073538" },
-      { journal: "AIDS", title: "Long-term safety and effects of tesamorelin, a growth hormone-releasing factor analogue, in HIV patients with abdominal fat accumulation", year: 2008, identifier: "PMID: 18690162", authors: "Falutz J et al.", url: "https://pubmed.ncbi.nlm.nih.gov/18690162/" },
-      { journal: "LANCET HIV", title: "Effects of tesamorelin on non-alcoholic fatty liver disease in HIV: a randomised, double-blind, multicentre trial", year: 2019, identifier: "PMID: 31611038", authors: "Stanley TL et al.", url: "https://pubmed.ncbi.nlm.nih.gov/31611038/" },
-      { journal: "WIKIPEDIA", title: "Tesamorelin", url: "https://en.wikipedia.org/wiki/Tesamorelin" },
-      { journal: "PUBCHEM", title: "Tesamorelin Acetate — CID 16159350", identifier: "CID 16159350", url: "https://pubchem.ncbi.nlm.nih.gov/compound/16159350" },
-    ],
-    relatedProductIds: ["tesamorelin"],
-  },
-  {
-    slug: "reconstituting-storing-research-peptides",
-    title: "How to Properly Reconstitute and Store Research Peptides",
-    excerpt: "A practical guide to reconstituting and storing lyophilized research peptides — what bacteriostatic water is, step-by-step reconstitution, calculating concentration, storage best practices, and compound-specific stability notes.",
-    date: "2026-06-28",
-    author: "Tier One Research Team",
-    tags: ["Education", "Reconstitution", "Storage", "Practical Guide"],
-    readingTimeMinutes: 10,
-    heroImage: "/bpc157-10.jpg",
-    metaTitle: "How to Reconstitute & Store Research Peptides: Complete Guide (2026)",
-    metaDescription: "Practical step-by-step guide to reconstituting lyophilized research peptides with bacteriostatic water. Covers concentration calculation, storage best practices for frozen and refrigerated forms, stability windows, and compound-specific notes.",
-    content: () => (<>
-      <h2>Quick Summary</h2>
-      <ul>
-        <li>Research peptides are supplied as <strong>lyophilized (freeze-dried) powder</strong> for maximum stability during shipping and storage.</li>
-        <li>Reconstitution is most commonly done with <strong>bacteriostatic water for injection</strong> (BAC water) — sterile water containing 0.9% benzyl alcohol as a preservative.</li>
-        <li>Store lyophilized vials in a standard freezer (0°F / -18°C) away from light; store reconstituted solutions refrigerated (35–46°F / 2–8°C).</li>
-        <li>Most reconstituted peptides remain stable for 2–6 weeks under proper refrigeration, with specific windows varying by compound.</li>
-      </ul>
-
-      <h2>Why Reconstitution Is Necessary</h2>
-      <p>Research peptides are shipped and stored as <strong>lyophilized powder</strong> — water has been removed from the solution through freeze-drying. Lyophilization stabilizes peptides for long-term storage at standard freezer temperatures and eliminates the risk of hydrolytic degradation that liquid-state peptides face during shipping and handling.</p>
-      <p>To prepare the peptide for laboratory use, the powder must be redissolved in an appropriate aqueous solvent — a process called <strong>reconstitution</strong>.</p>
-
-      <h2>Bacteriostatic Water for Injection (BAC Water)</h2>
-      <p><strong>Bacteriostatic water for injection</strong> (commonly abbreviated <strong>BAC water</strong> or <strong>BWFI</strong>) is sterile water containing 0.9% benzyl alcohol as a bacteriostatic preservative. The preservative prevents microbial growth in the reconstituted solution, allowing multiple withdrawals from the same vial over the storage life of the reconstituted peptide.</p>
-      <p>Plain sterile water for injection (without preservative) can also be used but should generally be limited to single-use scenarios because it offers no antimicrobial protection once the vial is breached.</p>
-      <p><em>Compatibility note:</em> a small number of peptides are reported to have stability issues with benzyl alcohol. Where this is a concern, the supplier's reconstitution recommendation should be followed. For peptides supplied at very acidic or basic isoelectric points, alternative solvents (such as 0.1M acetic acid for IGF-1 LR3) may be appropriate.</p>
-
-      <h2>Step-by-Step Reconstitution</h2>
-      <ol style={{ margin: "0 0 22px", paddingLeft: 22 }}>
-        <li style={{ marginBottom: 8 }}>Allow both the peptide vial and the BAC water to reach room temperature. Cold vials can produce condensation on the stopper, increasing contamination risk.</li>
-        <li style={{ marginBottom: 8 }}>Wipe the rubber stoppers of both vials with an alcohol prep pad.</li>
-        <li style={{ marginBottom: 8 }}>Draw the desired volume of BAC water into a clean syringe.</li>
-        <li style={{ marginBottom: 8 }}>Slowly inject the BAC water into the peptide vial. Angle the needle so the stream runs down the inside wall of the vial rather than directly onto the powder — this minimizes foaming and protects peptide integrity.</li>
-        <li style={{ marginBottom: 8 }}>Do <strong>not</strong> shake the vial. Gently swirl or roll it between your palms until the powder is fully dissolved. Most peptides dissolve completely within 30–60 seconds. Larger peptides may take a few minutes.</li>
-        <li style={{ marginBottom: 8 }}>Inspect the solution. It should be clear and colorless (the exception being copper peptides like GHK-Cu, which produce a characteristic blue solution). Cloudiness or visible particulates may indicate degradation or precipitation.</li>
-        <li>Label the vial with the date of reconstitution and the resulting concentration.</li>
-      </ol>
-
-      <h2>Calculating Concentration</h2>
-      <p>Concentration depends entirely on the amount of BAC water added. The formula is straightforward:</p>
-      <p><strong>Concentration (mg/mL) = Peptide amount (mg) ÷ BAC water added (mL)</strong></p>
-      <p>For example, reconstituting a 10 mg peptide vial with 2 mL of BAC water yields a concentration of 5 mg/mL. Most peptide dosing calculators (including the one at <a href="/calculator">tierone.bio/calculator</a>) handle these conversions automatically.</p>
-
-      <h2>Storage Best Practices</h2>
-
-      <h3>Pre-Reconstitution (Lyophilized Powder)</h3>
-      <p>Store unopened, lyophilized vials in a <strong>standard home freezer at 0°F (-18°C)</strong> away from light. Most research peptides remain stable for 12–24 months under these conditions. Light-sensitive peptides (GHK-Cu, melanocortin analogs) benefit from additional protection from light — keeping vials in their original packaging or in an opaque container.</p>
-
-      <h3>Post-Reconstitution (Liquid Solution)</h3>
-      <p>Once reconstituted, store the solution <strong>refrigerated at 35–46°F (2–8°C)</strong>. Avoid the refrigerator door (greater temperature fluctuation) and store toward the back of a main shelf.</p>
-      <p><strong>Avoid freezing reconstituted peptides</strong> unless a supplier's protocol specifically calls for it. Freeze-thaw cycles can cause peptide aggregation, loss of activity, and unpredictable dosing.</p>
-
-      <h3>What to Avoid</h3>
-      <ul>
-        <li><strong>Direct light</strong> — particularly UV. Most peptides degrade faster with light exposure.</li>
-        <li><strong>Heat</strong> — even brief exposure above room temperature accelerates degradation.</li>
-        <li><strong>Vigorous shaking</strong> — mechanical agitation can cause peptide aggregation.</li>
-        <li><strong>Repeated freeze-thaw</strong> — each cycle reduces potency unpredictably.</li>
-      </ul>
-
-      <h2>Compound-Specific Notes</h2>
-      <p><strong>BPC-157:</strong> Unusually stable in aqueous solution. Reconstituted solutions typically remain stable for 4 weeks refrigerated.</p>
-      <p><strong>GHK-Cu:</strong> Light-sensitive due to the copper coordination. Solutions appear blue and should be stored in dark or amber vials when possible. Use within 2 weeks of reconstitution.</p>
-      <p><strong>Tesamorelin:</strong> The trans-3-hexenoyl modification provides some additional stability; reconstituted solutions remain stable for approximately 3 weeks refrigerated.</p>
-      <p><strong>IGF-1 LR3:</strong> Reconstitution traditionally uses 0.1M acetic acid rather than BAC water due to solubility at neutral pH. Once reconstituted, use within 2 weeks. Refer to supplier-specific instructions.</p>
-      <p><strong>HCG:</strong> Stable refrigerated for up to 30 days post-reconstitution. The supplied lyophilized HCG vials should themselves be refrigerated, not frozen.</p>
-
-      <h2>Stability Windows: Quick Reference</h2>
-      <p>Approximate post-reconstitution stability windows under proper refrigeration:</p>
-      <ul>
-        <li>BPC-157, TB-500, MOTS-c, Selank, Semax, Ipamorelin, CJC-1295: <strong>~4 weeks</strong></li>
-        <li>GHK-Cu, IGF-1 LR3: <strong>~2 weeks</strong></li>
-        <li>Tesamorelin, Kisspeptin: <strong>~3 weeks</strong></li>
-        <li>Epitalon: <strong>~6 weeks</strong></li>
-        <li>HCG: <strong>~30 days (refrigerated, not frozen)</strong></li>
-      </ul>
-
-      <h2>Conclusion</h2>
-      <p>Proper reconstitution and storage are foundational to obtaining reliable research results with peptides. The protocols above represent standard practice across most research-grade peptide compounds; product-specific deviations should always follow the supplier's documentation. Our individual product pages list the specific storage and reconstitution recommendations for each compound in our catalog.</p>
-    </>),
-    references: [
-      { journal: "INT J PHARM", title: "Lyophilization and development of solid protein pharmaceuticals", year: 2000, identifier: "PMID: 10967427", authors: "Wang W", url: "https://pubmed.ncbi.nlm.nih.gov/10967427/" },
-      { journal: "PHARMACEUTICS", title: "Designing Formulation Strategies for Enhanced Stability of Therapeutic Peptides in Aqueous Solutions: A Review", year: 2023, identifier: "PMID: 36986796", authors: "Nugrahadi PP et al.", url: "https://pubmed.ncbi.nlm.nih.gov/36986796/" },
-      { journal: "USP", title: "Bacteriostatic Water for Injection USP — Monograph", url: "https://www.uspnf.com/" },
-    ],
-    relatedProductIds: ["bpc157-10", "ghkcu-100", "tesamorelin", "igf1lr3"],
-  },
-  {
-    slug: "thymosin-alpha-1-immune-research",
-    title: "Thymosin Alpha-1 and Immune System Research",
-    excerpt: "A research review of Thymosin Alpha-1 (Tα1) — the 28-amino-acid thymic peptide approved in over 35 countries as an immunomodulator. Covers its mechanism via TLR signaling, applications in immune research, and the major published findings.",
-    date: "2026-06-28",
-    author: "Tier One Research Team",
-    tags: ["Thymosin Alpha 1", "Immune", "Mechanism"],
-    readingTimeMinutes: 8,
-    heroImage: "/ta1.jpg",
-    metaTitle: "Thymosin Alpha-1 Research: Immune Modulation & Mechanism (2026)",
-    metaDescription: "Research review of Thymosin Alpha-1 (Tα1, thymalfasin) — a 28-amino-acid thymic peptide. Covers TLR2/TLR9 mechanism, T-cell maturation effects, clinical research in hepatitis and immunocompromised populations, and global regulatory status.",
-    content: () => (<>
-      <h2>Quick Summary</h2>
-      <ul>
-        <li>Thymosin Alpha-1 (Tα1) is a synthetic 28-amino-acid peptide identical to a polypeptide naturally produced by the thymus gland.</li>
-        <li>Approved in over <strong>35 countries</strong> as <em>thymalfasin</em> for chronic hepatitis B, hepatitis C, and as an adjuvant in cancer chemotherapy.</li>
-        <li>Mechanism: activates Toll-Like Receptors 2 and 9 on dendritic cells, modulating both innate and adaptive immunity.</li>
-        <li>Has a notably favorable safety profile across decades of clinical research.</li>
-      </ul>
-
-      <h2>What Is Thymosin Alpha-1?</h2>
-      <p><strong>Thymosin Alpha-1</strong> (Tα1) is a 28-amino-acid peptide first isolated and characterized by Allan Goldstein and colleagues in 1972 from calf thymus extracts. Its full sequence — Ac-Ser-Asp-Ala-Ala-Val-Asp-Thr-Ser-Ser-Glu-Ile-Thr-Thr-Lys-Asp-Leu-Lys-Glu-Lys-Lys-Glu-Val-Val-Glu-Glu-Ala-Glu-Asn — features N-terminal acetylation and a molecular weight of approximately 3,108 g/mol.</p>
-      <p>The synthetic version is marketed pharmaceutically as <strong>thymalfasin</strong> (brand name Zadaxin) and is approved in more than 35 countries worldwide. Although not approved by the US FDA for a primary indication, it has received orphan drug designations and is widely used in research settings.</p>
-      <p><em>In plain terms:</em> Thymosin Alpha-1 is a copy of a natural peptide that your thymus gland produces to help train and activate immune cells. It's been used clinically for decades in other countries to treat conditions where the immune system needs a boost.</p>
-
-      <h2>Mechanism of Action</h2>
-
-      <h3>Toll-Like Receptor Activation</h3>
-      <p>The primary mechanism through which Tα1 exerts its immunomodulatory effects is activation of <strong>Toll-Like Receptor 2 (TLR2) and Toll-Like Receptor 9 (TLR9)</strong> on dendritic cells. These receptors are part of the pattern-recognition system that bridges innate and adaptive immunity. By activating them, Tα1 promotes dendritic cell maturation, antigen presentation, and downstream T-cell activation.</p>
-
-      <h3>T-Cell Maturation and Differentiation</h3>
-      <p>Consistent with its thymic origin, Tα1 promotes the differentiation and maturation of T-lymphocyte precursors. Published research has documented enhanced CD4+ helper T-cell production, increased natural killer (NK) cell activity, and improved Th1 cytokine responses (IFN-γ, IL-2) — a profile favoring cell-mediated immunity over humoral immunity.</p>
-
-      <h3>Cytokine Modulation</h3>
-      <p>Tα1 modulates production of multiple cytokines, generally favoring antiviral and anti-tumor immune responses. It also appears to dampen inflammatory cytokine overproduction in scenarios characterized by immune dysregulation, suggesting a balancing rather than purely stimulatory role.</p>
-
-      <h2>Research Applications</h2>
-
-      <h3>Chronic Viral Hepatitis</h3>
-      <p>The largest body of clinical research is in <strong>chronic hepatitis B (HBV) and chronic hepatitis C (HCV)</strong>. Multiple controlled trials have examined Tα1 as monotherapy and in combination with interferon or direct-acting antivirals, with consistent findings of improved viral suppression, ALT normalization, and HBeAg/HBV-DNA loss rates compared to control regimens.</p>
-
-      <h3>Immunocompromised Populations</h3>
-      <p>Tα1 has been studied in patients with chemotherapy-induced immunosuppression, HIV-associated immune dysfunction, and certain congenital immunodeficiencies. Outcomes have included improved CD4+ counts, reduced opportunistic infection rates, and better tolerance of cytotoxic therapy.</p>
-
-      <h3>Cancer Adjuvant Research</h3>
-      <p>As an adjuvant to standard cancer treatment, Tα1 has been examined in hepatocellular carcinoma, melanoma, non-small cell lung cancer, and several others. The proposed mechanism involves restoration of dendritic cell function (often suppressed in tumor microenvironments) and enhancement of T-cell anti-tumor responses.</p>
-
-      <h3>Sepsis and Severe Infection</h3>
-      <p>Research has examined Tα1 in severe sepsis and septic shock, where immune dysregulation contributes substantially to mortality. Some studies have suggested mortality benefit with Tα1 adjunctive therapy, though the evidence base remains heterogeneous.</p>
-
-      <h2>Safety Profile</h2>
-      <p>Across decades of clinical use in approved indications, Tα1 has demonstrated a remarkably <strong>favorable safety profile</strong>. The most commonly reported adverse events are mild injection-site reactions; serious adverse events directly attributable to Tα1 are rare. No major drug-drug interactions have been documented, and the peptide does not appear to suppress endogenous thymic function.</p>
-
-      <h2>Conclusion</h2>
-      <p>Thymosin Alpha-1 represents one of the most clinically validated peptide immunomodulators available, with over four decades of research and regulatory approval in multiple jurisdictions. Its TLR-based mechanism positions it as both an immune activator and an immune balancer, making it broadly applicable to research scenarios involving immune dysfunction. For researchers in immunology, oncology, or infectious disease, Tα1 offers an unusually well-characterized tool compound.</p>
-    </>),
-    references: [
-      { journal: "ANN N Y ACAD SCI", title: "Thymosin α1: from bench to bedside", year: 2007, identifier: "PMID: 17600290", authors: "Garaci E et al.", url: "https://pubmed.ncbi.nlm.nih.gov/17600290/" },
-      { journal: "EXPERT OPIN BIOL THER", title: "Historical review on thymosin α1 in oncology: preclinical and clinical experiences", year: 2015, identifier: "PMID: 26096345", authors: "Garaci E et al.", url: "https://pubmed.ncbi.nlm.nih.gov/26096345/" },
-      { journal: "WORLD J VIROL", title: "Thymosin alpha 1: A comprehensive review of the literature", year: 2020, identifier: "PMID: 33362999", authors: "Dominari A et al.", url: "https://pubmed.ncbi.nlm.nih.gov/33362999/" },
-      { journal: "WIKIPEDIA", title: "Thymalfasin", url: "https://en.wikipedia.org/wiki/Thymalfasin" },
-      { journal: "PUBCHEM", title: "Thymosin α1 — CID 16130571", identifier: "CID 16130571", url: "https://pubchem.ncbi.nlm.nih.gov/compound/16130571" },
-    ],
-    relatedProductIds: ["ta1"],
-  },
-  {
-    slug: "nad-plus-supplementation-research",
-    title: "NAD+ Supplementation: Mechanisms and Current Research",
-    excerpt: "A research review of nicotinamide adenine dinucleotide (NAD+) — the essential coenzyme that declines with age. Covers its role in cellular metabolism, sirtuin and PARP enzyme activation, age-related decline, and current supplementation research.",
-    date: "2026-06-28",
-    author: "Tier One Research Team",
-    tags: ["NAD+", "Longevity", "Metabolism"],
-    readingTimeMinutes: 9,
-    heroImage: "/nad.jpg",
-    metaTitle: "NAD+ Supplementation: Mechanisms, Aging & Current Research (2026)",
-    metaDescription: "Research review of NAD+ (nicotinamide adenine dinucleotide) — the essential cellular coenzyme. Covers age-related decline, sirtuin activation, PARP-mediated DNA repair, mitochondrial function, and the latest supplementation research findings.",
-    content: () => (<>
-      <h2>Quick Summary</h2>
-      <ul>
-        <li>NAD+ is a small-molecule coenzyme essential for energy production, DNA repair, and circadian regulation in every living cell.</li>
-        <li>NAD+ levels decline significantly with age — by some estimates 50% or more between young adulthood and old age.</li>
-        <li>The decline has been linked to age-related metabolic dysfunction, reduced DNA repair capacity, and mitochondrial impairment.</li>
-        <li>Supplementation research uses direct NAD+ as well as precursors (NMN, NR) — direct NAD+ is most commonly delivered by injection or IV in research and clinical settings.</li>
-      </ul>
-
-      <h2>What Is NAD+?</h2>
-      <p><strong>Nicotinamide adenine dinucleotide (NAD+)</strong> is a small molecule found in every living cell. Despite being just a single coenzyme (not a peptide or hormone), NAD+ participates in an extraordinarily wide range of biological processes — making it one of the most-studied molecules in aging biology.</p>
-      <p>Its molecular formula is C₂₁H₂₇N₇O₁₄P₂ with a molecular weight of approximately 663 g/mol. Structurally, NAD+ consists of two nucleotides — adenine and nicotinamide — joined by a pair of phosphate groups. The "+" in NAD+ refers to its oxidized state; the reduced form is NADH, and the pair cycles between states as electrons are passed during cellular metabolism.</p>
-      <p><em>In plain terms:</em> NAD+ is a tiny molecule your cells use to make energy and repair their DNA. Your levels of it drop a lot as you age, and researchers are studying whether restoring those levels can slow some aspects of aging.</p>
-
-      <h2>Biological Roles</h2>
-
-      <h3>Energy Metabolism</h3>
-      <p>The most fundamental role of NAD+ is in <strong>cellular energy production</strong>. In glycolysis, the citric acid cycle, and oxidative phosphorylation, NAD+ accepts electrons from metabolic substrates (becoming NADH), then delivers them to the electron transport chain in the mitochondria to drive ATP synthesis. Without adequate NAD+, energy production stalls.</p>
-
-      <h3>Sirtuin Activation</h3>
-      <p><strong>Sirtuins</strong> are a family of NAD+-dependent enzymes (SIRT1 through SIRT7) involved in regulating gene expression, DNA repair, metabolism, and stress responses. Because they consume NAD+ as a cofactor, sirtuin activity is directly limited by NAD+ availability. The decline in NAD+ with age is one proposed mechanism by which sirtuin-mediated longevity pathways become less effective.</p>
-
-      <h3>DNA Repair via PARP Enzymes</h3>
-      <p><strong>Poly(ADP-ribose) polymerases (PARPs)</strong> are NAD+-dependent enzymes that detect DNA damage and recruit repair machinery to fix it. PARPs are heavily activated under conditions of genotoxic stress and can consume large amounts of NAD+ — sometimes to the point of depleting cellular pools and triggering metabolic distress.</p>
-
-      <h3>Circadian Rhythm Regulation</h3>
-      <p>NAD+ levels themselves oscillate over the course of the day, and this oscillation interacts with the molecular circadian clock through sirtuin-mediated deacetylation of clock proteins. Disruption of NAD+ rhythms has been implicated in shift-work-related metabolic dysfunction.</p>
-
-      <h2>Age-Related Decline</h2>
-      <p>One of the most consistent findings across NAD+ research is a substantial <strong>age-related decline</strong> in tissue NAD+ levels. The magnitude varies by tissue and measurement method, but reductions of 40–60% between young adulthood and old age have been documented in multiple tissues including skin, muscle, brain, and liver.</p>
-      <p>The decline appears to be driven by both reduced biosynthesis and increased consumption — particularly by chronic activation of PARPs and CD38 (a cell-surface enzyme that consumes NAD+ and whose expression increases with age and inflammation).</p>
-
-      <h2>Supplementation Research</h2>
-
-      <h3>Direct NAD+</h3>
-      <p>Direct NAD+ delivery (typically intravenous or intramuscular) has been studied for fatigue, addiction recovery, neurodegenerative conditions, and post-exercise recovery. Most published research is preliminary, with mixed methodologies and small sample sizes — but interest is sustained given the clear biological rationale.</p>
-
-      <h3>NAD+ Precursors</h3>
-      <p>Research has also examined NAD+ precursors — most commonly <strong>nicotinamide mononucleotide (NMN)</strong> and <strong>nicotinamide riboside (NR)</strong> — which are taken orally and converted to NAD+ inside cells. Multiple human studies have demonstrated that these precursors meaningfully elevate blood and tissue NAD+ levels, though clinical outcomes data remain mixed.</p>
-
-      <h3>Sirtuin-Mediated Outcomes</h3>
-      <p>A parallel research stream examines whether restoring NAD+ levels meaningfully recovers sirtuin function — and whether sirtuin recovery in turn reverses age-related dysfunction. Animal models have produced positive results in metabolic, neurological, and cardiovascular domains; human translation remains an active research area.</p>
-
-      <h2>Safety</h2>
-      <p>NAD+ has a generally favorable safety profile in human research, with mild flushing, transient nausea, and injection-site discomfort being the most common reported effects. Because NAD+ is endogenous and rapidly metabolized, accumulation toxicity is not a typical concern. As with any small molecule, hypersensitivity reactions are possible but rare.</p>
-
-      <h2>Conclusion</h2>
-      <p>NAD+ sits at the intersection of metabolism, DNA repair, gene regulation, and circadian biology. Its well-documented age-related decline and its essential role in pathways central to cellular health have made it one of the most active areas of aging research. For researchers working on mitochondrial function, sirtuin biology, DNA damage response, or metabolic regulation, NAD+ provides a foundational research tool with broad applicability.</p>
-    </>),
-    references: [
-      { journal: "NAT REV MOL CELL BIOL", title: "NAD+ metabolism and its roles in cellular processes during ageing", year: 2021, identifier: "PMID: 33353981", authors: "Covarrubias AJ, Perrone R, Grozio A, Verdin E", url: "https://pubmed.ncbi.nlm.nih.gov/33353981/" },
-      { journal: "CELL", title: "Declining NAD+ induces a pseudohypoxic state disrupting nuclear-mitochondrial communication during aging", year: 2013, identifier: "PMID: 24360282", authors: "Gomes AP et al.", url: "https://pubmed.ncbi.nlm.nih.gov/24360282/" },
-      { journal: "CELL METAB", title: "Therapeutic Potential of NAD-Boosting Molecules: The In Vivo Evidence", year: 2018, identifier: "PMID: 29514064", authors: "Rajman L, Chwalek K, Sinclair DA", url: "https://pubmed.ncbi.nlm.nih.gov/29514064/" },
-      { journal: "WIKIPEDIA", title: "Nicotinamide adenine dinucleotide", url: "https://en.wikipedia.org/wiki/Nicotinamide_adenine_dinucleotide" },
-      { journal: "PUBCHEM", title: "NAD+ — CID 5893", identifier: "CID 5893", url: "https://pubchem.ncbi.nlm.nih.gov/compound/5893" },
-    ],
-    relatedProductIds: ["nad"],
-  },
-  {
-    slug: "selank-semax-russian-nootropic-peptides",
-    title: "Selank and Semax: Russian Nootropic Peptides Research Summary",
-    excerpt: "A research review of Selank and Semax — two synthetic peptides developed at the Russian Academy of Sciences. Covers their mechanisms via BDNF and cytokine modulation, anxiolytic vs nootropic profiles, and the clinical research behind both compounds.",
-    date: "2026-06-28",
-    author: "Tier One Research Team",
-    tags: ["Selank", "Semax", "Cognitive", "Mechanism"],
-    readingTimeMinutes: 9,
-    heroImage: "/semax.jpg",
-    metaTitle: "Selank vs Semax: Russian Nootropic Peptide Research (2026)",
-    metaDescription: "Research review of Selank (anxiolytic) and Semax (nootropic) — synthetic peptides developed at the Russian Academy of Sciences. Covers BDNF upregulation, tuftsin and ACTH analog mechanisms, clinical research findings, and comparative use.",
-    content: () => (<>
-      <h2>Quick Summary</h2>
-      <ul>
-        <li><strong>Selank</strong> is a synthetic 7-amino-acid analog of the immunomodulatory peptide <em>tuftsin</em>, with anxiolytic and mild nootropic effects.</li>
-        <li><strong>Semax</strong> is a synthetic 7-amino-acid analog of adrenocorticotropic hormone (ACTH 4-10) fragment, with primarily nootropic and neuroprotective effects.</li>
-        <li>Both were developed at the Russian Academy of Sciences and are approved as medications in Russia.</li>
-        <li>Mechanism: both upregulate BDNF (brain-derived neurotrophic factor) and modulate monoamine neurotransmitter systems.</li>
-      </ul>
-
-      <h2>Background: Russian Peptide Development</h2>
-      <p>Russia has a distinctive pharmaceutical tradition of developing small synthetic peptides for neurological and psychiatric indications — many emerging from the <strong>Institute of Molecular Genetics, Russian Academy of Sciences</strong>. Both Selank and Semax originate from this program, which has prioritized peptides modeled on natural regulatory molecules with structural modifications that improve in vivo stability.</p>
-      <p>While these compounds have decades of Russian clinical experience behind them, neither has FDA approval in the United States, and the published Western-journal literature is more limited than for compounds with broader regulatory adoption.</p>
-
-      <h2>Selank: The Anxiolytic Tuftsin Analog</h2>
-
-      <h3>Structure and Origin</h3>
-      <p>Selank is a synthetic heptapeptide with the sequence <strong>Thr-Lys-Pro-Arg-Pro-Gly-Pro</strong> (TKPRPGP). The first four amino acids (TKPR) correspond to the natural immunomodulatory peptide <strong>tuftsin</strong>, with a C-terminal Pro-Gly-Pro extension added to substantially improve proteolytic stability. Molecular weight is approximately 751.87 g/mol.</p>
-
-      <h3>Mechanism of Action</h3>
-      <p>Selank's mechanism involves several parallel pathways:</p>
-      <ul>
-        <li><strong>BDNF upregulation</strong> — particularly in the hippocampus, which appears to mediate cognitive and mood effects.</li>
-        <li><strong>Modulation of enkephalin degradation</strong> — Selank inhibits enzymes that break down endogenous opioid peptides, indirectly enhancing endogenous opioid signaling.</li>
-        <li><strong>Th1/Th2 cytokine balance</strong> — a direct immunomodulatory effect inherited from its tuftsin origin.</li>
-        <li><strong>Serotonergic and dopaminergic modulation</strong> — observed in animal models, contributing to its anxiolytic profile.</li>
-      </ul>
-
-      <h3>Clinical Research</h3>
-      <p>Russian clinical research has examined Selank in <strong>generalized anxiety disorder</strong>, with reported efficacy comparable to traditional benzodiazepines but without sedation, cognitive impairment, or dependence. Smaller studies have examined cognitive performance, immune modulation, and adjunctive use in mood disorders.</p>
-
-      <h2>Semax: The Nootropic ACTH Analog</h2>
-
-      <h3>Structure and Origin</h3>
-      <p>Semax is a synthetic heptapeptide with the sequence <strong>Met-Glu-His-Phe-Pro-Gly-Pro</strong> (MEHFPGP). The first four amino acids correspond to ACTH residues 4–7, with the same Pro-Gly-Pro stability extension as Selank. Molecular weight is approximately 813.92 g/mol.</p>
-      <p>Critically, Semax retains the cognitive and neurotrophic effects of ACTH(4-10) without the endocrine effects of the full ACTH hormone — making it neuropharmacologically useful without affecting cortisol regulation.</p>
-
-      <h3>Mechanism of Action</h3>
-      <p>Semax's most-cited mechanism is potent <strong>upregulation of BDNF and its receptor TrkB</strong> in the hippocampus. The peptide rapidly (within hours) elevates BDNF protein levels, which in turn supports neurogenesis, synaptic plasticity, and neuronal survival under stress. Additional documented effects include modulation of dopaminergic and serotonergic systems and direct neuroprotective effects against ischemic damage.</p>
-
-      <h3>Clinical Research</h3>
-      <p>Russian clinical research has focused on:</p>
-      <ul>
-        <li><strong>Ischemic stroke</strong> — adjunctive use during the acute and recovery phases, with reported improvements in neurological deficit scores.</li>
-        <li><strong>Cognitive impairment</strong> — both age-related and following brain injury.</li>
-        <li><strong>Optic nerve disorders</strong> — leveraging Semax's neuroprotective profile.</li>
-        <li><strong>ADHD and learning disabilities</strong> in pediatric populations.</li>
-      </ul>
-
-      <h2>Selank vs Semax: When Each Is Used</h2>
-      <p>Although structurally similar (both heptapeptides with Pro-Gly-Pro stability extensions) and sharing some mechanistic overlap (both upregulate BDNF), the two compounds have distinct therapeutic profiles:</p>
-      <ul>
-        <li><strong>Selank</strong> — primarily anxiolytic with mild cognitive support. Closer comparator: benzodiazepines (without sedation).</li>
-        <li><strong>Semax</strong> — primarily nootropic and neuroprotective. Closer comparator: cognitive enhancers like piracetam, with stronger neurotrophic effects.</li>
-      </ul>
-
-      <h2>Safety</h2>
-      <p>Both peptides have demonstrated favorable safety profiles in Russian clinical research, with minimal adverse events reported across decades of medical use. The most commonly reported effects are mild and transient — typically related to the intranasal administration route (the most common delivery method in Russian practice). Neither peptide is known to produce dependence or withdrawal.</p>
-
-      <h2>Conclusion</h2>
-      <p>Selank and Semax represent a unique slice of peptide neuropharmacology — well-characterized in Russian research, less so in Western literature, but with distinctive mechanistic profiles based on BDNF upregulation and monoamine modulation. For researchers investigating peptide-based approaches to anxiety, cognitive enhancement, or neuroprotection, both compounds offer well-defined starting points with substantial existing literature in their respective domains.</p>
-    </>),
-    references: [
-      { journal: "BRAIN RES", title: "Semax, an analog of ACTH(4-10) with cognitive effects, regulates BDNF and trkB expression in the rat hippocampus", year: 2006, identifier: "PMID: 16996037", authors: "Dolotov OV et al.", url: "https://pubmed.ncbi.nlm.nih.gov/16996037/" },
-      { journal: "EKSP KLIN FARMAKOL", title: "Effects of heptapeptide selank on the content of monoamines and their metabolites in the brain of BALB/C and C57Bl/6 mice: a comparative study", year: 2008, identifier: "PMID: 19093364", authors: "Narkevich VB et al.", url: "https://pubmed.ncbi.nlm.nih.gov/19093364/" },
-      { journal: "CELL MOL NEUROBIOL", title: "Semax and Pro-Gly-Pro activate the transcription of neurotrophins and their receptor genes after cerebral ischemia", year: 2010, identifier: "PMID: 19633950", authors: "Dmitrieva VG et al.", url: "https://pubmed.ncbi.nlm.nih.gov/19633950/" },
-      { journal: "NEUROCHEM RES", title: "Semax, an ACTH(4-10) analogue with nootropic properties, activates dopaminergic and serotoninergic brain systems in rodents", year: 2005, identifier: "PMID: 16362768", authors: "Eremin KO et al.", url: "https://pubmed.ncbi.nlm.nih.gov/16362768/" },
-      { journal: "ZH NEVROL PSIKHIATR IM S S KORSAKOVA", title: "A comparison of the anxiolytic effect and tolerability of selank and phenazepam in the treatment of anxiety disorders", year: 2014, identifier: "PMID: 25176261", authors: "Medvedev VE et al.", url: "https://pubmed.ncbi.nlm.nih.gov/25176261/" },
-      { journal: "WIKIPEDIA", title: "Selank", url: "https://en.wikipedia.org/wiki/Selank" },
-      { journal: "WIKIPEDIA", title: "Semax", url: "https://en.wikipedia.org/wiki/Semax" },
-    ],
-    relatedProductIds: ["selank", "semax"],
-  },
-  {
-    slug: "mots-c-mitochondrial-peptide-research",
-    title: "MOTS-c: The Mitochondrial Peptide and Metabolic Health Research",
-    excerpt: "A research review of MOTS-c — the mitochondrially-encoded peptide. Covers its discovery, AMPK pathway activation, role as an exercise mimetic, and implications for insulin sensitivity and metabolic health research.",
-    date: "2026-06-28",
-    author: "Tier One Research Team",
-    tags: ["MOTS-c", "Longevity", "Metabolism", "Exercise Mimetic"],
-    readingTimeMinutes: 8,
-    heroImage: "/motsc.jpg",
-    metaTitle: "MOTS-c Research: Mitochondrial Peptide & Metabolic Health (2026)",
-    metaDescription: "Research review of MOTS-c — the 16-amino-acid mitochondrial-derived peptide. Covers AMPK pathway activation, exercise mimetic effects, insulin sensitivity, glucose metabolism, and the foundational research from the Pinchas Cohen laboratory.",
-    content: () => (<>
-      <h2>Quick Summary</h2>
-      <ul>
-        <li>MOTS-c is a 16-amino-acid peptide encoded by the mitochondrial DNA — one of a small class of "mitochondrial-derived peptides."</li>
-        <li>Activates the AMPK pathway, enhancing glucose uptake, fatty acid oxidation, and insulin sensitivity.</li>
-        <li>Has been described as an "exercise mimetic" because many of its metabolic effects parallel those of physical exercise.</li>
-        <li>Discovered in 2015 by Dr. Pinchas Cohen's laboratory at USC; research applications are expanding rapidly.</li>
-      </ul>
-
-      <h2>What Is MOTS-c?</h2>
-      <p><strong>MOTS-c</strong> — short for <em>Mitochondrial Open Reading Frame of the Twelve S rRNA type-c</em> — is a 16-amino-acid peptide with the sequence <strong>Met-Arg-Trp-Gln-Glu-Met-Gly-Tyr-Ile-Phe-Tyr-Pro-Arg-Lys-Leu-Arg</strong>. The peptide was first characterized in 2015 by the research group of Dr. Pinchas Cohen at the University of Southern California.</p>
-      <p>What makes MOTS-c remarkable is its origin: it is encoded within the <strong>mitochondrial DNA</strong> (specifically in the 12S rRNA region), not the nuclear genome. This places MOTS-c in a small but growing class of <strong>mitochondrial-derived peptides (MDPs)</strong>, which appear to act as signaling molecules between mitochondria and the rest of the cell.</p>
-      <p><em>In plain terms:</em> Most of your body's proteins are made from instructions stored in your cell nucleus. MOTS-c is unusual because it's made from instructions stored inside the mitochondria themselves. It seems to act as a signal that tells the rest of your body how the mitochondria are doing.</p>
-
-      <h2>Mechanism of Action</h2>
-
-      <h3>AMPK Pathway Activation</h3>
-      <p>The primary downstream target of MOTS-c is <strong>AMP-activated protein kinase (AMPK)</strong> — a master regulator of cellular energy balance. AMPK activation triggers a coordinated set of effects: increased glucose uptake into cells, enhanced fatty acid oxidation, suppression of energy-consuming biosynthetic pathways, and activation of mitochondrial biogenesis.</p>
-      <p>Notably, AMPK is the same pathway activated by physical exercise and by metformin (the most prescribed antidiabetic drug) — explaining MOTS-c's classification as an "exercise mimetic."</p>
-
-      <h3>Nuclear Translocation</h3>
-      <p>One particularly striking finding is that MOTS-c <strong>translocates from the mitochondria to the cell nucleus</strong> under metabolic stress, where it appears to regulate the expression of nuclear genes involved in metabolic adaptation. This bidirectional communication — mitochondria sending peptide signals to the nucleus — represents a novel layer of cellular metabolic regulation.</p>
-
-      <h3>Insulin Sensitivity</h3>
-      <p>Animal studies have demonstrated that MOTS-c improves <strong>insulin sensitivity</strong> in both skeletal muscle and adipose tissue, partially reversing high-fat-diet-induced insulin resistance. This effect appears to be mediated by AMPK activation and enhanced glucose disposal capacity.</p>
-
-      <h2>Research Applications</h2>
-
-      <h3>Metabolic Health</h3>
-      <p>The largest body of MOTS-c research focuses on <strong>metabolic disease models</strong> — type 2 diabetes, obesity, and metabolic syndrome. Across multiple animal models, MOTS-c administration improves fasting glucose, insulin sensitivity, body composition, and lipid profile. Human research is still preliminary but expanding.</p>
-
-      <h3>Exercise and Performance Research</h3>
-      <p>MOTS-c levels naturally rise in response to <strong>physical exercise</strong>, and supplementation studies have examined whether exogenous MOTS-c can recapitulate or amplify exercise's metabolic benefits. Animal research has demonstrated improvements in running endurance and skeletal muscle metabolic capacity.</p>
-
-      <h3>Aging Research</h3>
-      <p>MOTS-c levels decline with age, paralleling the broader pattern of declining mitochondrial function. Restoration research in aged animal models has shown improvements in metabolic flexibility, exercise capacity, and several markers of metabolic age — making MOTS-c a research focus in <strong>longevity science</strong>.</p>
-
-      <h3>Cardiovascular Research</h3>
-      <p>Smaller studies have examined MOTS-c in cardiovascular contexts, including endothelial function, vascular calcification, and ischemia-reperfusion injury. Findings have been broadly consistent with the AMPK-mediated protective profile observed in metabolic studies.</p>
-
-      <h2>Safety</h2>
-      <p>MOTS-c has demonstrated a favorable safety profile in animal studies, with no significant toxicity at the doses tested. Human safety data remain limited but no major adverse signal has emerged. As with all peptides, individual variation in response is expected, and the long-term effects of sustained MOTS-c supplementation in humans have not been fully characterized.</p>
-
-      <h2>Conclusion</h2>
-      <p>MOTS-c represents one of the most exciting recent additions to peptide research — both because of its novel mitochondrial origin and because of its potent effects on the AMPK pathway. As the field of mitochondrial-derived peptides matures, MOTS-c is positioned as the most thoroughly characterized member of this emerging class. For researchers in metabolism, aging biology, or exercise physiology, MOTS-c offers a uniquely targeted tool for studying mitochondrial-to-nuclear signaling.</p>
-    </>),
-    references: [
-      { journal: "CELL METAB", title: "The mitochondrial-derived peptide MOTS-c promotes metabolic homeostasis and reduces obesity and insulin resistance", year: 2015, identifier: "PMID: 25738459", authors: "Lee C et al.", url: "https://pubmed.ncbi.nlm.nih.gov/25738459/" },
-      { journal: "CELL METAB", title: "The Mitochondrial-Encoded Peptide MOTS-c Translocates to the Nucleus to Regulate Nuclear Gene Expression in Response to Metabolic Stress", year: 2018, identifier: "PMID: 29983246", authors: "Kim KH, Son JM, Benayoun BA, Lee C", url: "https://pubmed.ncbi.nlm.nih.gov/29983246/" },
-      { journal: "FRONT ENDOCRINOL", title: "MOTS-c: A promising mitochondrial-derived peptide for therapeutic exploitation", year: 2023, identifier: "PMC9905433", url: "https://pmc.ncbi.nlm.nih.gov/articles/PMC9905433/" },
-      { journal: "WIKIPEDIA", title: "MOTS-c", url: "https://en.wikipedia.org/wiki/MOTS-c" },
-      { journal: "PUBCHEM", title: "MOTS-c — CID 118767809", identifier: "CID 118767809", url: "https://pubchem.ncbi.nlm.nih.gov/compound/118767809" },
-    ],
-    relatedProductIds: ["motsc"],
-  },
-  {
-    slug: "tissue-repair-peptide-blends-research",
-    title: "Peptide Blends for Tissue Repair: BPC-157 + GHK-Cu + TB-500 Research Rationale",
-    excerpt: "An evidence-based review of multi-peptide tissue repair blends. Covers the complementary mechanisms of BPC-157, GHK-Cu, TB-500 (and KPV), the research rationale for combining them, and the current state of single-compound versus combination evidence.",
-    date: "2026-06-28",
-    author: "Tier One Research Team",
-    tags: ["Blends", "Recovery", "GLOW", "KLOW", "Tissue Repair"],
-    readingTimeMinutes: 9,
-    heroImage: "/glow.jpg",
-    metaTitle: "Peptide Blends for Tissue Repair: BPC-157 + GHK-Cu + TB-500 (2026)",
-    metaDescription: "Research rationale for combining BPC-157, GHK-Cu, TB-500, and KPV in tissue repair blends. Covers complementary mechanisms (angiogenesis, gene expression, actin binding, anti-inflammation), single-compound research, and current combination evidence.",
-    content: () => (<>
-      <h2>Quick Summary</h2>
-      <ul>
-        <li>Multi-peptide tissue repair blends combine compounds with <strong>complementary mechanisms</strong> rather than redundant ones.</li>
-        <li><strong>BPC-157</strong> promotes angiogenesis and modulates the nitric oxide system; <strong>GHK-Cu</strong> regulates over 4,000 genes involved in tissue regeneration; <strong>TB-500</strong> (Thymosin β4 fragment) drives cell migration via actin binding; <strong>KPV</strong> provides α-MSH-derived anti-inflammatory action.</li>
-        <li>The research rationale for combining them is mechanistic complementarity — different points in the repair cascade are addressed simultaneously.</li>
-        <li>Published controlled trials specifically on the blend formulations themselves do not exist; the evidence base is from the individual component compounds.</li>
-      </ul>
-
-      <h2>Why Combine Peptides for Tissue Repair?</h2>
-      <p>Tissue repair is a multi-stage biological process, not a single event. Following injury, the body sequentially activates hemostasis, inflammation, proliferation, and remodeling — each phase governed by different cellular populations and signaling pathways. The premise behind multi-peptide tissue repair blends is that compounds targeting <strong>distinct phases or pathways</strong> can address the repair cascade more comprehensively than any single compound alone.</p>
-      <p>This approach has analogs in conventional pharmacology — combination therapies in oncology, HIV, and chronic disease management all rely on attacking a process through multiple parallel mechanisms.</p>
-      <p><em>In plain terms:</em> Tissue healing isn't one event — it's a chain of overlapping processes (inflammation, building new tissue, remodeling). Blends combine peptides that each handle different parts of that chain.</p>
-
-      <h2>The Component Compounds</h2>
-
-      <h3>BPC-157: Angiogenesis and Tissue Protection</h3>
-      <p><strong>BPC-157</strong> (Body Protection Compound) is a synthetic pentadecapeptide whose primary documented effects include upregulation of VEGFR2 (driving angiogenesis), modulation of the nitric oxide system, and sensitization of tissues to growth hormone. In musculoskeletal repair models, BPC-157 accelerates healing of tendon, ligament, and muscle injuries — with measurably improved collagen organization and tensile strength.</p>
-      <p>Its contribution to a tissue repair blend: <strong>vascular and matrix-level support for the regenerating tissue</strong>, enabling oxygen and nutrient delivery to the injury site.</p>
-
-      <h3>GHK-Cu: Gene Expression and Regenerative Programming</h3>
-      <p><strong>GHK-Cu</strong> is a naturally occurring copper-binding tripeptide that modulates the expression of over 4,000 human genes — broadly favoring regenerative, anti-inflammatory, and "youthful" expression patterns. In wound healing models, GHK-Cu accelerates closure, improves collagen deposition, and recruits repair-active cells to injury sites.</p>
-      <p>Its contribution to a tissue repair blend: <strong>broad gene-expression reprogramming toward the regenerative phenotype</strong> across multiple cell types involved in repair.</p>
-
-      <h3>TB-500: Cell Migration and Actin Dynamics</h3>
-      <p><strong>TB-500</strong> is a synthetic N-acetylated active fragment of Thymosin β4 (residues 17–23). Its primary documented effect is <strong>actin binding</strong> — the cytoskeletal protein that regulates cell migration. By modulating actin dynamics, TB-500 accelerates the movement of repair-active cells (fibroblasts, endothelial cells, keratinocytes) into injury sites.</p>
-      <p>Its contribution to a tissue repair blend: <strong>improved cellular mobility</strong>, allowing repair cells to reach the injury location faster.</p>
-
-      <h3>KPV: Targeted Anti-Inflammatory Action</h3>
-      <p><strong>KPV</strong> (Lys-Pro-Val) is the C-terminal tripeptide of α-melanocyte-stimulating hormone (α-MSH). It retains the anti-inflammatory properties of full α-MSH — including suppression of NF-κB signaling and pro-inflammatory cytokine production — but lacks the pigmenting effects associated with melanocortin receptor activation.</p>
-      <p>Its contribution to a tissue repair blend (included in KLOW formulations): <strong>focused anti-inflammatory action</strong> without off-target endocrine effects, dampening the inflammatory phase to allow proliferation and remodeling to proceed.</p>
-
-      <h2>Research Rationale for the Combinations</h2>
-
-      <h3>GLOW: BPC-157 + GHK-Cu + TB-500</h3>
-      <p>The three-component GLOW blend combines compounds covering <strong>angiogenesis + gene expression + cell migration</strong>. Mechanistically, these address vascular support, regenerative programming, and cellular mobility — three foundational requirements for tissue repair that operate in parallel rather than in series.</p>
-
-      <h3>KLOW: BPC-157 + GHK-Cu + TB-500 + KPV</h3>
-      <p>The four-component KLOW blend adds <strong>anti-inflammatory action</strong> via KPV. The rationale: in scenarios where excessive or prolonged inflammation impedes repair (chronic injuries, autoimmune-associated tissue damage, post-surgical recovery), dampening the inflammatory phase while supporting the regenerative phase may produce better outcomes than the regenerative components alone.</p>
-
-      <h2>The State of Combination Research</h2>
-      <p>An important honest note: <strong>peer-reviewed clinical trials specifically on the BPC-157 + GHK-Cu + TB-500 (± KPV) combination formulations themselves have not been published.</strong> The research basis for combining these compounds is mechanistic — derived from the established (but predominantly preclinical) research on each individual component.</p>
-      <p>This is not unique to peptide blends; many combination therapies in mainstream pharmacology emerged from individual-component research before formal combination trials were conducted. But it is a meaningful limitation that researchers using these blends should be aware of when interpreting outcomes.</p>
-
-      <h2>Safety Considerations</h2>
-      <p>Each component peptide individually has a favorable safety profile in animal research and (where available) human use. Combination safety is generally inferred from component profiles, with no documented adverse pharmacokinetic or pharmacodynamic interactions between the four. As with all research peptides, individual variability is expected and the long-term safety of sustained combination administration in humans has not been formally characterized.</p>
-
-      <h2>Conclusion</h2>
-      <p>Multi-peptide tissue repair blends represent a mechanistically rational extension of single-compound peptide research — combining compounds whose effects are complementary rather than redundant. The strongest argument for the combination approach lies in the multi-phase nature of tissue repair and the documented distinct mechanisms of each component. The strongest caveat is that the combination itself has not yet been studied in controlled trials. For researchers studying tissue regeneration with peptide tools, the blend approach offers a practical way to address multiple repair pathways simultaneously — with the understanding that the combination's specific synergies remain to be formally characterized.</p>
-    </>),
-    references: [
-      { journal: "PHARMACEUTICALS", title: "Multifunctionality and Possible Medical Application of the BPC 157 Peptide — Literature and Patent Review", year: 2025, identifier: "PMC11859134", authors: "BPC-157 component", url: "https://pmc.ncbi.nlm.nih.gov/articles/PMC11859134/" },
-      { journal: "COSMETICS", title: "GHK-Cu may Prevent Oxidative Stress in Skin by Regulating Copper and Modifying Expression of Numerous Antioxidant Genes", year: 2015, identifier: "DOI: 10.3390/cosmetics2030236", authors: "GHK-Cu component · Pickart L, Vasquez-Soltero JM, Margolina A", url: "https://doi.org/10.3390/cosmetics2030236" },
-      { journal: "EXPERT OPIN BIOL THER", title: "Thymosin β4: a multi-functional regenerative peptide. Basic properties and clinical applications", year: 2012, identifier: "PMID: 22074294", authors: "TB-500 component · Goldstein AL, Hannappel E, Sosne G, Kleinman HK", url: "https://pubmed.ncbi.nlm.nih.gov/22074294/" },
-      { journal: "ENDOCR REV", title: "Alpha-melanocyte-stimulating hormone and related tripeptides: biochemistry, antiinflammatory and protective effects in vitro and in vivo", year: 2008, identifier: "PMID: 18612139", authors: "KPV component · Brzoska T, Luger TA, Maaser C, Abels C, Böhm M", url: "https://pubmed.ncbi.nlm.nih.gov/18612139/" },
-      { journal: "GASTROENTEROLOGY", title: "PepT1-mediated tripeptide KPV uptake reduces intestinal inflammation", year: 2008, identifier: "PMID: 18061177", authors: "KPV component · Dalmasso G et al.", url: "https://pubmed.ncbi.nlm.nih.gov/18061177/" },
-    ],
-    relatedProductIds: ["glow", "klow", "bpc157-10", "ghkcu-100", "tb500"],
-  },
-  {
-    slug: "bpc-157-vs-tb-500-tissue-repair",
-    title: "BPC-157 vs TB-500 for Tissue Repair: A Research Comparison",
-    excerpt: "An evidence-based comparison of the two most-studied recovery peptides. Covers their distinct mechanisms (angiogenesis vs actin regulation), where each has the strongest research, and the rationale researchers cite for combining them.",
-    date: "2026-07-10",
-    author: "Tier One Research Team",
-    tags: ["BPC-157", "TB-500", "Recovery", "Comparison"],
-    readingTimeMinutes: 10,
-    heroImage: "/tb500.jpg",
-    metaTitle: "BPC-157 vs TB-500 for Tissue Repair: Research Comparison (2026)",
-    metaDescription: "Side-by-side research comparison of BPC-157 and TB-500 for tissue repair. Covers mechanism of action (VEGF/angiogenesis vs actin regulation/cell migration), strongest research applications for each, the combination rationale, and safety.",
-    content: () => (<>
-      <h2>Quick Summary</h2>
-      <ul>
-        <li><strong>BPC-157</strong> is a 15-amino-acid peptide whose research centers on <strong>angiogenesis</strong> (new blood vessel formation via the VEGF pathway) and broad cytoprotection.</li>
-        <li><strong>TB-500</strong> is a synthetic fragment of Thymosin β4 whose research centers on <strong>actin regulation and cell migration</strong> — moving repair cells to injury sites.</li>
-        <li>Their mechanisms are <strong>complementary, not redundant</strong>, which is why they are so often studied together.</li>
-        <li>Both have strong preclinical data but limited human trial evidence; the popular combination has never been tested as a blend in a controlled human trial.</li>
-      </ul>
-
-      <h2>Two Peptides, Two Different Jobs</h2>
-      <p>BPC-157 and TB-500 are the two most-referenced peptides in tissue repair research, and they're frequently discussed together — sometimes as alternatives, more often as a pair. The key to understanding them is that they address <strong>different stages of the repair process</strong> through distinct molecular mechanisms. They are less "competitors" than "specialists" that happen to work on the same overall goal.</p>
-      <p><em>In plain terms:</em> if tissue repair were a construction project, BPC-157 helps lay the plumbing and wiring (blood supply) while TB-500 helps move the workers to the job site (cell migration). Neither replaces the other.</p>
-
-      <h2>BPC-157: The Angiogenesis and Cytoprotection Peptide</h2>
-      <p><strong>BPC-157</strong> (Body Protection Compound-157) is a synthetic pentadecapeptide derived from a protein found in human gastric juice. Its most consistently documented mechanism is <strong>upregulation of VEGFR2</strong>, which drives angiogenesis — the formation of new blood vessels from existing vasculature. New vessels deliver oxygen and nutrients to regenerating tissue, which appears central to BPC-157's wound-healing effects.</p>
-      <p>Beyond angiogenesis, BPC-157 research documents modulation of the nitric oxide system, upregulation of growth hormone receptor expression in fibroblasts, and broad cytoprotective effects across the gastrointestinal tract, liver, and other organs. Its research base is notably wide — spanning tendon, ligament, muscle, gut, and neurological models.</p>
-      <p><strong>Strongest research areas:</strong> tendon and ligament healing, gastrointestinal protection, and vascular/organ cytoprotection.</p>
-
-      <h2>TB-500: The Cell Migration Peptide</h2>
-      <p><strong>TB-500</strong> is a synthetic peptide corresponding to the active region (residues 17–23, Ac-LKKTETQ) of <strong>Thymosin β4</strong>, a naturally occurring protein involved in cellular structure. Its defining mechanism is <strong>regulation of actin</strong> — the cytoskeletal protein that governs cell movement. By modulating actin dynamics, TB-500 accelerates the migration of repair-active cells (fibroblasts, endothelial cells, keratinocytes) toward injury sites.</p>
-      <p>TB-500 also promotes angiogenesis and has documented anti-inflammatory effects, but its distinguishing contribution — the thing BPC-157 does not do as directly — is enhancing <strong>cellular mobility</strong>. Where BPC-157 builds the vascular infrastructure, TB-500 helps the cells that do the repair work actually get to where they're needed.</p>
-      <p><strong>Strongest research areas:</strong> muscle and soft-tissue repair, cardiac tissue models, and flexibility/range-of-motion research where cell migration is rate-limiting.</p>
-
-      <h2>Head-to-Head: Where They Differ</h2>
-      <h3>Primary Mechanism</h3>
-      <p><strong>BPC-157</strong> → VEGF-driven angiogenesis + broad cytoprotection. <strong>TB-500</strong> → actin-driven cell migration + microcirculation. This is the core distinction and the reason the two are considered complementary.</p>
-      <h3>Peptide Size and Origin</h3>
-      <p>BPC-157 is a 15-amino-acid sequence derived from gastric juice; TB-500 is a 7-amino-acid acetylated fragment of a 43-amino-acid thymic protein. BPC-157 is notably stable in aqueous and acidic environments, a property that has drawn research interest in oral as well as injectable administration.</p>
-      <h3>Breadth of Research</h3>
-      <p>BPC-157 has the broader research footprint, including substantial gastrointestinal and neurological literature that TB-500 does not share. TB-500's literature is more concentrated on soft-tissue and cardiac repair.</p>
-
-      <h2>Why Researchers Combine Them</h2>
-      <p>The rationale for studying BPC-157 and TB-500 <strong>together</strong> is mechanistic complementarity: BPC-157 supplies angiogenesis and cytoprotection while TB-500 supplies cell migration, addressing more of the repair cascade in parallel than either does alone. This is the same logic behind our multi-peptide blends — and it's covered in more depth in our article on <a href="/research/tissue-repair-peptide-blends-research">peptide blends for tissue repair</a>.</p>
-      <p>An important and honest caveat: <strong>no controlled human trial has tested the BPC-157 + TB-500 combination as a blend.</strong> The synergy argument is mechanism-based, extrapolated from the individual (largely preclinical) research on each compound. Researchers should weigh that when interpreting outcomes.</p>
-
-      <h2>Which One for Which Research Question?</h2>
-      <ul>
-        <li><strong>Vascular/angiogenesis focus, gut or organ protection, tendon/ligament models</strong> → BPC-157 has the deeper, more directly relevant literature.</li>
-        <li><strong>Cell-migration-limited repair, muscle and soft-tissue models, cardiac research</strong> → TB-500's actin mechanism is the more targeted tool.</li>
-        <li><strong>Multi-pathway repair where both vascular support and cell mobility matter</strong> → the combination is the mechanistically motivated choice.</li>
-      </ul>
-
-      <h2>Safety</h2>
-      <p>Both peptides have demonstrated favorable safety profiles in animal research, with no established LD50 at tested doses and minimal reported off-target effects. Human safety data remain limited for both. Both are included on the World Anti-Doping Agency (WADA) Prohibited List as non-approved substances. Researchers should be aware of the regulatory status in their jurisdiction.</p>
-
-      <h2>Conclusion</h2>
-      <p>BPC-157 and TB-500 are best understood not as rivals but as mechanistic specialists — one focused on building blood supply and protecting tissue, the other on mobilizing the cells that carry out repair. The individual research on each is substantial (if predominantly preclinical), and the widespread practice of combining them rests on a sound complementarity argument that has nonetheless not been formally validated as a blend in humans. For researchers, the choice comes down to which mechanism their question actually depends on.</p>
-    </>),
-    references: [
-      { journal: "PHARMACEUTICALS", title: "Multifunctionality and Possible Medical Application of the BPC 157 Peptide — Literature and Patent Review", year: 2025, identifier: "PMC11859134", url: "https://pmc.ncbi.nlm.nih.gov/articles/PMC11859134/" },
-      { journal: "FRONT PHARMACOL", title: "Stable Gastric Pentadecapeptide BPC 157 and Wound Healing", year: 2021, identifier: "PMID: 34267654", authors: "Seiwerth S et al.", url: "https://pubmed.ncbi.nlm.nih.gov/34267654/" },
-      { journal: "EXPERT OPIN BIOL THER", title: "Thymosin β4: a multi-functional regenerative peptide. Basic properties and clinical applications", year: 2012, identifier: "PMID: 22074294", authors: "Goldstein AL, Hannappel E, Sosne G, Kleinman HK", url: "https://pubmed.ncbi.nlm.nih.gov/22074294/" },
-      { journal: "ANN N Y ACAD SCI", title: "A randomized, placebo-controlled, single and multiple dose study of intravenous thymosin β4 in healthy volunteers", year: 2010, identifier: "PMID: 20536472", authors: "Ruff D, Crockford D, Girardi G, Zhang Y", url: "https://pubmed.ncbi.nlm.nih.gov/20536472/" },
-      { journal: "PUBCHEM", title: "BPC-157 — CID 9941957", identifier: "CID 9941957", url: "https://pubchem.ncbi.nlm.nih.gov/compound/9941957" },
-    ],
-    relatedProductIds: ["bpc157-5", "bpc157-10", "tb500", "glow"],
-  },
-  {
-    slug: "cjc-1295-ipamorelin-growth-hormone-stack",
-    title: "CJC-1295 and Ipamorelin: Growth Hormone Peptide Stack Research",
-    excerpt: "An evidence-based review of the most-studied growth hormone peptide pairing. Covers how CJC-1295 and Ipamorelin work through two different receptors, the DAC vs no-DAC distinction, why they're combined, and the research behind the stack.",
-    date: "2026-07-10",
-    author: "Tier One Research Team",
-    tags: ["CJC-1295", "Ipamorelin", "Growth Hormone", "Comparison"],
-    readingTimeMinutes: 11,
-    heroImage: "/cjc-ipa.jpg",
-    metaTitle: "CJC-1295 + Ipamorelin Stack: GH Peptide Research (2026)",
-    metaDescription: "Research review of the CJC-1295 and Ipamorelin growth hormone peptide stack. Covers the dual-receptor mechanism (GHRH + ghrelin), CJC-1295 with DAC vs without DAC (Mod GRF 1-29), half-life differences, Ipamorelin selectivity, and the synergy rationale.",
-    content: () => (<>
-      <h2>Quick Summary</h2>
-      <ul>
-        <li><strong>CJC-1295</strong> is a GHRH analog that stimulates the pituitary to release growth hormone and <strong>prolongs each GH pulse</strong>.</li>
-        <li><strong>Ipamorelin</strong> is a selective ghrelin-receptor agonist that <strong>amplifies the strength</strong> of the GH pulse through a separate pathway.</li>
-        <li>Because they act on <strong>two different receptors</strong>, combining them produces a greater GH response than either alone — the basis of the popular stack.</li>
-        <li>A key distinction buyers ask about: <strong>CJC-1295 "with DAC" (long half-life) vs "without DAC" / Mod GRF 1-29 (short half-life)</strong>.</li>
-      </ul>
-
-      <h2>The Two-Pathway Logic</h2>
-      <p>Growth hormone (GH) release from the pituitary is governed by two main signals: <strong>GHRH</strong> (growth hormone-releasing hormone), which tells the pituitary to make and release GH, and <strong>ghrelin</strong> (acting on the GHS-R1a receptor), which amplifies that release through a separate calcium-dependent pathway. CJC-1295 mimics the first signal; Ipamorelin mimics the second. Activating both at once produces a larger, cleaner GH pulse than hitting either pathway alone — which is precisely why the two are so often studied as a pair.</p>
-      <p><em>In plain terms:</em> one peptide tells the body to release growth hormone and keeps that signal going longer; the other makes each release stronger. Different switches, same light — pressing both gives a brighter result than pressing either one.</p>
-
-      <h2>CJC-1295: The GHRH Analog</h2>
-      <p><strong>CJC-1295</strong> is a synthetic analog of GHRH. It comes in two forms that are frequently confused, and the difference matters:</p>
-      <h3>CJC-1295 With DAC</h3>
-      <p>The "DAC" (Drug Affinity Complex) version carries a chemical group that binds to albumin in the blood, dramatically extending its half-life — from the roughly 7-minute half-life of natural GHRH to approximately <strong>6–8 days</strong>. This produces a sustained elevation in GH and IGF-1 often described as a "GH bleed" — a continuous low-level increase rather than sharp pulses.</p>
-      <h3>CJC-1295 Without DAC (Mod GRF 1-29)</h3>
-      <p>The "no-DAC" version — also called <strong>Modified GRF (1-29)</strong> — lacks the albumin-binding group and has a short half-life of roughly <strong>30 minutes</strong>. This produces a discrete GH pulse that more closely mimics the body's natural pulsatile release. The no-DAC form is the one most commonly paired with Ipamorelin in research, because both have short half-lives and together generate a clean, well-defined pulse.</p>
-      <p>Its sequence corresponds to the first 29 amino acids of GHRH with stabilizing modifications. Understanding which version is in a given formulation is essential to interpreting any research using it.</p>
-
-      <h2>Ipamorelin: The Selective Secretagogue</h2>
-      <p><strong>Ipamorelin</strong> is a growth hormone secretagogue that activates the ghrelin receptor (GHS-R1a). Its defining feature is <strong>selectivity</strong>: among the GH-releasing peptides, it is one of the cleanest. Unlike older secretagogues such as GHRP-6 and GHRP-2, research indicates Ipamorelin does not significantly raise cortisol, prolactin, or aldosterone at effective doses, and it does not produce the strong hunger stimulation associated with some other ghrelin-receptor agonists.</p>
-      <p>This selectivity is the main reason Ipamorelin became the preferred secretagogue for pairing with a GHRH analog — it amplifies GH release without dragging along the off-target hormonal effects that complicate research with earlier GHRPs.</p>
-
-      <h2>Why They're Combined</h2>
-      <p>The combination rationale is <strong>mechanistic complementarity through two receptors</strong>. CJC-1295 (GHRH receptor) increases the amount of GH available and, in the no-DAC form, defines the timing of the pulse; Ipamorelin (ghrelin receptor) amplifies the magnitude of that pulse. Research on GHRH-analog-plus-secretagogue pairings has consistently shown that dual stimulation yields a GH response exceeding the sum of the individual effects — a genuine synergy rather than simple addition.</p>
-      <p>The result researchers describe is a stronger, well-defined GH pulse that preserves the body's natural pulsatile pattern and negative-feedback regulation — a profile distinct from administering growth hormone directly, which produces sustained supraphysiological levels and can suppress the body's own production.</p>
-
-      <h2>Research Context and IGF-1</h2>
-      <p>Released GH drives hepatic production of <strong>IGF-1</strong> (insulin-like growth factor 1), the primary downstream mediator of most of GH's effects on tissue. Individual-component research shows sustained IGF-1 elevation with CJC-1295 and selective pulsatile GH release with Ipamorelin. Research applications for the pairing center on body composition, recovery, and the GH/IGF-1 axis. As with most research peptides, the strongest data are preclinical and mechanistic; large controlled human trials of the specific combination are limited.</p>
-
-      <h2>Safety Considerations</h2>
-      <p>Both peptides have shown favorable safety profiles in available research. Ipamorelin's selectivity means it largely avoids the cortisol and prolactin elevations seen with older secretagogues. The most commonly reported effects in research on this class are injection-site reactions, transient water retention, headache, and — via GH's counter-regulatory action on insulin — the theoretical potential for altered glucose tolerance at higher exposures. Both compounds appear on the World Anti-Doping Agency (WADA) Prohibited List. Researchers should confirm the regulatory status in their jurisdiction.</p>
-
-      <h2>Conclusion</h2>
-      <p>CJC-1295 and Ipamorelin are combined because they solve two halves of the same problem through independent receptors — one governs how much GH is released and for how long, the other how strongly. The DAC vs no-DAC distinction in CJC-1295 is the single most important detail to get right when interpreting research, since it determines whether the compound produces a sharp pulse or a sustained elevation. For researchers studying the GH/IGF-1 axis, the pairing remains one of the most mechanistically well-motivated stacks in peptide science — with the usual caveat that its human trial evidence lags behind its mechanistic rationale.</p>
-    </>),
-    references: [
-      { journal: "J CLIN ENDOCRINOL METAB", title: "Sustained effects of CJC-1295, a long-acting growth hormone-releasing hormone analog, on growth hormone and insulin-like growth factor I in healthy adults", year: 2006, identifier: "PMID: 16352683", authors: "Teichman SL et al.", url: "https://pubmed.ncbi.nlm.nih.gov/16352683/" },
-      { journal: "EUR J ENDOCRINOL", title: "Ipamorelin, the first selective growth hormone secretagogue", year: 1998, identifier: "PMID: 9849822", authors: "Raun K et al.", url: "https://pubmed.ncbi.nlm.nih.gov/9849822/" },
-      { journal: "J CLIN ENDOCRINOL METAB", title: "Growth hormone (GH)-releasing peptide stimulates GH release in normal men and acts synergistically with GH-releasing hormone", year: 1990, identifier: "PMID: 2108187", authors: "Bowers CY et al.", url: "https://pubmed.ncbi.nlm.nih.gov/2108187/" },
-      { journal: "WIKIPEDIA", title: "CJC-1295", url: "https://en.wikipedia.org/wiki/CJC-1295" },
-      { journal: "WIKIPEDIA", title: "Ipamorelin", url: "https://en.wikipedia.org/wiki/Ipamorelin" },
-    ],
-    relatedProductIds: ["cjc-ipa", "ipamorelin", "tesamorelin"],
-  },
-  {
-    slug: "epitalon-telomerase-pineal-peptide-research",
-    title: "Epitalon (Epithalon): Telomerase and Pineal Peptide Research",
-    excerpt: "An evidence-based review of the pineal tetrapeptide Epitalon. Covers how it is derived from natural epithalamin, the telomerase and telomere-length research, its effects on melatonin and circadian rhythm, and what the animal and human studies actually show.",
-    date: "2026-07-27",
-    author: "Tier One Research Team",
-    tags: ["Epitalon", "Telomerase", "Longevity", "Pineal"],
-    readingTimeMinutes: 10,
-    heroImage: "/epitalon.jpg",
-    metaTitle: "Epitalon (Epithalon): Telomerase & Pineal Peptide Research (2026)",
-    metaDescription: "Research review of Epitalon (Epithalon), the synthetic pineal tetrapeptide Ala-Glu-Asp-Gly. Covers telomerase activation and telomere elongation research, the link to natural epithalamin, effects on melatonin and circadian rhythm, and the animal and human study evidence.",
-    content: () => (<>
-      <h2>Quick Summary</h2>
-      <ul>
-        <li><strong>Epitalon</strong> (also spelled Epithalon or Epithalone) is a synthetic <strong>tetrapeptide</strong> with the sequence <strong>Ala-Glu-Asp-Gly</strong>, modeled on the natural pineal peptide <strong>epithalamin</strong>.</li>
-        <li>Its most-cited research finding is the <strong>induction of telomerase activity and telomere elongation</strong> in cultured human somatic cells that are normally telomerase-negative.</li>
-        <li>Additional research centers on <strong>melatonin and circadian rhythm regulation</strong>, since the peptide is derived from a pineal-gland source.</li>
-        <li>Most of the strongest evidence is <strong>preclinical (cell culture and animal models)</strong>, with a smaller body of human work led primarily by Professor Khavinson's group.</li>
-      </ul>
-
-      <h2>What Epitalon Is</h2>
-      <p><strong>Epitalon</strong> is a short synthetic peptide — just four amino acids, Ala-Glu-Asp-Gly. It was developed as a defined, reproducible version of <strong>epithalamin</strong>, a peptide complex extracted from the pineal gland. The pineal gland governs melatonin production and helps set the body's daily (circadian) clock, which is why Epitalon research so often touches on both <em>cellular aging</em> and <em>sleep/rhythm</em> at the same time.</p>
-      <p><em>In plain terms:</em> researchers took a natural pineal extract that appeared to influence aging markers, identified a small active peptide within that family, and synthesized a clean four-amino-acid version so it could be studied consistently.</p>
-
-      <h2>The Telomerase Mechanism</h2>
-      <p>The headline research interest in Epitalon is <strong>telomeres</strong> — the protective caps at the ends of chromosomes that shorten each time a cell divides. When they get too short, the cell stops dividing (senescence). The enzyme <strong>telomerase</strong> can rebuild telomeres, but most adult somatic cells switch it off.</p>
-      <p>In a widely cited 2003 study, Khavinson and colleagues reported that adding Epitalon to cultures of human fetal fibroblasts — cells that are normally <strong>telomerase-negative</strong> — induced expression of the telomerase catalytic subunit, restored enzymatic activity, and produced measurable <strong>telomere elongation</strong>. The authors interpreted this as reactivation of the telomerase gene in somatic cells. This is the mechanistic finding most often referenced when Epitalon is discussed as a "longevity" peptide.</p>
-      <p>It is worth stating the caveat clearly: telomerase reactivation in cell culture is a mechanistic observation, not a demonstration of extended human healthspan. The relationship between telomere length and aging in whole organisms is genuinely complex.</p>
-
-      <h2>Melatonin and Circadian Rhythm</h2>
-      <p>Because Epitalon traces back to a pineal source, a second research thread examines its effect on <strong>melatonin</strong> and the daily rhythm of its secretion. Work in older animals and elderly human subjects has reported a <strong>normalizing effect on the daily melatonin rhythm</strong> — nudging a blunted, age-shifted pattern back toward a more youthful profile. This connects the peptide's longevity research to the more concrete, measurable endpoint of circadian regulation.</p>
-
-      <h2>Animal Research on Aging and Tumors</h2>
-      <p>A substantial part of the Epitalon and epithalamin literature comes from long-term studies in mice, rats, and even fruit flies. Reported findings across this body of work include effects on <strong>biomarkers of aging</strong>, reductions in <strong>chromosome aberrations</strong>, slowed age-related loss of reproductive (estrous) function, and altered spontaneous tumor incidence, with some studies reporting increased mean or maximum lifespan in the model organism. Results are not uniform across every study and model — some showed lifespan effects, others did not — which is exactly why researchers treat the animal data as promising but not settled.</p>
-
-      <h2>Safety Considerations</h2>
-      <p>In the available research, Epitalon has generally shown a favorable tolerability profile, with the short tetrapeptide structure and low doses used in studies producing few reported adverse effects beyond injection-site reactions. However, human clinical data remain limited in scale and are concentrated within a small number of research groups, so the long-term safety picture is not as thoroughly characterized as for more widely studied compounds. As with all research peptides, Epitalon is intended strictly for laboratory research use; researchers should confirm the regulatory status in their jurisdiction.</p>
-
-      <h2>Conclusion</h2>
-      <p>Epitalon is one of the most mechanistically intriguing peptides in the longevity research space: a four-amino-acid pineal analog with reproducible cell-culture evidence of telomerase activation and telomere elongation, plus a parallel line of research on melatonin and circadian rhythm. The animal literature adds suggestive data on aging biomarkers and tumor incidence. The honest summary is that the <strong>mechanistic and preclinical case is strong and unusually specific</strong>, while large, independent human trials remain the missing piece — a common pattern for peptides in this category.</p>
-    </>),
-    references: [
-      { journal: "BULL EXP BIOL MED", title: "Epithalon peptide induces telomerase activity and telomere elongation in human somatic cells", year: 2003, identifier: "DOI: 10.1023/A:1025493705728", authors: "Khavinson VKh, Bondarev IE, Butyugov AA", url: "https://link.springer.com/article/10.1023/A:1025493705728" },
-      { journal: "BIOGERONTOLOGY", title: "Effect of Epitalon on biomarkers of aging, life span and spontaneous tumor incidence in female Swiss-derived SHR mice", year: 2003, identifier: "DOI: 10.1023/A:1025114230714", authors: "Anisimov VN, Khavinson VKh et al.", url: "https://link.springer.com/article/10.1023/A:1025114230714" },
-      { journal: "ADV GERONTOL", title: "Normalizing effect of the pineal gland peptides on the daily melatonin rhythm in old monkeys and elderly people", year: 2007, identifier: "PMID: 17969590", authors: "Korkushko OV et al.", url: "https://pubmed.ncbi.nlm.nih.gov/17969590/" },
-      { journal: "BULL EXP BIOL MED", title: "Effect of Ala-Glu-Asp-Gly peptide on life span and development of spontaneous tumors in female rats exposed to different illumination regimes", year: 2007, identifier: "PMID: 18856211", authors: "Vinogradova IA et al.", url: "https://pubmed.ncbi.nlm.nih.gov/18856211/" },
-      { journal: "WIKIPEDIA", title: "Epitalon", url: "https://en.wikipedia.org/wiki/Epitalon" },
-    ],
-    relatedProductIds: ["epitalon", "nad", "motsc"],
-  },
-];
+// Article bodies live in src/article-content.jsx and are loaded on demand;
+// see the ArticleBody lazy import above. ARTICLES therefore carries metadata
+// only — nothing in the listing pages ever needed the body text.
+const ARTICLES = ARTICLE_META;
 // ARTICLES:END — do not remove. See the note at ARTICLES:START.
 
 // ─── Scheduled publishing ────────────────────────────────────────────────────
@@ -2127,19 +399,10 @@ const ARTICLES = [
 // getArticleBySlug(). Reading the raw array anywhere else would leak a queued
 // article early — the whole queue is in the bundle, so the date check is the
 // only thing keeping unpublished articles out of sight.
-function todayISO() {
-  const d = new Date();
-  const month = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${d.getFullYear()}-${month}-${day}`;
-}
-
-// Dates are ISO (YYYY-MM-DD), so a string comparison is a date comparison.
-// An article with no date at all is treated as published rather than hidden
-// forever, so a missing field can never silently bury a finished article.
-function isPublished(article) {
-  return !article?.date || article.date <= todayISO();
-}
+// todayISO() and isPublished() live in src/data/routes.js so the build uses the
+// very same gate — otherwise a queued article could be absent from the site but
+// present in the sitemap, which is a direct invitation for Google to index a
+// 404.
 
 function publishedArticles() {
   return ARTICLES.filter(isPublished);
@@ -2201,15 +464,16 @@ function CountUp({ end, duration = 1500, suffix = "", prefix = "" }) {
 }
 
 // ─── Page Title & Meta Helper ─────────────────────────────────────────────────
-const SITE_DOMAIN = "https://www.tierone.bio";
+// SITE_DOMAIN is imported from src/data/site.js so the prerenderer and the app
+// cannot drift on what the canonical host is.
 
 // `image` is a site-relative path (e.g. "/bpc157-10.jpg"); `type` is the
 // OpenGraph type, "article" on research pages and "website" everywhere else.
 function usePageMeta(title, description, options = {}) {
-  const { image, type = "website" } = options;
+  const { image, type = "website", noindex = false } = options;
   useEffect(() => {
-    const suffix = " | Tier One BioSystems";
-    const fullTitle = title ? title + suffix : "Tier One BioSystems — Research Grade Peptides";
+    const suffix = TITLE_SUFFIX;
+    const fullTitle = title ? title + suffix : DEFAULT_TITLE;
     document.title = fullTitle;
 
     // Find-or-create. The previous version only wrote to tags that already
@@ -2231,8 +495,7 @@ function usePageMeta(title, description, options = {}) {
     // Google "I am a duplicate of /" — an instruction to drop the article from
     // the index in the homepage's favour. Query strings and trailing slashes
     // are stripped so ?ref=... variants collapse onto one canonical address.
-    const path = window.location.pathname.replace(/\/+$/, "");
-    const canonical = `${SITE_DOMAIN}${path || "/"}`;
+    const canonical = canonicalUrl(window.location.pathname);
     let link = document.head.querySelector('link[rel="canonical"]');
     if (!link) {
       link = document.createElement("link");
@@ -2255,10 +518,39 @@ function usePageMeta(title, description, options = {}) {
     upsertMeta("name", "twitter:description", description);
     upsertMeta("name", "twitter:image", absoluteImage);
 
+    // Cart, login, signup and account pages are useless as search results and
+    // dilute the pages that matter, so they are served but never indexed. The
+    // prerendered HTML carries the same directive — see scripts/prerender.js.
+    upsertMeta("name", "robots", noindex ? "noindex, follow" : "index, follow");
+
     return () => {
-      document.title = "Tier One BioSystems — Research Grade Peptides";
+      document.title = DEFAULT_TITLE;
     };
-  }, [title, description, image, type]);
+  }, [title, description, image, type, noindex]);
+}
+
+// Replaces the route-level JSON-LD in the document head.
+//
+// The prerendered HTML ships with the correct graph already in place, tagged
+// data-tier1-ld. On a client-side navigation that tag is now describing the
+// page the customer just left, so it is removed before the new graph goes in.
+// Returns a cleanup function for useEffect.
+function applyRouteJsonLd(graph) {
+  document.querySelectorAll("script[data-tier1-ld]").forEach(el => el.remove());
+  const script = document.createElement("script");
+  script.type = "application/ld+json";
+  script.setAttribute("data-tier1-ld", "");
+  script.textContent = JSON.stringify(graph);
+  document.head.appendChild(script);
+  return () => script.remove();
+}
+
+// Static pages take their title and description from the shared route table so
+// the prerendered HTML and the client-rendered page cannot drift apart.
+function useRouteMeta(path) {
+  const meta = routeMeta(path);
+  usePageMeta(meta.title, meta.description, { noindex: meta.noindex, image: meta.image, type: meta.type });
+  return meta;
 }
 
 // ─── Fonts via CDN ───────────────────────────────────────────────────────────
@@ -3069,6 +1361,22 @@ function Hero() {
 
 function ProductCard({ product, index, onClick, onAddToCart }) {
   const [hovered, setHovered] = useState(false);
+  const href = `/product/${product.id}`;
+
+  // The card opens a quick-view panel rather than navigating, which is why it
+  // used to be a plain clickable <div>. That made every product page invisible
+  // to crawlers (they follow href attributes, not click handlers) and
+  // unreachable by keyboard.
+  //
+  // It is now a real link that happens to intercept ordinary left-clicks. A
+  // crawler sees a normal <a href>; a keyboard user can Tab to it and press
+  // Enter; cmd/ctrl/middle-click still open the product page in a new tab,
+  // because those are left to the browser.
+  const openQuickView = (event) => {
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    onClick(product);
+  };
 
   return (
     <div
@@ -3109,7 +1417,17 @@ function ProductCard({ product, index, onClick, onAddToCart }) {
         overflow: "hidden",
         background: "#080808",
       }}>
-        <div className="product-card-inner" style={{ position: "absolute", inset: 0 }}>
+        {/* aria-hidden + tabIndex -1: the title link below is the one that
+            carries this card in the tab order, so the image does not add a
+            second stop pointing at the same URL. */}
+        <a
+          href={href}
+          onClick={openQuickView}
+          tabIndex={-1}
+          aria-hidden="true"
+          className="product-card-inner"
+          style={{ position: "absolute", inset: 0, display: "block" }}
+        >
           <img
             src={product.image}
             alt={product.name}
@@ -3120,18 +1438,25 @@ function ProductCard({ product, index, onClick, onAddToCart }) {
               objectFit: "cover",
             }}
           />
-        </div>
+        </a>
       </div>
 
       {/* Info */}
       <div style={{ padding: "16px 18px 20px", flex: 1, display: "flex", flexDirection: "column" }}>
-        <div style={{
-          fontFamily: "'Orbitron', sans-serif",
-          fontWeight: 700,
-          fontSize: 18,
-          letterSpacing: "0.05em",
-          marginBottom: 2,
-        }}>{product.name}</div>
+        <a
+          href={href}
+          onClick={openQuickView}
+          style={{
+            fontFamily: "'Orbitron', sans-serif",
+            fontWeight: 700,
+            fontSize: 18,
+            letterSpacing: "0.05em",
+            marginBottom: 2,
+            color: "inherit",
+            textDecoration: "none",
+            display: "block",
+          }}
+        >{product.name} <span style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)", whiteSpace: "nowrap" }}>{product.dose}</span></a>
 
         <div style={{
           fontFamily: "'Rajdhani', sans-serif",
@@ -3828,7 +2153,7 @@ function SyringeDiagram({ units }) {
 // ─── Peptide Calculator ───────────────────────────────────────────────────────
 
 function PeptideCalculator() {
-  usePageMeta("Peptide Reconstitution Calculator", "Free peptide reconstitution calculator. Calculate BAC water volume, concentration, and syringe units for research peptide preparation.");
+  useRouteMeta("/calculator");
   const [vialMg, setVialMg] = useState("");
   const [waterMl, setWaterMl] = useState("");
   const [doseValue, setDoseValue] = useState("");
@@ -3843,7 +2168,9 @@ function PeptideCalculator() {
 
   const concentration = vialMg && waterMl ? parseFloat(vialMg) / parseFloat(waterMl) : null;
   const volumeMl = concentration && doseMcg ? (doseMcg / 1000) / concentration : null;
-  const insulinUnits = volumeMl ? volumeMl * 100 : null;
+  // A U-100 graduated syringe reads 100 graduations per mL. Kept as a
+  // measurement scale for withdrawing sub-millilitre volumes, not as a dose.
+  const graduations = volumeMl ? volumeMl * 100 : null;
 
   const inputStyle = {
     width: "100%",
@@ -3897,7 +2224,7 @@ function PeptideCalculator() {
           maxWidth: 520,
           margin: "0 auto",
           lineHeight: 1.7,
-        }}>Enter your vial size, how much BAC water you're adding, and your desired dose to calculate exactly how much to draw.</p>
+        }}>Enter the vial content, the diluent volume, and the mass required per aliquot to obtain the resulting concentration and the volume to withdraw.</p>
       </div>
 
       {/* Inputs */}
@@ -3908,7 +2235,7 @@ function PeptideCalculator() {
         marginBottom: 40,
       }}>
         <div>
-          <label style={labelStyle}>Vial Size (mg)</label>
+          <label style={labelStyle}>Vial Content (mg)</label>
           <input
             type="number"
             min="0"
@@ -3921,7 +2248,7 @@ function PeptideCalculator() {
           />
         </div>
         <div>
-          <label style={labelStyle}>BAC Water Added (mL)</label>
+          <label style={labelStyle}>Diluent Volume (mL)</label>
           <input
             type="number"
             min="0"
@@ -3934,7 +2261,7 @@ function PeptideCalculator() {
           />
         </div>
         <div>
-          <label style={labelStyle}>Desired Dose</label>
+          <label style={labelStyle}>Mass Per Aliquot</label>
           <div style={{ display: "flex", gap: 0 }}>
             <input
               type="number"
@@ -3994,9 +2321,9 @@ function PeptideCalculator() {
               sub: "after reconstitution",
             },
             {
-              label: "Syringe",
-              value: insulinUnits ? `${Math.round(insulinUnits)} units` : "—",
-              sub: "on a 100-unit syringe",
+              label: "Aliquot Volume",
+              value: volumeMl ? `${fmt(volumeMl * 1000)} µL` : "—",
+              sub: "to withdraw per aliquot",
             },
           ].map((r, i) => (
             <div key={i} style={{
@@ -4028,10 +2355,12 @@ function PeptideCalculator() {
         </div>
       </div>
 
-      {/* Syringe */}
+      {/* Graduation scale. A U-100 graduated syringe is a standard tool for
+          measuring sub-millilitre volumes, so the readout stays — but it is
+          labelled as a measurement scale rather than presented as a dose. */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "0" }}>
         <div style={{ width: "100%", maxWidth: 560 }}>
-          <SyringeDiagram units={insulinUnits} />
+          <SyringeDiagram units={graduations} />
         </div>
       </div>
 
@@ -4058,11 +2387,11 @@ function PeptideCalculator() {
           paddingLeft: 20,
           margin: 0,
         }}>
-          <li>Draw your desired amount of BAC water into a syringe.</li>
-          <li>Slowly inject it down the side of the vial — do not shake.</li>
-          <li>Gently swirl until the powder is fully dissolved.</li>
-          <li>Using the result above, draw the calculated units into a fresh syringe for each dose.</li>
-          <li>Store reconstituted solution in the refrigerator and use within the timeframe listed on your product.</li>
+          <li>Draw the calculated diluent volume into a sterile syringe.</li>
+          <li>Dispense it slowly down the inside wall of the vial — do not shake.</li>
+          <li>Gently swirl until the lyophilised powder is fully dissolved.</li>
+          <li>Withdraw the calculated aliquot volume using a clean syringe for each withdrawal, to avoid contaminating the stock vial.</li>
+          <li>Store the reconstituted stock refrigerated and use within the stability window listed for that compound.</li>
         </ol>
       </div>
 
@@ -4082,7 +2411,7 @@ function PeptideCalculator() {
 // ─── Contact Page ────────────────────────────────────────────────────────────
 
 function ContactPage() {
-  usePageMeta("Contact Us", "Get in touch with Tier One BioSystems. Questions about research peptides, orders, or wholesale inquiries.");
+  useRouteMeta("/contact");
   const [form, setForm] = useState({ name: "", email: "", subject: "", message: "" });
   const [submitted, setSubmitted] = useState(false);
   const [sending, setSending] = useState(false);
@@ -4248,7 +2577,7 @@ function ContactPage() {
 // bundle. See netlify/functions/validate-discount.js.
 
 function CartPage({ cart, setCart }) {
-  usePageMeta("Your Cart", "Review your order and checkout at Tier One BioSystems.");
+  useRouteMeta("/cart");
   const navigate = useNavigate();
   const { user, profile, isLoggedIn } = useAuth();
   const [step, setStep] = useState("cart"); // cart, info, payment, confirmed
@@ -4280,6 +2609,18 @@ function CartPage({ cart, setCart }) {
   const [discountLoading, setDiscountLoading] = useState(false);
   const [paymentInitiated, setPaymentInitiated] = useState(false);
   const [returnedFromPayment, setReturnedFromPayment] = useState(false);
+  const [orderSubmitting, setOrderSubmitting] = useState(false);
+  const [orderSubmitError, setOrderSubmitError] = useState("");
+  const [receiptSent, setReceiptSent] = useState(true);
+  // Which durable writes have already landed for this order number. Confirming
+  // twice — a double click, or a retry after a partial failure — must not
+  // create a second order row or a second notification.
+  const submissionRef = useRef({ orderNumber: null, supabase: false, netlify: false, discount: false });
+  // Re-entry guard. This has to be a ref, not the orderSubmitting state: React
+  // batches state updates, so on a fast double-click both handlers would read
+  // orderSubmitting as false and both would insert an order. A ref flips
+  // synchronously, before the second click can get past it.
+  const submittingRef = useRef(false);
 
   useEffect(() => {
     const handler = () => setIsMobile(window.innerWidth < 700);
@@ -4289,7 +2630,7 @@ function CartPage({ cart, setCart }) {
 
   function updateQty(id, delta) {
     setCart(prev => prev
-      .map(item => item.id === id ? { ...item, qty: item.qty + delta } : item)
+      .map(item => item.id === id ? { ...item, qty: clampQuantity(item.qty + delta) } : item)
       .filter(item => item.qty > 0)
     );
   }
@@ -4495,7 +2836,31 @@ function CartPage({ cart, setCart }) {
     if (btn) btn.scrollIntoView({ behavior: "smooth", block: "center" });
   }, [returnedFromPayment]);
 
-  function handlePaymentConfirmed() {
+  // Confirming payment must not report success unless the order actually
+  // reached somewhere durable. The previous version fired the Supabase insert,
+  // the Netlify Forms post and the EmailJS send without awaiting any of them,
+  // then cleared the cart unconditionally — so a customer on a flaky connection
+  // saw "order received", lost their cart, and left no record behind.
+  //
+  // The order of operations now is: save durably, and only then do the things
+  // that can be redone by hand (redeem the code, send the receipt). The cart is
+  // the customer's only copy of the order, so it is cleared last of all.
+  async function handlePaymentConfirmed() {
+    if (submittingRef.current) return;
+    if (!orderNumber || cart.length === 0) {
+      setOrderSubmitError("Your order details are incomplete. Go back to the cart and try again.");
+      return;
+    }
+    submittingRef.current = true;
+    setOrderSubmitting(true);
+    setOrderSubmitError("");
+
+    // Reset the idempotency record if this is a different order number.
+    if (submissionRef.current.orderNumber !== orderNumber) {
+      submissionRef.current = { orderNumber, supabase: false, netlify: false, discount: false };
+    }
+    const submission = submissionRef.current;
+
     const { name, email, phone, address, city, state, zip } = customerInfo;
 
     // Build order items text
@@ -4519,52 +2884,6 @@ function CartPage({ cart, setCart }) {
       };
     });
 
-    // Persist the order to Supabase so signed-in customers can see it in their
-    // order history. Guests skip this (RLS requires an authenticated user);
-    // their order still flows through Netlify Forms + EmailJS below.
-    if (user) {
-      supabase.from("orders").insert({
-        user_id: user.id,
-        order_number: orderNumber,
-        status: "CONFIRMED",
-        items: itemsStructured,
-        items_text: itemsText,
-        subtotal: Math.round(subtotal * 100) / 100,
-        discount_code: [appliedDiscount?.code, appliedShipping?.code].filter(Boolean).join(", ") || null,
-        discount_amount: Math.round(discountAmount * 100) / 100,
-        shipping: shipping,
-        total: Math.round(total * 100) / 100,
-        payment_method: paymentMethod === "venmo" ? "Venmo" : "Cash App",
-        customer_name: name,
-        customer_email: email,
-        customer_phone: phone,
-        ship_address: address,
-        ship_city: city,
-        ship_state: state,
-        ship_zip: zip,
-      }).then(({ error }) => { if (error) console.error("Order DB save error:", error); });
-    }
-
-    // Burn a single-use code so it can't be applied to a second order. Runs
-    // after the order is placed, and deliberately never blocks or fails the
-    // checkout: the customer has already paid by this point, so a redemption
-    // that doesn't land is a bookkeeping problem, not a broken order.
-    // Sitewide codes aren't tracked and are a harmless no-op server-side.
-    if (user && appliedDiscount?.code) {
-      supabase.auth.getSession().then(({ data }) => {
-        const accessToken = data?.session?.access_token;
-        if (!accessToken) return;
-        return fetch("/.netlify/functions/redeem-discount", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${accessToken}`,
-          },
-          body: JSON.stringify({ code: appliedDiscount.code, orderNumber }),
-        });
-      }).catch((err) => console.error("Discount redemption error:", err));
-    }
-
     // Submit to Netlify Forms
     const formData = new URLSearchParams();
     formData.append("form-name", "order");
@@ -4586,35 +2905,112 @@ function CartPage({ cart, setCart }) {
     formData.append("paymentMethod", paymentMethod === "venmo" ? "Venmo" : "Cash App");
     formData.append("orderTotal", `$${total.toFixed(2)}`);
 
-    fetch("/", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: formData.toString(),
-    }).then((res) => {
-      if (!res.ok) console.error("Order submission failed:", res.status);
-    }).catch((err) => console.error("Order error:", err));
+    // ── Durable writes. A failure here means the order does not exist, so it
+    //    must stop the flow rather than be logged and stepped over. ──────────
+    try {
+      // Signed-in customers get a row in their own order history. Guests can't
+      // (RLS requires an authenticated user), so for them the Netlify Forms
+      // submission below is the order of record.
+      if (user && !submission.supabase) {
+        const { error } = await supabase.from("orders").insert({
+          user_id: user.id,
+          order_number: orderNumber,
+          status: "CONFIRMED",
+          items: itemsStructured,
+          items_text: itemsText,
+          subtotal: Math.round(subtotal * 100) / 100,
+          discount_code: [appliedDiscount?.code, appliedShipping?.code].filter(Boolean).join(", ") || null,
+          discount_amount: Math.round(discountAmount * 100) / 100,
+          shipping: shipping,
+          total: Math.round(total * 100) / 100,
+          payment_method: paymentMethod === "venmo" ? "Venmo" : "Cash App",
+          customer_name: name,
+          customer_email: email,
+          customer_phone: phone,
+          ship_address: address,
+          ship_city: city,
+          ship_state: state,
+          ship_zip: zip,
+        });
+        if (error) throw new Error(`order history: ${error.message}`);
+        submission.supabase = true;
+      }
 
-    // Send confirmation email to customer via EmailJS
-    emailjs.send("service_r3r7crs", "template_i9k8u2a", {
-      customerName: name,
-      customerEmail: email,
-      customerPhone: phone,
-      orderNumber: orderNumber,
-      orderItems: itemsText,
-      orderSubtotal: `$${subtotal.toFixed(2)}`,
-      discountCode: [appliedDiscount?.code, appliedShipping?.code].filter(Boolean).join(", "),
-      discountAmount: appliedDiscount ? `-$${discountAmount.toFixed(2)}` : "",
-      shipping: shipping === 0 ? "FREE" : `$${shipping.toFixed(2)}`,
-      paymentMethod: paymentMethod === "venmo" ? "Venmo" : "Cash App",
-      orderTotal: `$${total.toFixed(2)}`,
-      shippingAddress: address,
-      shippingCity: city,
-      shippingState: state,
-      shippingZip: zip,
-    }, "E2QQt-tqFcuyhtZOD").then(() => {
-      console.log("Confirmation email sent");
-    }).catch((err) => console.error("Email error:", err));
+      if (!submission.netlify) {
+        const res = await fetch("/", {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: formData.toString(),
+        });
+        if (!res.ok) throw new Error(`order notification: HTTP ${res.status}`);
+        submission.netlify = true;
+      }
+    } catch (err) {
+      console.error("Order save error:", err);
+      setOrderSubmitError(
+        `We could not confirm your order, so we have not cleared your cart. Nothing has been lost — ` +
+        `press Confirm again to retry. If it keeps failing, email ${CONTACT_EMAIL} quoting ${orderNumber} ` +
+        `and we will finish it by hand.`
+      );
+      submittingRef.current = false;
+      setOrderSubmitting(false);
+      return;
+    }
 
+    // ── Past this point the order exists. Everything below can be redone by
+    //    hand, so a failure is reported but never discards a saved order. ────
+
+    // Burn a single-use code so it can't be applied to a second order.
+    // Sitewide codes aren't tracked and are a harmless no-op server-side.
+    if (user && appliedDiscount?.code && !submission.discount) {
+      try {
+        const { data } = await supabase.auth.getSession();
+        const accessToken = data?.session?.access_token;
+        if (accessToken) {
+          const res = await fetch("/.netlify/functions/redeem-discount", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${accessToken}`,
+            },
+            body: JSON.stringify({ code: appliedDiscount.code, orderNumber }),
+          });
+          submission.discount = res.ok;
+        }
+      } catch (err) {
+        console.error("Discount redemption error:", err);
+      }
+    }
+
+    // Send confirmation email to customer via EmailJS. If this fails the
+    // confirmation screen says so, instead of promising an email that is
+    // never going to arrive.
+    try {
+      await emailjs.send("service_r3r7crs", "template_i9k8u2a", {
+        customerName: name,
+        customerEmail: email,
+        customerPhone: phone,
+        orderNumber: orderNumber,
+        orderItems: itemsText,
+        orderSubtotal: `$${subtotal.toFixed(2)}`,
+        discountCode: [appliedDiscount?.code, appliedShipping?.code].filter(Boolean).join(", "),
+        discountAmount: appliedDiscount ? `-$${discountAmount.toFixed(2)}` : "",
+        shipping: shipping === 0 ? "FREE" : `$${shipping.toFixed(2)}`,
+        paymentMethod: paymentMethod === "venmo" ? "Venmo" : "Cash App",
+        orderTotal: `$${total.toFixed(2)}`,
+        shippingAddress: address,
+        shippingCity: city,
+        shippingState: state,
+        shippingZip: zip,
+      }, "E2QQt-tqFcuyhtZOD");
+      setReceiptSent(true);
+    } catch (err) {
+      console.error("Email error:", err);
+      setReceiptSent(false);
+    }
+
+    submittingRef.current = false;
+    setOrderSubmitting(false);
     setStep("confirmed");
     setCart([]);
   }
@@ -4715,7 +3111,9 @@ function CartPage({ cart, setCart }) {
             color: "var(--text-dim)",
             lineHeight: 1.6,
           }}>
-            Save your order number for reference. A confirmation has been sent to your email.
+            {receiptSent
+              ? "Save your order number for reference. A confirmation has been sent to your email."
+              : `Save your order number for reference. Your order is recorded, but we could not send the confirmation email — quote this number to ${CONTACT_EMAIL} if you would like a copy.`}
           </p>
         </div>
         <button onClick={() => { setStep("cart"); navigate("/"); }} style={{
@@ -5074,27 +3472,45 @@ function CartPage({ cart, setCart }) {
           </div>
         )}
 
-        {paymentInitiated ? (
-          <button id="confirm-payment-btn" onClick={handlePaymentConfirmed} style={{
-            width: "100%",
-            padding: "16px 0",
-            background: "var(--red-primary)",
-            border: "1px solid var(--red-primary)",
-            color: "#fff",
-            fontFamily: "'Orbitron', sans-serif",
-            fontWeight: 700,
-            fontSize: 14,
-            letterSpacing: "0.2em",
-            textTransform: "uppercase",
-            cursor: "pointer",
-            transition: "all 0.2s",
+        {orderSubmitError && (
+          <div role="alert" style={{
             marginBottom: 16,
-            boxShadow: returnedFromPayment ? "0 0 0 0 rgba(196,30,42,0.6)" : "none",
-            animation: returnedFromPayment ? "pulseConfirm 1.6s ease-out infinite" : "none",
-          }}
-            onMouseEnter={e => { e.target.style.background = "transparent"; e.target.style.color = "var(--red-primary)"; }}
-            onMouseLeave={e => { e.target.style.background = "var(--red-primary)"; e.target.style.color = "#fff"; }}
-          >I HAVE SENT PAYMENT</button>
+            padding: "14px 16px",
+            border: "1px solid var(--red-primary)",
+            background: "rgba(196,30,42,0.08)",
+            fontFamily: "'Rajdhani', sans-serif",
+            fontSize: 15,
+            color: "var(--text-primary)",
+            lineHeight: 1.6,
+          }}>{orderSubmitError}</div>
+        )}
+
+        {paymentInitiated ? (
+          <button
+            id="confirm-payment-btn"
+            onClick={handlePaymentConfirmed}
+            disabled={orderSubmitting}
+            aria-busy={orderSubmitting}
+            style={{
+              width: "100%",
+              padding: "16px 0",
+              background: orderSubmitting ? "var(--bg-card-hover)" : "var(--red-primary)",
+              border: "1px solid var(--red-primary)",
+              color: orderSubmitting ? "var(--text-secondary)" : "#fff",
+              fontFamily: "'Orbitron', sans-serif",
+              fontWeight: 700,
+              fontSize: 14,
+              letterSpacing: "0.2em",
+              textTransform: "uppercase",
+              cursor: orderSubmitting ? "wait" : "pointer",
+              transition: "all 0.2s",
+              marginBottom: 16,
+              boxShadow: returnedFromPayment && !orderSubmitting ? "0 0 0 0 rgba(196,30,42,0.6)" : "none",
+              animation: returnedFromPayment && !orderSubmitting ? "pulseConfirm 1.6s ease-out infinite" : "none",
+            }}
+            onMouseEnter={e => { if (orderSubmitting) return; e.target.style.background = "transparent"; e.target.style.color = "var(--red-primary)"; }}
+            onMouseLeave={e => { if (orderSubmitting) return; e.target.style.background = "var(--red-primary)"; e.target.style.color = "#fff"; }}
+          >{orderSubmitting ? "SAVING YOUR ORDER…" : (orderSubmitError ? "RETRY CONFIRMATION" : "I HAVE SENT PAYMENT")}</button>
         ) : (
           <div style={{
             width: "100%",
@@ -5859,26 +4275,35 @@ function CartPage({ cart, setCart }) {
 // ─── Lab Results Page ─────────────────────────────────────────────────────────
 
 function LabResultsPage() {
-  usePageMeta("Lab Results — Certificates of Analysis", "Third-party verified lab results and Certificates of Analysis for all Tier One BioSystems research peptides. 99%+ purity guaranteed.");
+  useRouteMeta("/lab-results");
   const [searchParams] = useSearchParams();
   const [isMobile, setIsMobile] = useState(window.innerWidth < 700);
 
-  // Auto-expand product if navigated from a product page
+  // Auto-expand product if navigated from a product page. Only a summary that
+  // survives the quantity check can be auto-opened — otherwise a link from a
+  // withheld product would expand an empty panel.
   const productParam = searchParams.get("product");
   const doseParam = searchParams.get("dose");
-  const autoKey = productParam && doseParam ? `${productParam} ${doseParam}` : productParam;
-  const [expandedProduct, setExpandedProduct] = useState(
-    autoKey && (LAB_RESULTS[autoKey] || LAB_RESULTS[productParam]) ? (LAB_RESULTS[autoKey] ? autoKey : productParam) : null
-  );
+  const [expandedProduct, setExpandedProduct] = useState(() => {
+    if (!productParam) return null;
+    if (!getLabResults(productParam, doseParam)) return null;
+    const doseKey = doseParam ? `${productParam} ${doseParam}` : productParam;
+    return LAB_RESULTS[doseKey] ? doseKey : productParam;
+  });
 
-  // Scroll to the expanded product on mount
+  // Scroll to the summary the customer arrived for. Deliberately mount-only:
+  // it reacts to the ?product= parameter in the URL, not to the accordion being
+  // opened by hand afterwards — re-running it on every toggle would yank the
+  // page around under someone who is just browsing.
+  const arrivedExpanded = useRef(expandedProduct);
   useEffect(() => {
-    if (expandedProduct) {
-      setTimeout(() => {
-        const el = document.getElementById(`coa-${expandedProduct}`);
-        if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-      }, 300);
-    }
+    const target = arrivedExpanded.current;
+    if (!target) return;
+    const timer = setTimeout(() => {
+      const el = document.getElementById(`coa-${target}`);
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 300);
+    return () => clearTimeout(timer);
   }, []);
 
   useEffect(() => {
@@ -5887,19 +4312,24 @@ function LabResultsPage() {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  // Get unique product names (no duplicate dose variants)
-  // Build list of products with lab results — show each dose variant separately for multi-dose products
+  // Build the list of products whose summary actually describes the vial being
+  // sold. getLabResults() applies the quantity reconciliation, so anything it
+  // refuses is listed separately below as under re-verification rather than
+  // being quietly dropped.
   const uniqueProducts = [];
+  const withheld = [];
   const seen = new Set();
   PRODUCTS.forEach(p => {
     const doseKey = `${p.name} ${p.dose}`;
-    // If there's a dose-specific COA entry, show it separately
-    if (LAB_RESULTS[doseKey] && !seen.has(doseKey)) {
-      seen.add(doseKey);
-      uniqueProducts.push({ ...p, coaKey: doseKey, displayName: `${p.name} — ${p.dose}` });
-    } else if (!LAB_RESULTS[doseKey] && !seen.has(p.name) ) {
-      seen.add(p.name);
-      uniqueProducts.push({ ...p, coaKey: p.name, displayName: p.name });
+    const hasDoseEntry = !!LAB_RESULTS[doseKey];
+    const coaKey = hasDoseEntry ? doseKey : p.name;
+    if (seen.has(coaKey)) return;
+    seen.add(coaKey);
+    const displayName = hasDoseEntry ? `${p.name} — ${p.dose}` : p.name;
+    if (getLabResults(p.name, p.dose)) {
+      uniqueProducts.push({ ...p, coaKey, displayName });
+    } else if (isLabResultWithheld(p.name, p.dose)) {
+      withheld.push({ ...p, coaKey, displayName: `${p.name} — ${p.dose}` });
     }
   });
 
@@ -5931,8 +4361,9 @@ function LabResultsPage() {
           margin: "0 auto",
           lineHeight: 1.7,
         }}>
-          Every compound is independently tested and verified. Below are the analytical results
-          for each product in our catalog, conducted by third-party laboratories.
+          Analytical summaries for the lots currently in stock. Each one is published only
+          where the tested vial quantity matches the product it is attached to; anything that
+          does not reconcile is withheld until the original report has been re-checked.
         </p>
       </div>
 
@@ -5949,8 +4380,13 @@ function LabResultsPage() {
               background: "var(--bg-card)",
               transition: "all 0.3s ease",
             }}>
-              {/* Clickable header row */}
-              <div
+              {/* Header row. A real <button> so it is reachable by Tab and
+                  operable with Enter/Space, and so screen readers announce the
+                  expanded state. */}
+              <button
+                type="button"
+                aria-expanded={isExpanded}
+                aria-controls={`coa-panel-${product.coaKey}`}
                 onClick={() => setExpandedProduct(isExpanded ? null : product.coaKey)}
                 style={{
                   display: "flex",
@@ -5959,6 +4395,12 @@ function LabResultsPage() {
                   padding: isMobile ? "16px 16px" : "18px 28px",
                   cursor: "pointer",
                   gap: 16,
+                  width: "100%",
+                  background: "none",
+                  border: "none",
+                  color: "inherit",
+                  textAlign: "left",
+                  font: "inherit",
                 }}
               >
                 <div style={{ display: "flex", alignItems: "center", gap: 16, flex: 1, minWidth: 0 }}>
@@ -6000,11 +4442,11 @@ function LabResultsPage() {
                     display: "inline-block",
                   }}>&#9660;</span>
                 </div>
-              </div>
+              </button>
 
               {/* Expanded COA details */}
               {isExpanded && (
-                <div style={{
+                <div id={`coa-panel-${product.coaKey}`} style={{
                   borderTop: "1px solid var(--border)",
                   padding: isMobile ? "20px 16px" : "28px 28px",
                   animation: "fadeIn 0.25s ease-out",
@@ -6151,6 +4593,51 @@ function LabResultsPage() {
         })}
       </div>
 
+      {/* Summaries that do not reconcile with the product they belong to. Saying
+          so plainly is the honest option — and it is far better for trust than
+          a page that silently has gaps in it. */}
+      {withheld.length > 0 && (
+        <div style={{
+          marginTop: 32,
+          padding: "20px 24px",
+          border: "1px solid rgba(196,30,42,0.25)",
+          background: "rgba(196,30,42,0.04)",
+        }}>
+          <h2 style={{
+            fontFamily: "'Orbitron', sans-serif",
+            fontSize: 12,
+            fontWeight: 700,
+            letterSpacing: "0.12em",
+            color: "var(--red-primary)",
+            marginBottom: 10,
+            textTransform: "uppercase",
+          }}>Under re-verification</h2>
+          <p style={{
+            fontFamily: "'Rajdhani', sans-serif",
+            fontSize: 15,
+            color: "var(--text-secondary)",
+            lineHeight: 1.7,
+            marginBottom: 12,
+          }}>
+            The analytical summary we hold for these compounds records a different vial
+            quantity than the product listing. Rather than show a report that may belong to
+            another lot, we are withholding it until the original laboratory document has been
+            re-checked and the lot mapping corrected. Email{" "}
+            <a href={`mailto:${CONTACT_EMAIL}`} style={{ color: "var(--red-primary)" }}>{CONTACT_EMAIL}</a>{" "}
+            if you need the report for a specific lot in the meantime.
+          </p>
+          <ul style={{
+            fontFamily: "'Rajdhani', sans-serif",
+            fontSize: 15,
+            color: "var(--text-primary)",
+            lineHeight: 1.8,
+            paddingLeft: 20,
+          }}>
+            {withheld.map(p => <li key={p.coaKey}>{p.displayName}</li>)}
+          </ul>
+        </div>
+      )}
+
       {/* Bottom disclaimer */}
       <div style={{
         marginTop: 48,
@@ -6166,7 +4653,7 @@ function LabResultsPage() {
           letterSpacing: "0.1em",
           color: "var(--red-primary)",
           marginBottom: 8,
-        }}>THIRD-PARTY VERIFIED</div>
+        }}>ABOUT THESE RESULTS</div>
         <div style={{
           fontFamily: "'Rajdhani', sans-serif",
           fontSize: 15,
@@ -6175,9 +4662,10 @@ function LabResultsPage() {
           maxWidth: 700,
           margin: "0 auto",
         }}>
-          All analyses are performed by independent, accredited laboratories.
-          Certificates of Analysis are available for every lot produced. Results shown reflect
-          the most recent production lot for each compound.
+          The figures above are summaries of the analytical testing held for the most recent
+          production lot of each compound. They are not a substitute for the original
+          laboratory-issued report; request the signed document for a specific lot number at{" "}
+          <a href={`mailto:${CONTACT_EMAIL}`} style={{ color: "var(--red-primary)" }}>{CONTACT_EMAIL}</a>.
         </div>
       </div>
     </div>
@@ -6218,12 +4706,7 @@ function AuthPage() {
   // would otherwise send a just-authenticated customer off to a phishing page.
   const rawRedirect = searchParams.get("redirect") || "/account";
   const redirectTo = /^\/(?!\/)/.test(rawRedirect) ? rawRedirect : "/account";
-  usePageMeta(
-    isSignup ? "Create Account" : "Sign In",
-    isSignup
-      ? "Create a Tier One BioSystems account to save your info and track your orders."
-      : "Sign in to your Tier One BioSystems account to view your orders."
-  );
+  useRouteMeta(isSignup ? "/signup" : "/login");
 
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -6467,7 +4950,7 @@ function AuthPage() {
 function AccountPage() {
   const navigate = useNavigate();
   const { user, profile, isLoggedIn, loading: authLoading, signOut, refreshProfile } = useAuth();
-  usePageMeta("My Account", "Manage your Tier One BioSystems profile and view your order history.");
+  useRouteMeta("/account");
 
   const [form, setForm] = useState({ full_name: "", phone: "", address: "", city: "", state: "", zip: "" });
   const [orders, setOrders] = useState(null); // null = loading
@@ -6678,7 +5161,7 @@ function formatOrderDate(iso) {
 // ─── Age Verification Gate ────────────────────────────────────────────────────
 
 function NotFoundPage() {
-  usePageMeta("Page Not Found", "The page you're looking for doesn't exist.");
+  usePageMeta("Page Not Found", "The page you're looking for doesn't exist.", { noindex: true });
   const navigate = useNavigate();
   return (
     <div style={{
@@ -6771,7 +5254,7 @@ const policyHeadingStyle = {
 };
 
 function ShippingPage() {
-  usePageMeta("Shipping Policy", "How Tier One BioSystems ships research peptides — domestic shipping rates, processing time, free shipping over $200.");
+  useRouteMeta("/shipping");
   return (
     <>
       <PolicyShell kicker="POLICY" title="Shipping">
@@ -6798,7 +5281,7 @@ function ShippingPage() {
 }
 
 function ReturnsPage() {
-  usePageMeta("Returns Policy", "Tier One BioSystems returns and refunds policy for research peptides.");
+  useRouteMeta("/returns");
   return (
     <>
       <PolicyShell kicker="POLICY" title="Returns & Refunds">
@@ -6827,7 +5310,7 @@ function ReturnsPage() {
 }
 
 function TermsPage() {
-  usePageMeta("Terms of Service", "Terms of service for Tier One BioSystems research peptide supply.");
+  useRouteMeta("/terms");
   return (
     <>
       <PolicyShell kicker="LEGAL" title="Terms of Service">
@@ -6857,7 +5340,7 @@ function TermsPage() {
 }
 
 function PrivacyPage() {
-  usePageMeta("Privacy Policy", "How Tier One BioSystems collects and handles personal data.");
+  useRouteMeta("/privacy");
   return (
     <>
       <PolicyShell kicker="LEGAL" title="Privacy Policy">
@@ -6892,7 +5375,7 @@ function PrivacyPage() {
 }
 
 function AboutPage() {
-  usePageMeta("About", "Tier One BioSystems — research-grade peptides with lot-level transparency, 99%+ purity, and US-based fulfillment.");
+  useRouteMeta("/about");
   return (
     <>
       <PolicyShell kicker="WHO WE ARE" title="About Tier One">
@@ -6918,7 +5401,7 @@ function AboutPage() {
 }
 
 function FAQPage() {
-  usePageMeta("FAQ", "Frequently asked questions about Tier One BioSystems research peptide products, ordering, shipping, and quality.");
+  useRouteMeta("/faq");
   const [openIdx, setOpenIdx] = useState(null);
   const items = [
     { q: "Are your products for human use?", a: "No. All Tier One BioSystems products are sold strictly for in-vitro laboratory research use only. They are not drugs, supplements, food, or cosmetics. They are not intended for human or animal consumption." },
@@ -6928,7 +5411,7 @@ function FAQPage() {
     { q: "Do you offer free shipping?", a: "Yes. Orders of $200 or more (after any discounts applied) ship free. Orders under $200 are charged a flat $10 shipping fee." },
     { q: "What payment methods do you accept?", a: "Currently Cash App ($TierOneBio) and Venmo (@TierOneBio). At checkout you'll select your preferred method and follow the on-screen instructions to complete payment." },
     { q: "Why don't you accept credit cards?", a: "Most major card processors restrict research peptide sales due to category-level policy. Cash App and Venmo allow us to keep the catalog accessible and prices low without surprise account terminations or held funds." },
-    { q: "How should I store the products?", a: "Lyophilized vials should be stored in a standard home freezer (0°F / -18°C) for long-term storage. Once reconstituted with bacteriostatic water, store refrigerated (35–46°F / 2–8°C) and use within the storage window listed on the product page." },
+    { q: "How should I store the products?", a: "Lyophilized vials should be stored in a laboratory freezer (0°F / -18°C) for long-term storage. Once reconstituted with bacteriostatic water, store refrigerated (35–46°F / 2–8°C) and use within the storage window listed on the product page." },
     { q: "Do you offer bulk discounts?", a: "Yes. Each product has a discounted per-vial price when you order 5 or more of the same compound and dose. The bulk price is shown on every product card and product page." },
     { q: "Do you ship internationally?", a: "Not at this time. We currently ship to the United States only." },
     { q: "What if my order arrives damaged?", a: "Contact us at sales@tierone.bio within 7 days of delivery with your order number and photos. We will replace or refund eligible damaged shipments." },
@@ -7009,7 +5492,7 @@ function FAQPage() {
 }
 
 function TestingStandardsPage() {
-  usePageMeta("Testing Standards", "How Tier One BioSystems verifies research peptide purity, identity, and safety. HPLC, ESI-MS, AAA, peptide content, and endotoxin testing explained.");
+  useRouteMeta("/testing-standards");
   const navigate = useNavigate();
   return (
     <>
@@ -7055,10 +5538,7 @@ function TestingStandardsPage() {
 }
 
 function ResearchPage() {
-  usePageMeta(
-    "Research",
-    "Peer-reviewed research summaries, peptide mechanism explainers, and educational articles from Tier One BioSystems — evidence-based content for qualified researchers."
-  );
+  useRouteMeta("/research");
   const navigate = useNavigate();
   const isMobile = window.innerWidth < 700;
   const sorted = publishedArticles().sort((a, b) => (b.date || "").localeCompare(a.date || ""));
@@ -7111,32 +5591,19 @@ function ArticlePage() {
   const { slug } = useParams();
   const article = getArticleBySlug(slug);
   const navigate = useNavigate();
+  // articleMeta() is the same helper the prerenderer uses, so the served HTML
+  // and the hydrated page always agree on this article's title.
+  const meta = article ? articleMeta(article) : null;
   usePageMeta(
-    article ? (article.metaTitle || article.title) : "Article Not Found",
-    article ? article.metaDescription : "",
-    { image: article?.heroImage, type: "article" }
+    meta ? meta.title : "Article Not Found",
+    meta ? meta.description : "",
+    { image: meta?.image, type: "article", noindex: !article }
   );
+  // Same graph the prerenderer bakes into this page's HTML, plus the breadcrumb
+  // trail that was missing before.
   useEffect(() => {
-    if (!article) return;
-    const DOMAIN = "https://www.tierone.bio";
-    const jsonld = {
-      "@context": "https://schema.org",
-      "@type": "Article",
-      "headline": article.title,
-      "description": article.metaDescription,
-      "image": article.heroImage ? `${DOMAIN}${article.heroImage}` : undefined,
-      "datePublished": article.date,
-      "dateModified": article.date,
-      "author": { "@type": "Organization", "name": article.author || "Tier One BioSystems" },
-      "publisher": { "@type": "Organization", "name": "Tier One BioSystems", "logo": { "@type": "ImageObject", "url": `${DOMAIN}/logo_transparent.png` } },
-      "mainEntityOfPage": { "@type": "WebPage", "@id": `${DOMAIN}/research/${article.slug}` },
-    };
-    const script = document.createElement("script");
-    script.type = "application/ld+json";
-    script.setAttribute("data-tier1-article", "true");
-    script.textContent = JSON.stringify(jsonld);
-    document.head.appendChild(script);
-    return () => { document.querySelectorAll('script[data-tier1-article]').forEach(el => el.remove()); };
+    if (!article) return undefined;
+    return applyRouteJsonLd(articleGraph(article));
   }, [article]);
   if (!article) return <NotFoundPage />;
   const isMobile = window.innerWidth < 700;
@@ -7171,7 +5638,9 @@ function ArticlePage() {
         )}
 
         <div className="article-body" style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 17, lineHeight: 1.8, color: "var(--text-secondary)" }}>
-          {article.content()}
+          <Suspense fallback={<p style={{ color: "var(--text-dim)" }}>Loading article…</p>}>
+            <ArticleBody slug={article.slug} />
+          </Suspense>
         </div>
 
         {article.references && article.references.length > 0 && (
@@ -7377,7 +5846,7 @@ const FEATURED_IDS = ["glp3rt-10", "tesamorelin", "bpc157-10", "tb500", "klow", 
 function HomePage({ onAddToCart, onSelectProduct }) {
   const navigate = useNavigate();
   const featuredProducts = FEATURED_IDS.map(id => PRODUCTS.find(p => p.id === id)).filter(Boolean);
-  usePageMeta(null, "Premium research grade peptides with 99%+ purity. Third-party tested. BPC-157, GLP-3RT, Tesamorelin, and more. US-based supplier.");
+  useRouteMeta("/");
   useScrollReveal();
   return (<>
     <Hero />
@@ -7444,7 +5913,7 @@ function HomePage({ onAddToCart, onSelectProduct }) {
 // Full Products Page
 function ProductsPage({ searchQuery, setSearchQuery, onAddToCart, onSelectProduct }) {
   const filtered = PRODUCTS.filter(p => searchQuery === "" || p.name.toLowerCase().includes(searchQuery.toLowerCase()));
-  usePageMeta("All Products", "Browse our full catalog of research grade peptides. 99%+ purity, third-party tested.");
+  useRouteMeta("/products");
   useScrollReveal();
   return (<>
     <section style={{ maxWidth: 1400, margin: "0 auto", padding: "120px 24px 80px" }}>
@@ -7531,10 +6000,21 @@ function ProductPage({ onAddToCart }) {
   const navigate = useNavigate();
   const { id } = useParams();
   const product = PRODUCTS.find(p => p.id === id);
+  // productMeta() is the same helper the prerenderer uses.
+  const meta = product ? productMeta(product) : null;
   usePageMeta(
-    product ? `${product.name} ${product.dose}` : "Product Not Found",
-    product ? `${product.name} ${product.dose} — ${product.research?.slice(0, 150)}` : ""
+    meta ? meta.title : "Product Not Found",
+    meta ? meta.description : "",
+    { image: meta?.image, noindex: !product }
   );
+  // Product schema for crawlers that DO run JavaScript. The prerendered HTML
+  // already carries the identical graph (both come from productGraph), so this
+  // replaces rather than duplicates it. Declared before the early return below
+  // — every hook in this file must run before any `if (...) return`.
+  useEffect(() => {
+    if (!product) return undefined;
+    return applyRouteJsonLd(productGraph(product));
+  }, [product]);
   const isMobile = window.innerWidth < 700;
   if (!product) return <NotFoundPage />;
   return (<>
@@ -7705,6 +6185,26 @@ function ProductPage({ onAddToCart }) {
             onMouseLeave={e => { e.target.style.background = "transparent"; }}
           >VIEW CERTIFICATE OF ANALYSIS</button>
         )}
+
+        {/* Say why there is no report here, rather than leaving a silent gap
+            where every other product shows one. */}
+        {isLabResultWithheld(product.name, product.dose) && (
+          <div style={{
+            marginTop: 28,
+            padding: "14px 16px",
+            border: "1px solid rgba(196,30,42,0.25)",
+            background: "rgba(196,30,42,0.04)",
+            fontFamily: "'Rajdhani', sans-serif",
+            fontSize: 15,
+            color: "var(--text-secondary)",
+            lineHeight: 1.6,
+          }}>
+            The analytical summary on file for this compound records a different vial quantity
+            than this listing, so we are withholding it until the original report has been
+            re-checked. Request the signed report for a specific lot at{" "}
+            <a href={`mailto:${CONTACT_EMAIL}`} style={{ color: "var(--red-primary)" }}>{CONTACT_EMAIL}</a>.
+          </div>
+        )}
       </div>
 
       {/* Molecular Profile */}
@@ -7747,11 +6247,13 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedProduct, setSelectedProduct] = useState(null);
   const navigate = useNavigate();
-  const [cart, setCart] = useState(() => {
-    try { const saved = localStorage.getItem("t1b-cart"); return saved ? JSON.parse(saved) : []; }
-    catch { return []; }
-  });
-  useEffect(() => { localStorage.setItem("t1b-cart", JSON.stringify(cart)); }, [cart]);
+  // Everything in localStorage is customer-editable, so the stored cart is
+  // treated as untrusted input and every line is rebuilt from the catalog.
+  const [cart, setCart] = useState(() => readStoredCart(localStorage));
+  useEffect(() => {
+    try { localStorage.setItem("t1b-cart", JSON.stringify(cart)); }
+    catch { /* Storage can be full or blocked; the in-memory cart still works. */ }
+  }, [cart]);
   const [cartPopupVisible, setCartPopupVisible] = useState(false);
   const cartPopupTimer = useRef(null);
   const location = useLocation();
@@ -7778,7 +6280,7 @@ export default function App() {
     setCart(prev => {
       const existing = prev.find(item => item.id === product.id);
       if (existing) {
-        return prev.map(item => item.id === product.id ? { ...item, qty: item.qty + 1 } : item);
+        return prev.map(item => item.id === product.id ? { ...item, qty: clampQuantity(item.qty + 1) } : item);
       }
       return [...prev, { ...product, qty: 1 }];
     });
@@ -7787,40 +6289,12 @@ export default function App() {
     cartPopupTimer.current = setTimeout(() => setCartPopupVisible(false), 4000);
   }
 
-  useEffect(() => {
-    const DOMAIN = "https://www.tierone.bio";
-    const jsonld = {
-      "@context": "https://schema.org",
-      "@graph": PRODUCTS.map(p => ({
-        "@type": "Product",
-        "@id": `${DOMAIN}/product/${p.id}`,
-        "name": `${p.name} ${p.dose}`,
-        "description": p.research,
-        "sku": p.id,
-        "mpn": p.id,
-        "brand": { "@type": "Brand", "name": "Tier One Bio" },
-        "image": [`${DOMAIN}/${p.id}.jpg`, `${DOMAIN}/logo.png`],
-        "url": `${DOMAIN}/product/${p.id}`,
-        "offers": {
-          "@type": "Offer",
-          "url": `${DOMAIN}/product/${p.id}`,
-          "price": applySale(p.price),
-          "priceCurrency": "USD",
-          "availability": "https://schema.org/InStock",
-          "priceValidUntil": "2027-12-31",
-          "seller": { "@type": "Organization", "name": "Tier One Bio" }
-        }
-      }))
-    };
-    const script = document.createElement("script");
-    script.type = "application/ld+json";
-    script.setAttribute("data-tier1-products", "true");
-    script.textContent = JSON.stringify(jsonld);
-    document.head.appendChild(script);
-    return () => {
-      document.querySelectorAll('script[data-tier1-products]').forEach(el => el.remove());
-    };
-  }, []);
+  // The global "every product on every page" JSON-LD that used to live here has
+  // been removed. It put all 27 Product entities on the cart, the login page and
+  // every article — structured data is supposed to describe the page it is on,
+  // and describing 27 products on a page showing none of them describes nothing.
+  // Product schema is now emitted per product page (see ProductPage), and baked
+  // into the prerendered HTML so it does not depend on JavaScript running.
 
   // Age denied screen
   if (ageDenied) {
@@ -7853,22 +6327,32 @@ export default function App() {
     );
   }
 
-  // Age verification gate
-  if (!ageVerified) {
-    return (
-      <AgeGate onConfirm={(isOldEnough) => {
-        if (isOldEnough) {
-          try { sessionStorage.setItem("ageVerified", "true"); } catch {}
-          setAgeVerified(true);
-        } else {
-          setAgeDenied(true);
-        }
-      }} />
-    );
-  }
-
+  // The age gate is an overlay ON TOP of the site, not a replacement for it.
+  //
+  // It used to `return <AgeGate />` instead of the app, which meant the page
+  // contained nothing but the gate until someone clicked a button. Crawlers do
+  // not click buttons, so every URL on the site rendered as a single modal with
+  // no content, no headings and no links — the gate was quietly acting as a
+  // sitewide noindex.
+  //
+  // Rendering the site underneath and covering it with a modal keeps the
+  // verification step intact for people while leaving the page itself readable.
+  // `inert` blocks interaction and removes the content beneath from the tab
+  // order, so the gate is not bypassable by keyboard while it is up.
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg-primary)" }}>
+      {!ageVerified && (
+        <AgeGate onConfirm={(isOldEnough) => {
+          if (isOldEnough) {
+            try { sessionStorage.setItem("ageVerified", "true"); }
+            catch { /* Session storage can be blocked; the gate simply reappears. */ }
+            setAgeVerified(true);
+          } else {
+            setAgeDenied(true);
+          }
+        }} />
+      )}
+      <div inert={!ageVerified ? "" : undefined}>
       <Header cartCount={cart.reduce((sum, i) => sum + i.qty, 0)} />
       <CartPopup cart={cart} visible={cartPopupVisible} onClose={() => setCartPopupVisible(false)} />
       {selectedProduct && (
@@ -7902,6 +6386,7 @@ export default function App() {
         <Route path="/privacy" element={<PrivacyPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
+      </div>
     </div>
   );
 }

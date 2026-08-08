@@ -1,1 +1,10 @@
-/*    /index.html   200
+# /checkout has always just bounced to /cart. With real 404s below it needs an
+# explicit rule, otherwise a bookmarked /checkout would start returning 404.
+/checkout   /cart   301
+
+# Every real route is prerendered to its own HTML file by scripts/prerender.js,
+# and Netlify serves a matching static file before it consults this rule. So
+# this line only catches URLs that genuinely do not exist — which now return a
+# real 404 instead of the old "200 OK plus a Not Found page", the thing that
+# made Google treat every typo'd URL as a thin duplicate of the homepage.
+/*    /404.html   404
