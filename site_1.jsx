@@ -2195,26 +2195,64 @@ function CountUp({ end, duration = 1500, suffix = "", prefix = "" }) {
 }
 
 // ─── Page Title & Meta Helper ─────────────────────────────────────────────────
-function usePageMeta(title, description) {
+const SITE_DOMAIN = "https://www.tierone.bio";
+
+// `image` is a site-relative path (e.g. "/bpc157-10.jpg"); `type` is the
+// OpenGraph type, "article" on research pages and "website" everywhere else.
+function usePageMeta(title, description, options = {}) {
+  const { image, type = "website" } = options;
   useEffect(() => {
     const suffix = " | Tier One BioSystems";
     const fullTitle = title ? title + suffix : "Tier One BioSystems — Research Grade Peptides";
     document.title = fullTitle;
-    const setMeta = (selector, value) => {
+
+    // Find-or-create. The previous version only wrote to tags that already
+    // existed in index.html and silently did nothing otherwise, which is why
+    // og:image never appeared on any page — the tag was never in the HTML.
+    const upsertMeta = (attr, key, value) => {
       if (!value) return;
-      const el = document.querySelector(selector);
-      if (el) el.setAttribute("content", value);
+      let el = document.head.querySelector(`meta[${attr}="${key}"]`);
+      if (!el) {
+        el = document.createElement("meta");
+        el.setAttribute(attr, key);
+        document.head.appendChild(el);
+      }
+      el.setAttribute("content", value);
     };
-    setMeta('meta[name="description"]', description);
-    setMeta('meta[property="og:title"]', fullTitle);
-    setMeta('meta[property="og:description"]', description);
-    setMeta('meta[property="og:url"]', window.location.href);
-    setMeta('meta[name="twitter:title"]', fullTitle);
-    setMeta('meta[name="twitter:description"]', description);
+
+    // The canonical URL has to name THIS page. index.html hardcodes the
+    // homepage, and nothing used to update it, so every article was telling
+    // Google "I am a duplicate of /" — an instruction to drop the article from
+    // the index in the homepage's favour. Query strings and trailing slashes
+    // are stripped so ?ref=... variants collapse onto one canonical address.
+    const path = window.location.pathname.replace(/\/+$/, "");
+    const canonical = `${SITE_DOMAIN}${path || "/"}`;
+    let link = document.head.querySelector('link[rel="canonical"]');
+    if (!link) {
+      link = document.createElement("link");
+      link.setAttribute("rel", "canonical");
+      document.head.appendChild(link);
+    }
+    link.setAttribute("href", canonical);
+
+    const absoluteImage = image
+      ? (image.startsWith("http") ? image : `${SITE_DOMAIN}${image}`)
+      : `${SITE_DOMAIN}/logo-wide.png`;
+
+    upsertMeta("name", "description", description);
+    upsertMeta("property", "og:title", fullTitle);
+    upsertMeta("property", "og:description", description);
+    upsertMeta("property", "og:url", canonical);
+    upsertMeta("property", "og:type", type);
+    upsertMeta("property", "og:image", absoluteImage);
+    upsertMeta("name", "twitter:title", fullTitle);
+    upsertMeta("name", "twitter:description", description);
+    upsertMeta("name", "twitter:image", absoluteImage);
+
     return () => {
       document.title = "Tier One BioSystems — Research Grade Peptides";
     };
-  }, [title, description]);
+  }, [title, description, image, type]);
 }
 
 // ─── Fonts via CDN ───────────────────────────────────────────────────────────
@@ -7069,7 +7107,8 @@ function ArticlePage() {
   const navigate = useNavigate();
   usePageMeta(
     article ? (article.metaTitle || article.title) : "Article Not Found",
-    article ? article.metaDescription : ""
+    article ? article.metaDescription : "",
+    { image: article?.heroImage, type: "article" }
   );
   useEffect(() => {
     if (!article) return;
