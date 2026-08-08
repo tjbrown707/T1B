@@ -35,6 +35,12 @@ import {
 } from "./src/data/pricing.js";
 import { getLabResults, isLabResultWithheld } from "./src/data/lab-integrity.js";
 import { readStoredCart, clampQuantity, MAX_CART_QUANTITY } from "./src/data/cart.js";
+import {
+  lineUnitPrice,
+  orderTotals,
+  FREE_SHIPPING_THRESHOLD,
+  isShippingDiscountCode,
+} from "./src/data/order-totals.js";
 
 // ─── Molecular Profiles (per compound) ────────────────────────────────────────
 const MOLECULAR_PROFILES = {
@@ -730,16 +736,9 @@ function CartPopup({ cart, visible, onClose }) {
   const navigate = useNavigate();
   if (!visible || cart.length === 0) return null;
 
-  const tieredPrice = (item) => {
-    // Resolved from the catalog, not from the (editable) stored cart item.
-    const { price, bulk } = catalogPrices(item);
-    let base;
-    if (item.qty >= 25) base = Math.round(bulk * 0.90 * 100) / 100;
-    else if (item.qty >= 10) base = Math.round(bulk * 0.95 * 100) / 100;
-    else if (item.qty >= 5) base = bulk;
-    else base = price;
-    return isSaleActive() ? applySale(base) : base;
-  };
+  // Pricing comes from src/data/order-totals.js so the popup, the checkout and
+  // the server all quote the same figure.
+  const tieredPrice = lineUnitPrice;
   const subtotal = cart.reduce((sum, item) => sum + tieredPrice(item) * item.qty, 0);
   const totalItems = cart.reduce((sum, i) => sum + i.qty, 0);
 
@@ -2569,41 +2568,22 @@ function CartPage({ cart, setCart }) {
     );
   }
 
-  // Calculate price per item with tiered bulk discounts
-  // 1-4: regular price | 5-9: bulk | 10-24: bulk -5% | 25+: bulk -10%
-  // Sitewide sale (if active) is applied on top of the resulting price.
-  function getItemPrice(item) {
-    // Prices are resolved from the catalog, never from the stored cart item.
-    const { price, bulk } = catalogPrices(item);
-    let base;
-    if (item.qty >= 25) base = Math.round(bulk * 0.90 * 100) / 100;
-    else if (item.qty >= 10) base = Math.round(bulk * 0.95 * 100) / 100;
-    else if (item.qty >= 5) base = bulk;
-    else base = price;
-    return isSaleActive() ? applySale(base) : base;
-  }
+  // Tiered bulk pricing lives in src/data/order-totals.js — one definition
+  // shared by this page, the cart popup and the server-side order function.
+  const getItemPrice = lineUnitPrice;
 
-  const subtotal = cart.reduce((sum, item) => sum + getItemPrice(item) * item.qty, 0);
-
-  // Calculate discount amount based on applied code
-  const discountAmount = appliedDiscount
-    ? appliedDiscount.type === "percent"
-      ? Math.min(subtotal, subtotal * (appliedDiscount.value / 100))
-      : Math.min(subtotal, appliedDiscount.value)
-    : 0;
-  const subtotalAfterDiscount = Math.max(0, subtotal - discountAmount);
-
-  // Shipping: $10 flat, free at $200+, also free if a shipping discount code is applied
-  const shipping = cart.length === 0
-    ? 0
-    : appliedShipping
-      ? 0
-      : (subtotalAfterDiscount >= 200 ? 0 : 10);
-  const total = subtotalAfterDiscount + shipping;
+  // The figures shown here come from the same function create-order uses to
+  // price the order, so what the customer is quoted is what the server records.
+  // If these ever disagreed, the customer would be shown one total and charged
+  // another.
+  const { subtotal, discountAmount, subtotalAfterDiscount, shipping, total } = orderTotals(cart, {
+    discount: appliedDiscount,
+    freeShipping: !!appliedShipping,
+  });
 
   // Codes that unlock the free-shipping slot instead of the regular discount slot
-  const SHIPPING_DISCOUNT_CODES = ["SHIP4FREE"];
-  const isShippingDiscount = (code) => SHIPPING_DISCOUNT_CODES.includes(code);
+  // Shared with the server so a code is classified the same way in both places.
+  const isShippingDiscount = isShippingDiscountCode;
 
   async function applyDiscountCode() {
     if (isSaleActive()) {
@@ -2798,31 +2778,13 @@ function CartPage({ cart, setCart }) {
     const { name, email, phone, address, city, state, zip } = customerInfo;
 
     // Build order items text
-    const itemsText = cart.map(item => {
-      const unitPrice = getItemPrice(item);
-      const isBulk = item.qty >= 5;
-      return `${item.name} ${item.dose} x${item.qty} @ $${unitPrice.toFixed(2)}${isBulk ? " (bulk)" : ""} = $${(unitPrice * item.qty).toFixed(2)}`;
-    }).join("\n");
-
-    // Structured line items for the database record (logged-in customers).
-    const itemsStructured = cart.map(item => {
-      const unitPrice = getItemPrice(item);
-      return {
-        id: item.id,
-        name: item.name,
-        dose: item.dose,
-        qty: item.qty,
-        unitPrice,
-        lineTotal: Math.round(unitPrice * item.qty * 100) / 100,
-        bulk: item.qty >= 5,
-      };
-    });
+    const discountCodes = [appliedDiscount?.code, appliedShipping?.code].filter(Boolean);
 
     // Submit to Netlify Forms
     const formData = new URLSearchParams();
     formData.append("form-name", "order");
     formData.append("bot-field", "");
-    formData.append("orderStatus", "CONFIRMED");
+    formData.append("orderStatus", "AWAITING PAYMENT");
     formData.append("orderNumber", orderNumber);
     formData.append("customerName", name);
     formData.append("customerEmail", email);
@@ -2831,59 +2793,50 @@ function CartPage({ cart, setCart }) {
     formData.append("shippingCity", city);
     formData.append("shippingState", state);
     formData.append("shippingZip", zip);
-    formData.append("orderItems", itemsText);
-    formData.append("orderSubtotal", `$${subtotal.toFixed(2)}`);
-    formData.append("discountCode", [appliedDiscount?.code, appliedShipping?.code].filter(Boolean).join(", "));
-    formData.append("discountAmount", appliedDiscount ? `-$${discountAmount.toFixed(2)}` : "");
-    formData.append("shipping", shipping === 0 ? "FREE" : `$${shipping.toFixed(2)}`);
     formData.append("paymentMethod", paymentMethod === "venmo" ? "Venmo" : "Cash App");
-    formData.append("orderTotal", `$${total.toFixed(2)}`);
     // Recorded so there is evidence the acknowledgement was given for this order.
     formData.append("researchUseAcknowledged", researchAcknowledged ? "yes" : "no");
+    // The money fields are appended after the server has priced the order, so
+    // that the notification the owner fulfils from carries the server's figures
+    // rather than the browser's.
 
-    // ── Durable writes. A failure here means the order does not exist, so it
-    //    must stop the flow rather than be logged and stepped over. ──────────
+    // ── The order is created and priced by the server. ────────────────────
+    // Only product ids and quantities are sent: every figure below comes back
+    // from create-order, which recomputes them from the catalog. The function
+    // writes through a UNIQUE constraint on order_number, so pressing Confirm
+    // again — or after a refresh, which the old in-memory guard could not
+    // survive — returns the original order rather than creating a second one.
+    let confirmed;
     try {
-      // Signed-in customers get a row in their own order history. Guests can't
-      // (RLS requires an authenticated user), so for them the Netlify Forms
-      // submission below is the order of record.
-      if (user && !submission.supabase) {
-        const { error } = await supabase.from("orders").insert({
-          user_id: user.id,
-          order_number: orderNumber,
-          status: "CONFIRMED",
-          items: itemsStructured,
-          items_text: itemsText,
-          subtotal: Math.round(subtotal * 100) / 100,
-          discount_code: [appliedDiscount?.code, appliedShipping?.code].filter(Boolean).join(", ") || null,
-          discount_amount: Math.round(discountAmount * 100) / 100,
-          shipping: shipping,
-          total: Math.round(total * 100) / 100,
-          payment_method: paymentMethod === "venmo" ? "Venmo" : "Cash App",
-          customer_name: name,
-          customer_email: email,
-          customer_phone: phone,
-          ship_address: address,
-          ship_city: city,
-          ship_state: state,
-          ship_zip: zip,
-        });
-        if (error) throw new Error(`order history: ${error.message}`);
-        submission.supabase = true;
-      }
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
 
-      if (!submission.netlify) {
-        const res = await fetch("/", {
-          method: "POST",
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: formData.toString(),
-        });
-        if (!res.ok) throw new Error(`order notification: HTTP ${res.status}`);
-        submission.netlify = true;
+      const res = await fetch("/.netlify/functions/create-order", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
+        body: JSON.stringify({
+          orderNumber,
+          items: cart.map(item => ({ id: item.id, qty: item.qty })),
+          customer: { name, email, phone, address, city, state, zip },
+          paymentMethod,
+          discountCodes,
+          researchAcknowledged,
+        }),
+      });
+
+      const payload = await res.json().catch(() => null);
+      if (!res.ok || !payload?.ok) {
+        throw new Error(payload?.error || `order service: HTTP ${res.status}`);
       }
+      confirmed = payload;
+      submission.supabase = true;
     } catch (err) {
       console.error("Order save error:", err);
       setOrderSubmitError(
+        (err?.message && !/HTTP \d+/.test(err.message) ? `${err.message} ` : "") +
         `We could not confirm your order, so we have not cleared your cart. Nothing has been lost — ` +
         `press Confirm again to retry. If it keeps failing, email ${CONTACT_EMAIL} quoting ${orderNumber} ` +
         `and we will finish it by hand.`
@@ -2891,6 +2844,34 @@ function CartPage({ cart, setCart }) {
       submittingRef.current = false;
       setOrderSubmitting(false);
       return;
+    }
+
+    // The order now exists with these figures. Everything downstream quotes
+    // the server's numbers, not the browser's.
+    const itemsText = confirmed.itemsText;
+    const serverTotals = confirmed.totals;
+
+    formData.append("orderItems", itemsText);
+    formData.append("orderSubtotal", `$${serverTotals.subtotal.toFixed(2)}`);
+    formData.append("discountCode", discountCodes.join(", "));
+    formData.append("discountAmount", serverTotals.discountAmount > 0 ? `-$${serverTotals.discountAmount.toFixed(2)}` : "");
+    formData.append("shipping", serverTotals.shipping === 0 ? "FREE" : `$${serverTotals.shipping.toFixed(2)}`);
+    formData.append("orderTotal", `$${serverTotals.total.toFixed(2)}`);
+
+    // Notifies the owner for fulfilment. The order is already saved, so a
+    // failure here is reported without discarding it.
+    if (!submission.netlify) {
+      try {
+        const res = await fetch("/", {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: formData.toString(),
+        });
+        submission.netlify = res.ok;
+        if (!res.ok) console.error("Order notification failed:", res.status);
+      } catch (err) {
+        console.error("Order notification error:", err);
+      }
     }
 
     // ── Past this point the order exists. Everything below can be redone by
@@ -4087,13 +4068,13 @@ function CartPage({ cart, setCart }) {
                 {shipping === 0 ? "FREE" : `$${shipping.toFixed(2)}`}
               </span>
             </div>
-            {shipping > 0 && subtotalAfterDiscount < 200 && (
+            {shipping > 0 && subtotalAfterDiscount < FREE_SHIPPING_THRESHOLD && (
               <div style={{
                 fontFamily: "'Rajdhani', sans-serif",
                 fontSize: 13,
                 color: "var(--text-dim)",
                 fontStyle: "italic",
-              }}>Add ${(200 - subtotalAfterDiscount).toFixed(2)} more for free shipping</div>
+              }}>Add ${(FREE_SHIPPING_THRESHOLD - subtotalAfterDiscount).toFixed(2)} more for free shipping</div>
             )}
           </div>
 

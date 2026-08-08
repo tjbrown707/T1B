@@ -71,8 +71,21 @@ called before any `if (...) return`. React counts hooks per render and a mismatc
 the page.
 
 **Never trust prices on a cart item.** The cart is persisted to `localStorage` and is
-customer-editable. Always resolve price/bulk from the `PRODUCTS` catalog via
-`catalogPrices(item)`. Reading `item.price` directly is a price-tampering hole.
+customer-editable. All order arithmetic lives in one place — `src/data/order-totals.js`
+(`lineUnitPrice`, `orderTotals`, `orderLineItems`) — and resolves price/bulk from the
+`PRODUCTS` catalog by id. Do not write a fourth copy of the bulk-tier rule; it already
+existed twice and was about to exist three times.
+
+**Orders are created and priced by the server.** `netlify/functions/create-order.js` is
+the authority: the browser sends only product ids and quantities, and the function
+recomputes every figure from the catalog, re-validates any discount code, and writes
+through a `UNIQUE (order_number)` constraint so a retry — including after a refresh or
+from another device — returns the original order instead of creating a second. The client
+reports success only on a 2xx, and clears the cart last of all. Do not reintroduce a
+direct `supabase.from("orders").insert()` from the browser.
+
+Order status is recorded as `AWAITING PAYMENT`, not `CONFIRMED`: the customer has said
+they sent payment via Cash App or Venmo, and nobody has verified it arrived.
 
 **Do not define components inside other components.** `HomePage` / `ProductsPage` /
 `ProductPage` were once nested inside `App`, which remounted the whole page on every
