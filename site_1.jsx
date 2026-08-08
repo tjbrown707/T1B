@@ -1227,6 +1227,10 @@ function getReferences(productName) {
 // Long-form research review articles, keyed by URL slug. Adding a new article =
 // adding a new entry to this array. Each `content` is a function returning JSX
 // so we can keep articles readable inline.
+// ARTICLES:START — do not remove. scripts/check-diff-scope.js uses these two
+// markers to decide which lines an automated article PR is allowed to touch.
+// Bracket-matching the array would be fooled by brackets inside JSX and
+// strings; a literal sentinel cannot be.
 const ARTICLES = [
   {
     slug: "bpc-157-mechanism-of-action",
@@ -2110,6 +2114,7 @@ const ARTICLES = [
     relatedProductIds: ["epitalon", "nad", "motsc"],
   },
 ];
+// ARTICLES:END — do not remove. See the note at ARTICLES:START.
 
 // ─── Scheduled publishing ────────────────────────────────────────────────────
 // An article whose `date` is in the future is written and shipped in the bundle
