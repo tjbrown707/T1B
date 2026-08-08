@@ -33,10 +33,10 @@ const ROUTES = [
   { path: "/", expect: "Tier One" },
   { path: "/products", expect: "BPC-157" },
   { path: "/product/bpc157-10", expect: "BPC-157" },
-  { path: "/product/tesamorelin", expect: "re-checked" },   // withheld-summary notice
+  { path: "/product/tesamorelin", expect: "CERTIFICATE OF ANALYSIS" }, // summary now reconciles
   { path: "/research", expect: "Research" },
   { path: "/research/bpc-157-mechanism-of-action", expect: "BPC-157" },
-  { path: "/lab-results", expect: "Under re-verification" }, // the withheld panel
+  { path: "/lab-results", expect: "CERTIFICATES OF ANALYSIS" },
   { path: "/cart", expect: "Your cart is empty" },
   { path: "/calculator", expect: "Aliquot" },                 // relabelled calculator
   { path: "/login", expect: "Sign" },

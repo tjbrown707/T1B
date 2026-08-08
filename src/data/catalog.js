@@ -14,9 +14,9 @@ export const PRODUCTS = [
     bulk: 50,
     image: "/glp3rt-5.jpg",
     category: "Metabolic",
-    research: "GLP-3RT is a research compound targeting the GLP-1 receptor pathway. Preclinical studies suggest it may influence glucose metabolism, appetite signaling, and energy homeostasis. Researchers have observed its potential role in modulating incretin hormone activity, which plays a key role in metabolic regulation. Studies in animal models have demonstrated dose-dependent effects on food intake and body composition parameters.",
+    research: "GLP-3RT is a research compound targeting the GLP-1 receptor pathway. Preclinical studies suggest it may influence glucose metabolism, appetite signaling, and energy homeostasis. Researchers have observed its potential role in modulating incretin hormone activity, which plays a key role in metabolic regulation. Studies in animal models have demonstrated dose-dependent effects on food intake and on adiposity and lean-mass measures.",
     sequence: "Modified GLP-1 receptor targeting peptide",
-    storage: "Store powder in a laboratory freezer (0°F / -18°C). Once reconstituted, refrigerate (35–46°F / 2–8°C) and use within 4 weeks.",
+    storage: "Store lyophilized material at -18°C or below in a controlled laboratory freezer. Reconstituted solution: hold at 2–8°C; validated stability window 4 weeks.",
     purity: "99%+",
   },
   {
@@ -27,9 +27,9 @@ export const PRODUCTS = [
     bulk: 80,
     image: "/glp3rt-10.jpg",
     category: "Metabolic",
-    research: "GLP-3RT is a research compound targeting the GLP-1 receptor pathway. Preclinical studies suggest it may influence glucose metabolism, appetite signaling, and energy homeostasis. Researchers have observed its potential role in modulating incretin hormone activity, which plays a key role in metabolic regulation. Studies in animal models have demonstrated dose-dependent effects on food intake and body composition parameters.",
+    research: "GLP-3RT is a research compound targeting the GLP-1 receptor pathway. Preclinical studies suggest it may influence glucose metabolism, appetite signaling, and energy homeostasis. Researchers have observed its potential role in modulating incretin hormone activity, which plays a key role in metabolic regulation. Studies in animal models have demonstrated dose-dependent effects on food intake and on adiposity and lean-mass measures.",
     sequence: "Modified GLP-1 receptor targeting peptide",
-    storage: "Store powder in a laboratory freezer (0°F / -18°C). Once reconstituted, refrigerate (35–46°F / 2–8°C) and use within 4 weeks.",
+    storage: "Store lyophilized material at -18°C or below in a controlled laboratory freezer. Reconstituted solution: hold at 2–8°C; validated stability window 4 weeks.",
     purity: "99%+",
   },
   {
@@ -40,9 +40,9 @@ export const PRODUCTS = [
     bulk: 130,
     image: "/glp3rt-20.jpg",
     category: "Metabolic",
-    research: "GLP-3RT is a research compound targeting the GLP-1 receptor pathway. Preclinical studies suggest it may influence glucose metabolism, appetite signaling, and energy homeostasis. Researchers have observed its potential role in modulating incretin hormone activity, which plays a key role in metabolic regulation. Studies in animal models have demonstrated dose-dependent effects on food intake and body composition parameters.",
+    research: "GLP-3RT is a research compound targeting the GLP-1 receptor pathway. Preclinical studies suggest it may influence glucose metabolism, appetite signaling, and energy homeostasis. Researchers have observed its potential role in modulating incretin hormone activity, which plays a key role in metabolic regulation. Studies in animal models have demonstrated dose-dependent effects on food intake and on adiposity and lean-mass measures.",
     sequence: "Modified GLP-1 receptor targeting peptide",
-    storage: "Store powder in a laboratory freezer (0°F / -18°C). Once reconstituted, refrigerate (35–46°F / 2–8°C) and use within 4 weeks.",
+    storage: "Store lyophilized material at -18°C or below in a controlled laboratory freezer. Reconstituted solution: hold at 2–8°C; validated stability window 4 weeks.",
     purity: "99%+",
   },
   {
@@ -53,9 +53,9 @@ export const PRODUCTS = [
     bulk: 165,
     image: "/glp3rt-30.jpg",
     category: "Metabolic",
-    research: "GLP-3RT is a research compound targeting the GLP-1 receptor pathway. Preclinical studies suggest it may influence glucose metabolism, appetite signaling, and energy homeostasis. Researchers have observed its potential role in modulating incretin hormone activity, which plays a key role in metabolic regulation. Studies in animal models have demonstrated dose-dependent effects on food intake and body composition parameters.",
+    research: "GLP-3RT is a research compound targeting the GLP-1 receptor pathway. Preclinical studies suggest it may influence glucose metabolism, appetite signaling, and energy homeostasis. Researchers have observed its potential role in modulating incretin hormone activity, which plays a key role in metabolic regulation. Studies in animal models have demonstrated dose-dependent effects on food intake and on adiposity and lean-mass measures.",
     sequence: "Modified GLP-1 receptor targeting peptide",
-    storage: "Store powder in a laboratory freezer (0°F / -18°C). Once reconstituted, refrigerate (35–46°F / 2–8°C) and use within 4 weeks.",
+    storage: "Store lyophilized material at -18°C or below in a controlled laboratory freezer. Reconstituted solution: hold at 2–8°C; validated stability window 4 weeks.",
     purity: "99%+",
   },
   {
@@ -66,9 +66,9 @@ export const PRODUCTS = [
     bulk: 70,
     image: "/tesamorelin.jpg",
     category: "Growth Hormone Axis",
-    research: "Tesamorelin is a synthetic analog of growth hormone-releasing hormone (GHRH). Research indicates it stimulates the pituitary gland to produce growth hormone in a pulsatile, physiological manner. Published studies have examined its effects on visceral adipose tissue reduction and lipid metabolism. It has been the subject of clinical research for its impact on body composition in various metabolic conditions.",
+    research: "Tesamorelin is a synthetic analog of growth hormone-releasing hormone (GHRH). Research indicates it stimulates the pituitary gland to produce growth hormone in a pulsatile, physiological manner. Published studies have examined its effects on visceral adipose tissue reduction and lipid metabolism. It has been the subject of clinical research for its impact on adiposity and lean mass in various metabolic conditions.",
     sequence: "Modified GHRH (1-44) amide",
-    storage: "Store powder in a laboratory freezer (0°F / -18°C). Once reconstituted, refrigerate (35–46°F / 2–8°C) and use within 3 weeks.",
+    storage: "Store lyophilized material at -18°C or below in a controlled laboratory freezer. Reconstituted solution: hold at 2–8°C; validated stability window 3 weeks.",
     purity: "99%+",
   },
   {
@@ -81,7 +81,7 @@ export const PRODUCTS = [
     category: "Growth Hormone Axis",
     research: "CJC-1295 is a synthetic GHRH analog with Drug Affinity Complex (DAC) technology, extending its half-life. Ipamorelin is a selective growth hormone secretagogue that mimics ghrelin. When combined, research suggests a synergistic effect on GH release via complementary mechanisms — CJC-1295 amplifies the GH pulse while Ipamorelin triggers it. Preclinical data indicates this combination promotes pulsatile GH secretion while minimizing cortisol and prolactin elevation.",
     sequence: "CJC-1295: Modified GHRH (1-29) | Ipamorelin: Aib-His-D-2-Nal-D-Phe-Lys-NH₂",
-    storage: "Store powder in a laboratory freezer (0°F / -18°C). Once reconstituted, refrigerate (35–46°F / 2–8°C) and use within 4 weeks.",
+    storage: "Store lyophilized material at -18°C or below in a controlled laboratory freezer. Reconstituted solution: hold at 2–8°C; validated stability window 4 weeks.",
     purity: "99%+",
   },
   {
@@ -94,7 +94,7 @@ export const PRODUCTS = [
     category: "Tissue Repair",
     research: "BPC-157 (Body Protection Compound-157) is a pentadecapeptide derived from human gastric juice. Extensive preclinical research demonstrates its involvement in angiogenesis, wound healing, and tissue repair across muscle, tendon, ligament, and nerve tissues. Studies suggest it modulates the nitric oxide system, upregulates growth factor expression, and interacts with the dopaminergic system. It has shown cytoprotective properties in various organ systems in animal models.",
     sequence: "Gly-Glu-Pro-Pro-Pro-Gly-Lys-Pro-Ala-Asp-Asp-Ala-Gly-Leu-Val",
-    storage: "Store powder in a laboratory freezer (0°F / -18°C). Once reconstituted, refrigerate (35–46°F / 2–8°C) and use within 4 weeks.",
+    storage: "Store lyophilized material at -18°C or below in a controlled laboratory freezer. Reconstituted solution: hold at 2–8°C; validated stability window 4 weeks.",
     purity: "99%+",
   },
   {
@@ -107,7 +107,7 @@ export const PRODUCTS = [
     category: "Tissue Repair",
     research: "BPC-157 (Body Protection Compound-157) is a pentadecapeptide derived from human gastric juice. Extensive preclinical research demonstrates its involvement in angiogenesis, wound healing, and tissue repair across muscle, tendon, ligament, and nerve tissues. Studies suggest it modulates the nitric oxide system, upregulates growth factor expression, and interacts with the dopaminergic system. It has shown cytoprotective properties in various organ systems in animal models.",
     sequence: "Gly-Glu-Pro-Pro-Pro-Gly-Lys-Pro-Ala-Asp-Asp-Ala-Gly-Leu-Val",
-    storage: "Store powder in a laboratory freezer (0°F / -18°C). Once reconstituted, refrigerate (35–46°F / 2–8°C) and use within 4 weeks.",
+    storage: "Store lyophilized material at -18°C or below in a controlled laboratory freezer. Reconstituted solution: hold at 2–8°C; validated stability window 4 weeks.",
     purity: "99%+",
   },
   {
@@ -120,7 +120,7 @@ export const PRODUCTS = [
     category: "Tissue Repair",
     research: "TB-500 is a synthetic fraction of the naturally occurring thymosin beta-4 protein. Research has demonstrated its role in cell migration, blood vessel formation, and regulation of actin — a key cell-building protein. Preclinical studies indicate TB-500 promotes tissue repair by upregulating cell-building proteins, reducing inflammation, and facilitating new blood vessel growth. It has been studied for its effects on wound healing, cardiac tissue repair, and musculoskeletal recovery.",
     sequence: "Synthetic fragment of Thymosin Beta-4 (Tβ4)",
-    storage: "Store powder in a laboratory freezer (0°F / -18°C). Once reconstituted, refrigerate (35–46°F / 2–8°C) and use within 4 weeks.",
+    storage: "Store lyophilized material at -18°C or below in a controlled laboratory freezer. Reconstituted solution: hold at 2–8°C; validated stability window 4 weeks.",
     purity: "99%+",
   },
   {
@@ -133,7 +133,7 @@ export const PRODUCTS = [
     category: "Cellular & Mitochondrial",
     research: "Epitalon (Epithalon) is a synthetic tetrapeptide based on the natural epithalamin peptide produced by the pineal gland. Research has focused on its potential to activate telomerase, the enzyme responsible for maintaining telomere length — a key biomarker of cellular aging. Studies by Professor Khavinson demonstrated increased telomerase activity and telomere elongation in human somatic cells. Additional research suggests effects on melatonin production, circadian rhythm regulation, and antioxidant enzyme activity.",
     sequence: "Ala-Glu-Asp-Gly",
-    storage: "Store powder in a laboratory freezer (0°F / -18°C). Once reconstituted, refrigerate (35–46°F / 2–8°C) and use within 6 weeks.",
+    storage: "Store lyophilized material at -18°C or below in a controlled laboratory freezer. Reconstituted solution: hold at 2–8°C; validated stability window 6 weeks.",
     purity: "99%+",
   },
   {
@@ -146,7 +146,7 @@ export const PRODUCTS = [
     category: "Cellular & Mitochondrial",
     research: "GHK-Cu (copper peptide) is a naturally occurring tripeptide with high affinity for copper(II) ions. Found in human plasma, saliva, and urine, its concentration declines with age. Research demonstrates it modulates over 4,000 human genes, promoting tissue remodeling, anti-inflammatory responses, and stem cell attraction to injury sites. Studies have examined its role in collagen synthesis, wound healing, skin regeneration, hair growth, and antioxidant defense mechanisms.",
     sequence: "Gly-His-Lys-Cu²⁺",
-    storage: "Store powder in a laboratory freezer (0°F / -18°C), away from light. Once reconstituted, refrigerate (35–46°F / 2–8°C) and use within 2 weeks.",
+    storage: "Store lyophilized material at -18°C or below in a controlled laboratory freezer, protected from light. Reconstituted solution: hold at 2–8°C; validated stability window 2 weeks.",
     purity: "99%+",
   },
   {
@@ -159,7 +159,7 @@ export const PRODUCTS = [
     category: "Cellular & Mitochondrial",
     research: "GHK-Cu (copper peptide) is a naturally occurring tripeptide with high affinity for copper(II) ions. Found in human plasma, saliva, and urine, its concentration declines with age. Research demonstrates it modulates over 4,000 human genes, promoting tissue remodeling, anti-inflammatory responses, and stem cell attraction to injury sites. Studies have examined its role in collagen synthesis, wound healing, skin regeneration, hair growth, and antioxidant defense mechanisms.",
     sequence: "Gly-His-Lys-Cu²⁺",
-    storage: "Store powder in a laboratory freezer (0°F / -18°C), away from light. Once reconstituted, refrigerate (35–46°F / 2–8°C) and use within 2 weeks.",
+    storage: "Store lyophilized material at -18°C or below in a controlled laboratory freezer, protected from light. Reconstituted solution: hold at 2–8°C; validated stability window 2 weeks.",
     purity: "99%+",
   },
   {
@@ -172,7 +172,7 @@ export const PRODUCTS = [
     category: "Cellular & Mitochondrial",
     research: "SS-31 (Elamipretide) is a mitochondria-targeted tetrapeptide that selectively concentrates in the inner mitochondrial membrane. Research demonstrates it binds to cardiolipin, stabilizing the electron transport chain and reducing reactive oxygen species production. Preclinical studies show improved mitochondrial function, enhanced ATP production, and reduced oxidative stress. It has been investigated for age-related mitochondrial dysfunction, cardiac and renal conditions, and neurodegenerative research models.",
     sequence: "D-Arg-Dmt-Lys-Phe-NH₂",
-    storage: "Store powder in a laboratory freezer (0°F / -18°C). Once reconstituted, refrigerate (35–46°F / 2–8°C) and use within 4 weeks.",
+    storage: "Store lyophilized material at -18°C or below in a controlled laboratory freezer. Reconstituted solution: hold at 2–8°C; validated stability window 4 weeks.",
     purity: "99%+",
   },
   {
@@ -183,9 +183,9 @@ export const PRODUCTS = [
     bulk: 30,
     image: "/ipamorelin.jpg",
     category: "Growth Hormone Axis",
-    research: "Ipamorelin is a selective growth hormone secretagogue receptor (GHS-R) agonist and one of the most selective GH-releasing peptides studied. Unlike other GHRPs, research indicates it does not significantly elevate cortisol, acetylcholine, prolactin, or aldosterone levels at effective doses. Studies demonstrate dose-dependent GH release with a favorable selectivity profile. It has been researched for its effects on bone density, body composition, and growth hormone pulsatility.",
+    research: "Ipamorelin is a selective growth hormone secretagogue receptor (GHS-R) agonist and one of the most selective GH-releasing peptides studied. Unlike other GHRPs, research indicates it does not significantly elevate cortisol, acetylcholine, prolactin, or aldosterone levels at effective doses. Studies demonstrate dose-dependent GH release with a favorable selectivity profile. It has been researched for its effects on bone density, lean-mass and adiposity measures, and growth hormone pulsatility.",
     sequence: "Aib-His-D-2-Nal-D-Phe-Lys-NH₂",
-    storage: "Store powder in a laboratory freezer (0°F / -18°C). Once reconstituted, refrigerate (35–46°F / 2–8°C) and use within 4 weeks.",
+    storage: "Store lyophilized material at -18°C or below in a controlled laboratory freezer. Reconstituted solution: hold at 2–8°C; validated stability window 4 weeks.",
     purity: "99%+",
   },
   {
@@ -198,7 +198,7 @@ export const PRODUCTS = [
     category: "Endocrine",
     research: "Kisspeptin is a neuropeptide encoded by the KISS1 gene and is a key regulator of the hypothalamic-pituitary-gonadal (HPG) axis. Research demonstrates it stimulates GnRH neurons, triggering the release of luteinizing hormone (LH) and follicle-stimulating hormone (FSH). Studies have examined its role in puberty onset, reproductive function, and as a diagnostic tool for reproductive disorders. It has been investigated for its effects on testosterone production and fertility markers.",
     sequence: "Kisspeptin-10 (KISS1 derived)",
-    storage: "Store powder in a laboratory freezer (0°F / -18°C). Once reconstituted, refrigerate (35–46°F / 2–8°C) and use within 3 weeks.",
+    storage: "Store lyophilized material at -18°C or below in a controlled laboratory freezer. Reconstituted solution: hold at 2–8°C; validated stability window 3 weeks.",
     purity: "99%+",
   },
   {
@@ -211,7 +211,7 @@ export const PRODUCTS = [
     category: "Cellular & Mitochondrial",
     research: "MOTS-c (Mitochondrial Open Reading Frame of the Twelve S rRNA type-c) is a mitochondrial-derived peptide. Research led by Dr. Pinchas Cohen identified it as a key regulator of metabolic homeostasis. Studies demonstrate it activates AMPK, enhances glucose uptake, improves insulin sensitivity, and regulates fatty acid metabolism. It has been described as an exercise mimetic, with research showing it translocates to the nucleus during metabolic stress to regulate adaptive gene expression.",
     sequence: "16-amino acid mitochondrial-derived peptide",
-    storage: "Store powder in a laboratory freezer (0°F / -18°C). Once reconstituted, refrigerate (35–46°F / 2–8°C) and use within 4 weeks.",
+    storage: "Store lyophilized material at -18°C or below in a controlled laboratory freezer. Reconstituted solution: hold at 2–8°C; validated stability window 4 weeks.",
     purity: "99%+",
   },
   {
@@ -224,7 +224,7 @@ export const PRODUCTS = [
     category: "Neuropeptide",
     research: "Selank is a synthetic analog of the immunomodulatory peptide tuftsin, developed at the Institute of Molecular Genetics of the Russian Academy of Sciences. Research indicates it influences the expression of brain-derived neurotrophic factor (BDNF), modulates the balance of T-helper cell cytokines, and affects enkephalin degradation. Studies have examined its anxiolytic, nootropic, and immunomodulatory properties. It is approved in Russia as an anxiolytic medication.",
     sequence: "Thr-Lys-Pro-Arg-Pro-Gly-Pro (Tuftsin analog with Gly-Pro extension)",
-    storage: "Store powder in a laboratory freezer (0°F / -18°C). Once reconstituted, refrigerate (35–46°F / 2–8°C) and use within 4 weeks.",
+    storage: "Store lyophilized material at -18°C or below in a controlled laboratory freezer. Reconstituted solution: hold at 2–8°C; validated stability window 4 weeks.",
     purity: "99%+",
   },
   {
@@ -237,7 +237,7 @@ export const PRODUCTS = [
     category: "Neuropeptide",
     research: "Semax is a synthetic peptide derived from a fragment of adrenocorticotropic hormone (ACTH 4-10). Developed at the Institute of Molecular Genetics, Russian Academy of Sciences, research demonstrates it increases BDNF and its signaling receptor TrkB in the hippocampus. Studies indicate neuroprotective, nootropic, and neurogenic properties. It has been investigated for cognitive enhancement, cerebrovascular conditions, and optic nerve health. Approved in Russia as a nootropic medication.",
     sequence: "Met-Glu-His-Phe-Pro-Gly-Pro (ACTH 4-10 with Pro-Gly-Pro extension)",
-    storage: "Store powder in a laboratory freezer (0°F / -18°C). Once reconstituted, refrigerate (35–46°F / 2–8°C) and use within 4 weeks.",
+    storage: "Store lyophilized material at -18°C or below in a controlled laboratory freezer. Reconstituted solution: hold at 2–8°C; validated stability window 4 weeks.",
     purity: "99%+",
   },
   {
@@ -250,7 +250,7 @@ export const PRODUCTS = [
     category: "Blends",
     research: "GLOW is a proprietary peptide blend formulated by Tier One BioSystems for research applications targeting skin health and rejuvenation pathways. This 70 mg complex combines multiple bioactive peptides selected for their studied effects on collagen synthesis, cellular turnover, and tissue regeneration. The blend is designed for researchers investigating multi-pathway approaches to dermal matrix remodeling and growth factor signaling cascades.",
     sequence: "Proprietary multi-peptide blend",
-    storage: "Store powder in a laboratory freezer (0°F / -18°C). Once reconstituted, refrigerate (35–46°F / 2–8°C) and use within 2 weeks.",
+    storage: "Store lyophilized material at -18°C or below in a controlled laboratory freezer. Reconstituted solution: hold at 2–8°C; validated stability window 2 weeks.",
     purity: "99%+",
   },
   {
@@ -261,9 +261,9 @@ export const PRODUCTS = [
     bulk: 145,
     image: "/klow.jpg",
     category: "Blends",
-    research: "KLOW is a proprietary peptide blend developed by Tier One BioSystems for advanced metabolic research. This 80 mg formulation combines targeted peptides selected for their studied effects on metabolic signaling, energy homeostasis, and body composition regulation. The blend is designed for researchers investigating synergistic multi-pathway approaches to metabolic optimization and weight management signaling cascades.",
+    research: "KLOW is a proprietary peptide blend developed by Tier One BioSystems for advanced metabolic research. This 80 mg formulation combines peptides selected for their studied effects on metabolic signaling, energy homeostasis, and adiposity regulation. It is intended for researchers investigating synergistic multi-pathway activity across these signalling cascades.",
     sequence: "Proprietary multi-peptide blend",
-    storage: "Store powder in a laboratory freezer (0°F / -18°C). Once reconstituted, refrigerate (35–46°F / 2–8°C) and use within 2 weeks.",
+    storage: "Store lyophilized material at -18°C or below in a controlled laboratory freezer. Reconstituted solution: hold at 2–8°C; validated stability window 2 weeks.",
     purity: "99%+",
   },
   {
@@ -276,7 +276,7 @@ export const PRODUCTS = [
     category: "Endocrine",
     research: "Human Chorionic Gonadotropin (HCG) is a glycoprotein hormone composed of alpha and beta subunits. Research demonstrates it mimics luteinizing hormone (LH) activity by binding to LH/CG receptors. Studies have extensively examined its role in stimulating Leydig cell testosterone production, supporting spermatogenesis, and maintaining testicular function. It is widely used in clinical research relating to hypogonadism, fertility protocols, and hormonal axis regulation.",
     sequence: "Glycoprotein hormone (α and β subunits, ~237 amino acids total)",
-    storage: "Store powder in the refrigerator (35–46°F / 2–8°C). Once reconstituted, keep refrigerated and use within 30 days.",
+    storage: "Store lyophilized material at 2–8°C in a controlled laboratory refrigerator. Reconstituted solution: hold at 2–8°C; validated stability window 30 days.",
     purity: "99%+",
   },
   {
@@ -289,7 +289,7 @@ export const PRODUCTS = [
     category: "Melanocortin",
     research: "Melanotan I (Afamelanotide) is a synthetic analog of alpha-melanocyte stimulating hormone (α-MSH). Research demonstrates it binds to the MC1R melanocortin receptor, stimulating melanogenesis — the production of melanin pigment. Studies have examined its photoprotective properties and its potential to increase eumelanin production in skin cells. It has been the subject of clinical research for conditions involving photosensitivity and has been investigated as a potential UV-protective compound.",
     sequence: "Ac-Ser-Tyr-Ser-Nle-Glu-His-D-Phe-Arg-Trp-Gly-Lys-Pro-Val-NH₂",
-    storage: "Store powder in a laboratory freezer (0°F / -18°C), away from light. Once reconstituted, refrigerate (35–46°F / 2–8°C) and use within 4 weeks.",
+    storage: "Store lyophilized material at -18°C or below in a controlled laboratory freezer, protected from light. Reconstituted solution: hold at 2–8°C; validated stability window 4 weeks.",
     purity: "99%+",
   },
   {
@@ -302,7 +302,7 @@ export const PRODUCTS = [
     category: "Melanocortin",
     research: "Melanotan II is a cyclic heptapeptide analog of α-MSH that acts as a non-selective agonist at melanocortin receptors (MC1R-MC5R). Research demonstrates broader receptor activity compared to MT-1, with studies examining its effects on melanogenesis, appetite, and libido through MC3R and MC4R activation. Preclinical research has investigated its dual melanotropic and aphrodisiac properties. Its cyclic structure provides enhanced metabolic stability compared to linear analogs.",
     sequence: "Ac-Nle-c[Asp-His-D-Phe-Arg-Trp-Lys]-NH₂",
-    storage: "Store powder in a laboratory freezer (0°F / -18°C), away from light. Once reconstituted, refrigerate (35–46°F / 2–8°C) and use within 4 weeks.",
+    storage: "Store lyophilized material at -18°C or below in a controlled laboratory freezer, protected from light. Reconstituted solution: hold at 2–8°C; validated stability window 4 weeks.",
     purity: "99%+",
   },
   {
@@ -315,7 +315,7 @@ export const PRODUCTS = [
     category: "Immunomodulatory",
     research: "Thymosin Alpha 1 (Tα1) is a peptide naturally produced by the thymus gland, first isolated by Dr. Allan Goldstein. Research demonstrates it enhances T-cell maturation, dendritic cell function, and antibody responses. Studies indicate it modulates both innate and adaptive immunity by activating toll-like receptors (TLR2 and TLR9). It is approved in over 35 countries for various clinical applications and has been extensively studied for immune modulation in immunocompromised subjects.",
     sequence: "28-amino acid peptide (Ac-SDAAVDTSSEITTKDLKEKKEVVEEAEN-OH)",
-    storage: "Store powder in a laboratory freezer (0°F / -18°C). Once reconstituted, refrigerate (35–46°F / 2–8°C) and use within 4 weeks.",
+    storage: "Store lyophilized material at -18°C or below in a controlled laboratory freezer. Reconstituted solution: hold at 2–8°C; validated stability window 4 weeks.",
     purity: "99%+",
   },
   {
@@ -328,7 +328,7 @@ export const PRODUCTS = [
     category: "Cellular & Mitochondrial",
     research: "Nicotinamide adenine dinucleotide (NAD+) is a critical coenzyme found in every living cell. Research demonstrates it is essential for mitochondrial function, DNA repair via PARP enzymes, sirtuin activation, and cellular energy metabolism. NAD+ levels decline significantly with age, and this decline has been linked to metabolic dysfunction and age-related conditions. Studies have examined direct NAD+ supplementation for its effects on cellular energy production, circadian rhythm regulation, and genomic stability.",
     sequence: "C₂₁H₂₇N₇O₁₄P₂ (dinucleotide coenzyme)",
-    storage: "Store powder in a laboratory freezer (0°F / -18°C), away from light and moisture. Once reconstituted, use promptly.",
+    storage: "Store lyophilized material at -18°C or below in a controlled laboratory freezer, protected from light and moisture. Prepare solution immediately before use.",
     purity: "99%+",
   },
   {
@@ -341,7 +341,7 @@ export const PRODUCTS = [
     category: "Growth Hormone Axis",
     research: "IGF-1 LR3 (Long R3 Insulin-like Growth Factor-1) is an 83-amino acid analog of human IGF-1 with an arginine substitution at position 3 and a 13-amino acid N-terminal extension. This modification dramatically reduces binding to IGF binding proteins (IGFBPs), resulting in enhanced bioavailability and a significantly longer half-life. Research demonstrates it activates the IGF-1 receptor, promoting cell proliferation, differentiation, and survival signaling via the PI3K/Akt and MAPK/ERK pathways.",
     sequence: "83-amino acid modified IGF-1 (Arg³ substitution + N-terminal extension)",
-    storage: "Store powder in a laboratory freezer (0°F / -18°C). Once reconstituted, refrigerate (35–46°F / 2–8°C) and use within 2 weeks. Reconstitute using 0.1M acetic acid.",
+    storage: "Store lyophilized material at -18°C or below in a controlled laboratory freezer. Reconstituted solution: hold at 2–8°C; validated stability window 2 weeks. Reconstitute using 0.1M acetic acid.",
     purity: "99%+",
   },
   {
@@ -354,7 +354,7 @@ export const PRODUCTS = [
     category: "Immunomodulatory",
     research: "KPV is a naturally occurring tripeptide derived from the C-terminal end of alpha-melanocyte stimulating hormone (α-MSH). Research demonstrates potent anti-inflammatory activity through inhibition of NF-κB signaling, a master regulator of inflammatory gene expression. Studies have examined its effects on gut inflammation, skin inflammatory conditions, and wound healing. Unlike full-length α-MSH, KPV retains anti-inflammatory properties without melanotropic activity, making it a focused research tool.",
     sequence: "Lys-Pro-Val",
-    storage: "Store powder in a laboratory freezer (0°F / -18°C). Once reconstituted, refrigerate (35–46°F / 2–8°C) and use within 4 weeks.",
+    storage: "Store lyophilized material at -18°C or below in a controlled laboratory freezer. Reconstituted solution: hold at 2–8°C; validated stability window 4 weeks.",
     purity: "99%+",
   },
 ];

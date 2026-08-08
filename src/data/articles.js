@@ -90,6 +90,12 @@ export const ARTICLE_META = [
   },
   {
     slug: "reconstituting-storing-research-peptides",
+    // Held back pending the regulatory review. The body gives step-by-step
+    // handling instructions in domestic terms ("standard home freezer",
+    // drawing into a syringe), which is the strongest human-use signal left on
+    // the site. Withheld rather than deleted so it can be rewritten in
+    // laboratory terms and released, rather than rewritten from nothing.
+    complianceHold: true,
     title: "How to Properly Reconstitute and Store Research Peptides",
     excerpt: "A practical guide to reconstituting and storing lyophilized research peptides — what bacteriostatic water is, step-by-step reconstitution, calculating concentration, storage best practices, and compound-specific stability notes.",
     date: "2026-06-28",

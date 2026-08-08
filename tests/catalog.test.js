@@ -39,10 +39,37 @@ test("categories are not stated as consumer outcomes", () => {
   }
 });
 
-test("storage guidance does not describe a domestic kitchen", () => {
+test("storage guidance reads as a laboratory protocol, not domestic advice", () => {
+  const domestic = [/home freezer/i, /refrigerator\)/i, /°F/, /\bkitchen\b/i];
   for (const product of PRODUCTS) {
     if (!product.storage) continue;
-    assert.ok(!/home freezer/i.test(product.storage), `${product.id} storage still says "home freezer"`);
+    for (const pattern of domestic) {
+      assert.ok(!pattern.test(product.storage), `${product.id} storage matches ${pattern}: "${product.storage}"`);
+    }
+  }
+});
+
+// The storage strings were rewritten one profile at a time rather than
+// collapsed into a single sentence, because the compounds genuinely differ —
+// HCG is refrigerated rather than frozen, and stability windows run from
+// "immediately" to 6 weeks. Flattening them would have stated some incorrectly.
+test("storage guidance keeps its per-compound differences", () => {
+  const distinct = new Set(PRODUCTS.map(p => p.storage).filter(Boolean));
+  assert.ok(distinct.size >= 5, `expected several storage profiles, found ${distinct.size}`);
+  const hcg = PRODUCTS.find(p => p.id === "hcg");
+  assert.match(hcg.storage, /2–8°C/, "HCG is refrigerated, not frozen");
+  assert.ok(!/-18°C or below in a controlled laboratory freezer/.test(hcg.storage),
+    "HCG must not have been flattened into the frozen-storage wording");
+});
+
+// Product prose should name the variable that was measured, not the outcome a
+// buyer might want for themselves.
+test("product prose makes no consumer-outcome claim", () => {
+  const banned = [/body composition/i, /weight management/i, /fat loss/i, /slim/i, /anti-?ag(e|ing)/i];
+  for (const product of PRODUCTS) {
+    for (const pattern of banned) {
+      assert.ok(!pattern.test(product.research || ""), `${product.id} research prose matches ${pattern}`);
+    }
   }
 });
 

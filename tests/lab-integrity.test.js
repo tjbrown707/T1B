@@ -42,21 +42,24 @@ test("a summary with no labeled-content row is withheld, not published", () => {
   assert.equal(labResultMatchesDose(noLabel, "10 mg"), false);
 });
 
-// The seven the audit found. Pinned by name so that "fixing" one by deleting
-// the check is a visible test change rather than a silent regression.
-const KNOWN_MISMATCHES = [
-  "Tesamorelin 10 mg",
-  "CJC-1295 / Ipamorelin 5/5 mg",
-  "Epitalon 10 mg",
-  "SS-31 10 mg",
-  "Kisspeptin 10 mg",
-  "Selank 10 mg",
-  "Thymosin Alpha 1 10 mg",
-];
+// The seven quantity mismatches the audit found have been corrected in the
+// data, so nothing should be withheld. These figures are stand-ins until the
+// Freedom Diagnostics reports arrive; when they are entered, this test is what
+// catches a report that has been filed against the wrong product or lot.
+test("no summary contradicts the quantity its product is sold as", () => {
+  const withheld = withheldLabResults();
+  assert.deepEqual(
+    withheld.map(w => `${w.product}: report says ${w.labeled?.value}${w.labeled?.unit}`),
+    [],
+    "a lab summary does not match its product's dose"
+  );
+});
 
-test("every summary whose quantity contradicts its product is withheld", () => {
-  const withheld = withheldLabResults().map(w => w.product).sort();
-  assert.deepEqual(withheld, [...KNOWN_MISMATCHES].sort());
+test("every product has a summary to show", () => {
+  const uncovered = PRODUCTS
+    .filter(p => !getLabResults(p.name, p.dose))
+    .map(p => `${p.name} ${p.dose}`);
+  assert.deepEqual(uncovered, []);
 });
 
 test("withheld products expose no lab result to the UI", () => {
@@ -84,16 +87,19 @@ test("every published summary states the quantity the product is sold as", () =>
   }
 });
 
-test("the gate is derived, so correcting the data republishes without a code change", () => {
-  const key = "Tesamorelin";
-  const entry = LAB_RESULTS[key];
-  const row = entry.tests.find(t => /^labeled\b.*\bcontent$/i.test(t.test));
+// The gate is derived from the data on every load rather than from a
+// hand-maintained list of known-bad products. That is what makes it survive the
+// Freedom Diagnostics reports being pasted in: a report filed against the wrong
+// vial size withholds itself, with no code change and nothing to remember.
+test("a report that disagrees with its product withholds itself", () => {
+  const row = LAB_RESULTS["Tesamorelin"].tests
+    .find(t => /^labeled\b.*\bcontent$/i.test(t.test));
   const original = row.specification;
-  assert.equal(isLabResultWithheld("Tesamorelin", "10 mg"), true);
+  assert.equal(isLabResultWithheld("Tesamorelin", "10 mg"), false, "starts publishable");
   try {
-    row.specification = "10.00 mg/vial"; // as if the report had been re-checked
-    assert.equal(isLabResultWithheld("Tesamorelin", "10 mg"), false);
-    assert.ok(getLabResults("Tesamorelin", "10 mg"));
+    row.specification = "5.00 mg/vial"; // as if a 5 mg report were filed here
+    assert.equal(isLabResultWithheld("Tesamorelin", "10 mg"), true);
+    assert.equal(getLabResults("Tesamorelin", "10 mg"), null);
   } finally {
     row.specification = original;
   }

@@ -1669,8 +1669,21 @@ function MolecularProfile({ product, compact }) {
   );
 }
 
+// References we are willing to show under a "peer-reviewed research" heading.
+// Wikipedia entries stay in the underlying data as background reading but are
+// never rendered as a citation.
+const NON_CITABLE_SOURCES = new Set(["WIKIPEDIA"]);
+function citableReferences(refs) {
+  if (!Array.isArray(refs)) return [];
+  return refs.filter(ref => !NON_CITABLE_SOURCES.has((ref?.journal || "").toUpperCase()));
+}
+
 function SourcesReferences({ product }) {
-  const refs = getReferences(product.name);
+  // Wikipedia is fine as background reading and useless as a citation under a
+  // heading that says "peer-reviewed research". It stays in the source data —
+  // it is genuinely where some of this was checked — but it is not presented
+  // to customers as evidence.
+  const refs = citableReferences(getReferences(product.name));
   if (!refs || refs.length === 0) return null;
   const isMobile = window.innerWidth < 700;
   const profile = getMolecularProfile(product.name);
@@ -2072,83 +2085,9 @@ function Footer() {
 
 // ─── Syringe Diagram ─────────────────────────────────────────────────────────
 
-function SyringeDiagram({ units }) {
-  const BL = 100, BR = 460, BT = 28, BH = 26;
-  const BB = BT + BH, BW = BR - BL, CY = BT + BH / 2;
-  const safe = Math.min(100, Math.max(0, units || 0));
-  const fillW = (safe / 100) * (BW - 2);
-
-  return (
-    <div style={{ padding: "0 0 14px" }}>
-      <div style={{
-        fontFamily: "'Orbitron', sans-serif",
-        fontSize: 12,
-        fontWeight: 700,
-        letterSpacing: "0.15em",
-        color: "var(--red-primary)",
-        textTransform: "uppercase",
-        marginBottom: 2,
-        textAlign: "center",
-      }}>Syringe Fill</div>
-
-      <svg viewBox="0 0 560 88" width="100%" style={{ display: "block", overflow: "visible" }}>
-        {/* Plunger handle */}
-        <rect x={8} y={BT - 8} width={16} height={BH + 16} rx={3}
-          fill="none" stroke="rgba(196,30,42,0.5)" strokeWidth={2} />
-        {/* Plunger rod */}
-        <rect x={24} y={CY - 3} width={BL - 30} height={6}
-          fill="rgba(196,30,42,0.2)" />
-        {/* Plunger stopper */}
-        <rect x={BL - 5} y={BT} width={7} height={BH} rx={2}
-          fill="rgba(196,30,42,0.5)" />
-
-        {/* Red fill — starts from needle side (right) */}
-        <rect
-          x={BR - 1 - fillW} y={BT + 1} height={BH - 2}
-          width={fillW}
-          fill="rgba(196,30,42,0.65)"
-          style={{ transition: "width 0.7s cubic-bezier(0.4,0,0.2,1), x 0.7s cubic-bezier(0.4,0,0.2,1)" }}
-        />
-
-        {/* Barrel */}
-        <rect x={BL} y={BT} width={BW} height={BH} rx={3}
-          fill="none" stroke="rgba(196,30,42,0.4)" strokeWidth={2} />
-
-        {/* Graduation marks + labels — 0 at needle side (right), 100 at plunger (left) */}
-        {[0,10,20,30,40,50,60,70,80,90,100].map(n => {
-          const x = BL + (n / 100) * BW;
-          const label = 100 - n;
-          return (
-            <g key={n}>
-              <line x1={x} y1={BB} x2={x} y2={BB + 8}
-                stroke="rgba(196,30,42,0.5)" strokeWidth={1.5} />
-              <text x={x} y={BB + 18}
-                textAnchor="middle"
-                fill="var(--text-secondary)"
-                fontSize={8}
-                fontFamily="'Orbitron', sans-serif">{label}</text>
-            </g>
-          );
-        })}
-
-        {/* Needle — extends straight from barrel */}
-        <line x1={BR} y1={CY} x2={BR + 60} y2={CY}
-          stroke="rgba(190,190,190,0.85)" strokeWidth={1.5} />
-      </svg>
-
-      <div style={{
-        fontFamily: "'Orbitron', sans-serif",
-        fontSize: 13,
-        color: units ? "var(--text-primary)" : "var(--text-secondary)",
-        marginTop: 4,
-        letterSpacing: "0.05em",
-        textAlign: "center",
-      }}>
-        {units ? `${Math.round(units)} / 100 units` : "awaiting input"}
-      </div>
-    </div>
-  );
-}
+// SyringeDiagram was removed with the calculator's reframing. A rendered
+// insulin syringe reads as a dosing instruction whatever the caption says,
+// and the microlitre figure already gives a laboratory the volume it needs.
 
 // ─── Peptide Calculator ───────────────────────────────────────────────────────
 
@@ -2168,9 +2107,6 @@ function PeptideCalculator() {
 
   const concentration = vialMg && waterMl ? parseFloat(vialMg) / parseFloat(waterMl) : null;
   const volumeMl = concentration && doseMcg ? (doseMcg / 1000) / concentration : null;
-  // A U-100 graduated syringe reads 100 graduations per mL. Kept as a
-  // measurement scale for withdrawing sub-millilitre volumes, not as a dose.
-  const graduations = volumeMl ? volumeMl * 100 : null;
 
   const inputStyle = {
     width: "100%",
@@ -2216,7 +2152,7 @@ function PeptideCalculator() {
           letterSpacing: "0.03em",
           marginBottom: 16,
           textTransform: "uppercase",
-        }}>Peptide Reconstitution<br />Calculator</h2>
+        }}>Laboratory Concentration<br />Calculator</h2>
         <p style={{
           fontFamily: "'Rajdhani', sans-serif",
           fontSize: 17,
@@ -2261,7 +2197,7 @@ function PeptideCalculator() {
           />
         </div>
         <div>
-          <label style={labelStyle}>Mass Per Aliquot</label>
+          <label style={labelStyle}>Target Aliquot</label>
           <div style={{ display: "flex", gap: 0 }}>
             <input
               type="number"
@@ -2355,14 +2291,10 @@ function PeptideCalculator() {
         </div>
       </div>
 
-      {/* Graduation scale. A U-100 graduated syringe is a standard tool for
-          measuring sub-millilitre volumes, so the readout stays — but it is
-          labelled as a measurement scale rather than presented as a dose. */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "0" }}>
-        <div style={{ width: "100%", maxWidth: 560 }}>
-          <SyringeDiagram units={graduations} />
-        </div>
-      </div>
+      {/* The syringe graduation diagram was removed rather than relabelled. A
+          picture of a filled insulin syringe reads as a dosing instruction no
+          matter what the caption says, and the µL figure above already gives
+          the volume a laboratory needs. */}
 
       {/* How it works */}
       <div style={{
@@ -2387,11 +2319,12 @@ function PeptideCalculator() {
           paddingLeft: 20,
           margin: 0,
         }}>
-          <li>Draw the calculated diluent volume into a sterile syringe.</li>
-          <li>Dispense it slowly down the inside wall of the vial — do not shake.</li>
-          <li>Gently swirl until the lyophilised powder is fully dissolved.</li>
-          <li>Withdraw the calculated aliquot volume using a clean syringe for each withdrawal, to avoid contaminating the stock vial.</li>
-          <li>Store the reconstituted stock refrigerated and use within the stability window listed for that compound.</li>
+          <li>Enter the labeled material quantity in milligrams.</li>
+          <li>Enter the total laboratory diluent volume in millilitres.</li>
+          <li>Enter the target aliquot in micrograms or milligrams.</li>
+          <li>Dispense diluent down the inside wall of the vial and swirl gently until dissolved — do not shake.</li>
+          <li>Use the calculated concentration and microlitre volume in accordance with your validated laboratory protocol.</li>
+          <li>Verify all calculations independently and follow the stability documentation for the specific lot.</li>
         </ol>
       </div>
 
@@ -2403,7 +2336,7 @@ function PeptideCalculator() {
         textAlign: "center",
         lineHeight: 1.6,
         opacity: 0.7,
-      }}>For research use only. This calculator is provided as a convenience tool. Always verify calculations independently.</div>
+      }}>For in-vitro laboratory research only. This tool does not provide human or veterinary dosing instructions. Always verify calculations independently.</div>
     </div>
   );
 }
@@ -2609,6 +2542,7 @@ function CartPage({ cart, setCart }) {
   const [discountLoading, setDiscountLoading] = useState(false);
   const [paymentInitiated, setPaymentInitiated] = useState(false);
   const [returnedFromPayment, setReturnedFromPayment] = useState(false);
+  const [researchAcknowledged, setResearchAcknowledged] = useState(false);
   const [orderSubmitting, setOrderSubmitting] = useState(false);
   const [orderSubmitError, setOrderSubmitError] = useState("");
   const [receiptSent, setReceiptSent] = useState(true);
@@ -2904,6 +2838,8 @@ function CartPage({ cart, setCart }) {
     formData.append("shipping", shipping === 0 ? "FREE" : `$${shipping.toFixed(2)}`);
     formData.append("paymentMethod", paymentMethod === "venmo" ? "Venmo" : "Cash App");
     formData.append("orderTotal", `$${total.toFixed(2)}`);
+    // Recorded so there is evidence the acknowledgement was given for this order.
+    formData.append("researchUseAcknowledged", researchAcknowledged ? "yes" : "no");
 
     // ── Durable writes. A failure here means the order does not exist, so it
     //    must stop the flow rather than be logged and stepped over. ──────────
@@ -3545,8 +3481,13 @@ function CartPage({ cart, setCart }) {
 
   // ─── Customer Info Screen ────────────────────────────
   if (step === "info") {
+    // The research-use acknowledgement is part of the gate, not a footnote. A
+    // "research use only" disclaimer that a buyer never has to read or agree to
+    // is exactly the arrangement recent FDA warning letters have treated as
+    // decorative, so this one has to be ticked before the order can proceed.
     const allFilled = customerInfo.name && customerInfo.email && customerInfo.phone &&
-      customerInfo.address && customerInfo.city && customerInfo.state && customerInfo.zip;
+      customerInfo.address && customerInfo.city && customerInfo.state && customerInfo.zip &&
+      researchAcknowledged;
 
     return (
       <div style={{ maxWidth: 700, margin: "0 auto", padding: "120px 24px 80px" }}>
@@ -3766,6 +3707,36 @@ function CartPage({ cart, setCart }) {
             </div>
           </div>
 
+          <label htmlFor="research-acknowledgment" style={{
+            display: "flex",
+            alignItems: "flex-start",
+            gap: 12,
+            marginTop: 8,
+            padding: "16px 18px",
+            border: "1px solid var(--border)",
+            background: "rgba(17,17,17,0.5)",
+            fontFamily: "'Rajdhani', sans-serif",
+            fontSize: 15,
+            lineHeight: 1.6,
+            color: "var(--text-secondary)",
+            cursor: "pointer",
+          }}>
+            <input
+              id="research-acknowledgment"
+              name="researchUseAcknowledgment"
+              type="checkbox"
+              required
+              checked={researchAcknowledged}
+              onChange={e => setResearchAcknowledged(e.target.checked)}
+              style={{ width: 20, height: 20, marginTop: 1, accentColor: "var(--red-primary)", flexShrink: 0 }}
+            />
+            <span>
+              I confirm this purchase is solely for in-vitro laboratory research — not for human or
+              veterinary use — and I agree to the{" "}
+              <a href="/terms" target="_blank" rel="noopener noreferrer" style={{ color: "var(--red-primary)" }}>Terms of Service</a>.
+            </span>
+          </label>
+
           <div style={{ display: "flex", gap: 16, marginTop: 8 }}>
             <button type="button" onClick={() => setStep("cart")} style={{
               flex: 1,
@@ -3780,7 +3751,7 @@ function CartPage({ cart, setCart }) {
               textTransform: "uppercase",
               cursor: "pointer",
             }}>Back to Cart</button>
-            <button type="submit" style={{
+            <button type="submit" disabled={!allFilled} style={{
               flex: 2,
               padding: "14px 0",
               background: allFilled ? "var(--red-primary)" : "rgba(196,30,42,0.3)",
@@ -5643,12 +5614,12 @@ function ArticlePage() {
           </Suspense>
         </div>
 
-        {article.references && article.references.length > 0 && (
+        {citableReferences(article.references).length > 0 && (
           <div style={{ marginTop: 48, paddingTop: 32, borderTop: "1px solid var(--border)" }}>
             <div style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 11, fontWeight: 700, letterSpacing: "0.18em", color: "var(--red-primary)", textTransform: "uppercase", marginBottom: 6 }}>Peer-reviewed research</div>
             <h2 style={{ fontFamily: "'Orbitron', sans-serif", fontWeight: 800, fontSize: 22, letterSpacing: "0.02em", color: "var(--text-primary)", marginBottom: 18 }}>References</h2>
             <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill, minmax(260px, 1fr))", gap: 12 }}>
-              {article.references.map((ref, i) => (
+              {citableReferences(article.references).map((ref, i) => (
                 <a key={i} href={ref.url} target="_blank" rel="noopener noreferrer" style={{ display: "block", padding: "16px 18px", border: "1px solid var(--border)", background: "rgba(17,17,17,0.5)", textDecoration: "none", transition: "all 0.2s" }} onMouseEnter={e => { e.currentTarget.style.borderColor = "rgba(196,30,42,0.4)"; e.currentTarget.style.background = "rgba(196,30,42,0.04)"; }} onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.background = "rgba(17,17,17,0.5)"; }}>
                   <div style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", color: "var(--red-primary)", marginBottom: 8, textTransform: "uppercase" }}>{ref.journal}</div>
                   <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 14, fontWeight: 600, color: "var(--text-primary)", lineHeight: 1.35, marginBottom: 8 }}>{ref.title}</div>

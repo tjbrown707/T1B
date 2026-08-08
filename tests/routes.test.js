@@ -70,6 +70,41 @@ test("an article with no date is treated as published", () => {
   assert.equal(isPublished({ title: "x" }), true);
 });
 
+// complianceHold withdraws an article from the site without deleting it. The
+// point of routing it through isPublished() is that the sitemap, the prerender
+// list and the build check all inherit the exclusion automatically.
+test("a compliance-held article is withheld regardless of its date", () => {
+  assert.equal(isPublished({ title: "x", date: "2000-01-01", complianceHold: true }), false);
+});
+
+test("compliance-held articles reach neither the site nor the sitemap", () => {
+  const held = ARTICLE_META.filter(a => a.complianceHold);
+  assert.ok(held.length > 0, "expected at least one held article to be exercising this path");
+  const published = new Set(publishedArticleMeta().map(a => a.slug));
+  const routed = new Set(allRoutes().map(r => r.path));
+  const indexed = new Set(sitemapRoutes().map(r => r.path));
+  for (const article of held) {
+    assert.equal(published.has(article.slug), false, `${article.slug} is still published`);
+    assert.equal(routed.has(`/research/${article.slug}`), false, `${article.slug} still has a route`);
+    assert.equal(indexed.has(`/research/${article.slug}`), false, `${article.slug} is still in the sitemap`);
+  }
+});
+
+// Wikipedia is legitimate background reading and not a citation. It stays in
+// the data; it must not be rendered under a "peer-reviewed research" heading.
+test("no Wikipedia entry is presented to customers as a citation", () => {
+  const source = readFileSync("site_1.jsx", "utf8");
+  assert.match(source, /NON_CITABLE_SOURCES/, "the citation filter is missing");
+  assert.ok(
+    !/\{article\.references\.map/.test(source),
+    "article references are rendered unfiltered"
+  );
+  assert.ok(
+    !/const refs = getReferences\(product\.name\);/.test(source),
+    "product references are rendered unfiltered"
+  );
+});
+
 test("canonical URLs are absolute and have no trailing slash except the root", () => {
   assert.equal(canonicalUrl("/"), "https://www.tierone.bio/");
   assert.equal(canonicalUrl("/products"), "https://www.tierone.bio/products");

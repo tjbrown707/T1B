@@ -25,7 +25,14 @@ export function todayISO(now = new Date()) {
   return `${now.getFullYear()}-${month}-${day}`;
 }
 
+// `complianceHold: true` pulls an article from the site without deleting it.
+// Use it when the text itself is the problem — home-use framing, an unsupported
+// claim — rather than the publication date. Because the sitemap generator, the
+// prerenderer and the build integrity check all read publishedArticleMeta(),
+// setting the flag removes the article from every one of them at once; there is
+// no second list to remember to update.
 export function isPublished(article, today = todayISO()) {
+  if (article?.complianceHold) return false;
   return !article?.date || article.date <= today;
 }
 
@@ -90,9 +97,9 @@ export const STATIC_ROUTES = [
   },
   {
     path: "/calculator",
-    title: "Peptide Reconstitution Calculator",
-    description: "Laboratory reconstitution calculator for research peptides. Work out diluent volume, resulting concentration, and the volume needed to draw a given mass.",
-    h1: "Reconstitution calculator",
+    title: "Laboratory Peptide Concentration Calculator",
+    description: "Calculate laboratory peptide concentration and aliquot volume from labeled material quantity and diluent volume. For in-vitro research use; not a dosing tool.",
+    h1: "Laboratory concentration calculator",
     priority: "0.8", changefreq: "monthly",
   },
   {
