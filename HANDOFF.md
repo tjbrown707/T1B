@@ -1,52 +1,61 @@
 # Handoff — pick up here
 
-Written 2026-08-07. Read this before starting work; it records state that is not
-obvious from the code or the git log.
+Written 2026-08-07, updated 2026-08-08. Read this before starting work; it
+records state that is not obvious from the code or the git log.
 
 ---
 
-## THE URGENT ONE: 22 of 40 citations point at the wrong paper
+## The citations are fixed — but the count was worse than this file said
 
-Live on the site right now, on pages that sell the compounds being cited.
-
-These are **not** made-up ID numbers. They are real PMIDs attached to completely
-unrelated research, so they resolve, they link, and they look verified. That is
-what makes them worse than obvious fabrications — nothing looks wrong.
+Every citation in `site_1.jsx` now resolves to the paper it names. Verified:
 
 ```
-selank-semax-russian-nootropic-peptides      4/4   every citation wrong
-tissue-repair-peptide-blends-research        4/4   every citation wrong
-thymosin-alpha-1-immune-research             3/3   every citation wrong
-ghk-cu-copper-peptide-research               2/2   every citation wrong
-reconstituting-storing-research-peptides     2/2   every citation wrong
-tesamorelin-growth-hormone-research          2/2   every citation wrong
-bpc-157-vs-tb-500-tissue-repair              2/3
-nad-plus-supplementation-research            2/3
-mots-c-mitochondrial-peptide-research        1/2
-cjc-1295-ipamorelin-growth-hormone-stack     1/3
+node scripts/check-citations.js --all     # 41 citations verified, exits clean
 ```
 
-Examples of the failure shape:
+**The real number was 53, not 22.** The original count only covered the article
+region, because that is all `--all` used to sweep. The per-compound `REFERENCES`
+block that feeds the **product pages** sits *above* `ARTICLES:START` and was
+never audited — and it held roughly thirty of the bad citations, on the exact
+pages that sell the compound being cited. `--all` now reads the whole file.
+That change is the durable part of this fix; the rest was research.
 
-| Cited as | Actually is |
-|---|---|
-| "Thymosin β4 and tissue repair…" | "Granzyme A activates another way to die." |
-| "α-MSH-derived tripeptide KPV…" | "Verruciform xanthoma — 282 oral lesions" |
-| "NAD+ Metabolism and Its Roles in Ageing" | "Cadaver Lab in Podiatric Surgery Residency Programs" |
+Two failure shapes, both fixed:
 
-Only two articles are clean: `bpc-157-mechanism-of-action` and
-`epitalon-telomerase-pineal-peptide-research`. Both lean on **PMC** IDs, and every
-PMC citation in the library checks out. The PMIDs are the problem.
+- **Real PMID, unrelated paper.** "Thymosin β4 and tissue repair…" resolved to
+  "Granzyme A activates another way to die." Nothing looks wrong to a reader.
+- **Right paper, wrong masthead.** Citations that passed the gate on title still
+  printed the wrong journal or year — NAD+ ageing was labelled *Cell Metab 2020*
+  when it is *Nat Rev Mol Cell Biol 2021*. The gate only compares titles, so
+  this class is still invisible to it.
 
-Reproduce the full list any time:
+Method, if this ever has to be redone: resolve each cited *title* through Europe
+PMC and NCBI, then rebuild the whole citation — journal, title, year, ID,
+authors, URL — from the record. Do not just swap the number. Crossref will
+happily match "Thymosin α1: from bench to bedside" to a 2025 book called *From
+Bench to Bedside* with a perfect similarity score, so a fuzzy match is a
+starting point for a lookup, never evidence.
 
-```
-node scripts/check-citations.js --all
-```
+Where no such paper existed, the citation was replaced with a real one that
+supports the same claim. Two of those were substantive:
 
-**Fixing this is real research, not find-and-replace.** Each claim in the prose
-needs a source that actually supports it; where no such paper exists, the
-sentence has to change. Re-run the command until it exits clean.
+- **KPV** was cited to a title asserting it works "via the melanocortin
+  pathway." No such paper exists, and the claim is wrong — the real literature
+  finds KPV acts *independently* of melanocortin receptors, which is what the
+  site's own article text already said. Now cited to Brzoska 2008 (*Endocr Rev*).
+- **TB-500** was cited to a fabricated "clinical trials — a critical
+  evaluation." Now cited to Ruff 2010, the actual placebo-controlled human
+  safety trial — which is what the articles' "human evidence is limited"
+  caveats should have been pointing at all along.
+
+### Known-unsupported, left alone deliberately
+
+The compound-specific stability windows in
+`reconstituting-storing-research-peptides` (BPC-157 ~4 weeks, GHK-Cu ~2 weeks,
+Epitalon ~6 weeks…) have no published source. They are vendor convention. The
+article frames them as approximate standard practice and tells the reader to
+follow supplier documentation, and no citation is attached to them, so nothing
+is being falsely attributed. Worth revisiting if the framing ever hardens.
 
 ---
 
@@ -107,20 +116,27 @@ the model. Removing a sentinel fails the check **closed**.
 
 Gate 2 resolves every new PMID/PMCID through NCBI E-utilities and compares the
 cited title against the real one. Existence alone is insufficient — that is
-exactly how the 22 bad citations above would have passed.
+exactly how the fabricated citations above would have passed.
+
+On a PR it checks added lines anywhere in the diff, so product-page references
+are covered. Only the `--all` sweep was ever region-scoped, and that is fixed.
 
 ---
 
 ## Outstanding work
 
-1. **Fix the 22 citations.** Highest value; everything else is downstream.
-2. **Claims lint** — gate 3. Fail on explicit medical claims ("cures", "treats
+1. **Claims lint** — gate 3. Fail on explicit medical claims ("cures", "treats
    X disease", "FDA approved") in the article region. Keep patterns
    high-precision; a gate with false positives gets ignored.
-3. **GitHub Actions workflow** — run all gates plus build/lint on `research/*`
+2. **GitHub Actions workflow** — run all gates plus build/lint on `research/*`
    PRs, auto-merge on green so no human approval is needed in the happy path.
-4. **The scheduled agent itself** — writes an article every 3 days, dated ~9 days
+3. **The scheduled agent itself** — writes an article every 3 days, dated ~9 days
    out so the publish queue doubles as a review window.
+4. **Consider checking journal and year, not just title,** in gate 2. Every
+   mis-labelled masthead found this round passed the existing check. Europe PMC
+   returns both fields in the same response the gate already makes, so the cost
+   is small — the work is picking a comparison lenient enough not to fail on
+   `NAT REV MOL CELL BIOL` vs `Nature reviews. Molecular cell biology`.
 
 ### Needs the owner, cannot be done from code
 

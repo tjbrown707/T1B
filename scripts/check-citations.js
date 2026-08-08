@@ -25,24 +25,22 @@ function git(args) {
   return execFileSync("git", args, { encoding: "utf8", maxBuffer: 32 * 1024 * 1024 });
 }
 
-// --all audits every citation currently in the article region rather than just
-// the ones a PR adds. Use it after changing this script, or to sweep for
-// mis-citations that predate the gate.
+// --all audits every citation in site_1.jsx rather than just the ones a PR
+// adds. Use it after changing this script, or to sweep for mis-citations that
+// predate the gate.
+//
+// It deliberately reads the WHOLE file, not just the article region. The
+// per-compound REFERENCES block sits above ARTICLES:START and feeds the product
+// pages, and scoping this sweep to the article region is how 30-odd fabricated
+// citations sat on pages selling the compound they cited without ever being
+// audited. A citation is no less damaging for living outside the marked region.
 const AUDIT_ALL = process.argv.includes("--all");
-
-function articleRegionLines() {
-  const lines = readFileSync("site_1.jsx", "utf8").split("\n");
-  const start = lines.findIndex(l => l.startsWith("// ARTICLES:START"));
-  const end = lines.findIndex(l => l.startsWith("// ARTICLES:END"));
-  if (start === -1 || end === -1) throw new Error("ARTICLES markers not found in site_1.jsx");
-  return lines.slice(start, end + 1);
-}
 
 // In PR mode only added lines matter. Citations already on main were reviewed
 // when they landed, and re-checking them would fail the build for reasons
 // unrelated to this PR (a record withdrawn upstream, say).
 const addedLines = AUDIT_ALL
-  ? articleRegionLines()
+  ? readFileSync("site_1.jsx", "utf8").split("\n")
   : git(["diff", `${BASE_REF}...HEAD`])
       .split("\n")
       .filter(l => l.startsWith("+") && !l.startsWith("+++"))
