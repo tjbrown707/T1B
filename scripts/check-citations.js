@@ -16,6 +16,7 @@
 // Usage:  node scripts/check-citations.js [baseRef]
 
 import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 
 const BASE_REF = process.argv[2] || "origin/main";
 const ESUMMARY = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi";
@@ -24,13 +25,28 @@ function git(args) {
   return execFileSync("git", args, { encoding: "utf8", maxBuffer: 32 * 1024 * 1024 });
 }
 
-// Only added lines matter. Citations already on main were reviewed when they
-// landed, and re-checking them would fail the build for reasons unrelated to
-// this PR (a record withdrawn upstream, say).
-const addedLines = git(["diff", `${BASE_REF}...HEAD`])
-  .split("\n")
-  .filter(l => l.startsWith("+") && !l.startsWith("+++"))
-  .map(l => l.slice(1));
+// --all audits every citation currently in the article region rather than just
+// the ones a PR adds. Use it after changing this script, or to sweep for
+// mis-citations that predate the gate.
+const AUDIT_ALL = process.argv.includes("--all");
+
+function articleRegionLines() {
+  const lines = readFileSync("site_1.jsx", "utf8").split("\n");
+  const start = lines.findIndex(l => l.startsWith("// ARTICLES:START"));
+  const end = lines.findIndex(l => l.startsWith("// ARTICLES:END"));
+  if (start === -1 || end === -1) throw new Error("ARTICLES markers not found in site_1.jsx");
+  return lines.slice(start, end + 1);
+}
+
+// In PR mode only added lines matter. Citations already on main were reviewed
+// when they landed, and re-checking them would fail the build for reasons
+// unrelated to this PR (a record withdrawn upstream, say).
+const addedLines = AUDIT_ALL
+  ? articleRegionLines()
+  : git(["diff", `${BASE_REF}...HEAD`])
+      .split("\n")
+      .filter(l => l.startsWith("+") && !l.startsWith("+++"))
+      .map(l => l.slice(1));
 
 const pmids = new Set();
 const pmcids = new Set();
@@ -77,7 +93,11 @@ async function resolve(db, ids) {
   // One batched request rather than one per ID: NCBI asks for no more than a
   // few requests per second, and a 12-source article would otherwise sail past
   // that and start getting throttled responses that look like failures.
-  const url = `${ESUMMARY}?db=${db}&id=${[...ids].join(",")}&retmode=json`;
+  // db=pmc wants the bare numeric ID. Sending "PMC11859134" makes NCBI return
+  // nothing, which previously read as "this record does not exist" — a false
+  // accusation against a real citation, the worst way for this gate to fail.
+  const requestIds = [...ids].map(id => (db === "pmc" ? id.replace(/^PMC/i, "") : id));
+  const url = `${ESUMMARY}?db=${db}&id=${requestIds.join(",")}&retmode=json`;
   const res = await fetch(url, { headers: { "User-Agent": "tierone-bio-citation-check" } });
   if (!res.ok) {
     throw new Error(`NCBI returned ${res.status} for db=${db}`);
