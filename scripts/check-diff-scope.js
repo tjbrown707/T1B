@@ -65,7 +65,20 @@ for (const file of changedFiles) {
 
 // --- Which lines of site_1.jsx changed? --------------------------------------
 if (changedFiles.includes("site_1.jsx")) {
-  const { start, end } = articlesBounds();
+  let bounds;
+  try {
+    bounds = articlesBounds();
+  } catch (err) {
+    // Fail closed, and say why. A stack trace here reads as "the tooling is
+    // broken" when what actually happened is the guard was removed.
+    console.error("");
+    console.error("  BLOCKED — the article region markers are gone");
+    console.error("  " + "─".repeat(62));
+    console.error("  " + err.message.split("\n").join("\n  "));
+    console.error("");
+    process.exit(1);
+  }
+  const { start, end } = bounds;
 
   // --unified=0 so each hunk header names exactly the changed lines rather
   // than a window of surrounding context.
