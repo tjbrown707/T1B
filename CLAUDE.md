@@ -1,5 +1,10 @@
 # Tier One BioSystems — project notes for Claude
 
+> **Read `HANDOFF.md` first.** It carries live state from the session of
+> 2026-08-07 — including 22 mis-attributed citations currently published on the
+> research pages — plus what is built, what is outstanding, and what needs the
+> owner's hands in a dashboard. None of it is inferable from the code.
+
 Storefront for research-grade peptides. Live at https://www.tierone.bio
 
 The owner is not a developer. Explain changes in plain language, give click-by-click
