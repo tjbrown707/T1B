@@ -2059,6 +2059,56 @@ const ARTICLES = [
     ],
     relatedProductIds: ["cjc-ipa", "ipamorelin", "tesamorelin"],
   },
+  {
+    slug: "epitalon-telomerase-pineal-peptide-research",
+    title: "Epitalon (Epithalon): Telomerase and Pineal Peptide Research",
+    excerpt: "An evidence-based review of the pineal tetrapeptide Epitalon. Covers how it is derived from natural epithalamin, the telomerase and telomere-length research, its effects on melatonin and circadian rhythm, and what the animal and human studies actually show.",
+    date: "2026-07-27",
+    author: "Tier One Research Team",
+    tags: ["Epitalon", "Telomerase", "Longevity", "Pineal"],
+    readingTimeMinutes: 10,
+    heroImage: "/epitalon.jpg",
+    metaTitle: "Epitalon (Epithalon): Telomerase & Pineal Peptide Research (2026)",
+    metaDescription: "Research review of Epitalon (Epithalon), the synthetic pineal tetrapeptide Ala-Glu-Asp-Gly. Covers telomerase activation and telomere elongation research, the link to natural epithalamin, effects on melatonin and circadian rhythm, and the animal and human study evidence.",
+    content: () => (<>
+      <h2>Quick Summary</h2>
+      <ul>
+        <li><strong>Epitalon</strong> (also spelled Epithalon or Epithalone) is a synthetic <strong>tetrapeptide</strong> with the sequence <strong>Ala-Glu-Asp-Gly</strong>, modeled on the natural pineal peptide <strong>epithalamin</strong>.</li>
+        <li>Its most-cited research finding is the <strong>induction of telomerase activity and telomere elongation</strong> in cultured human somatic cells that are normally telomerase-negative.</li>
+        <li>Additional research centers on <strong>melatonin and circadian rhythm regulation</strong>, since the peptide is derived from a pineal-gland source.</li>
+        <li>Most of the strongest evidence is <strong>preclinical (cell culture and animal models)</strong>, with a smaller body of human work led primarily by Professor Khavinson's group.</li>
+      </ul>
+
+      <h2>What Epitalon Is</h2>
+      <p><strong>Epitalon</strong> is a short synthetic peptide — just four amino acids, Ala-Glu-Asp-Gly. It was developed as a defined, reproducible version of <strong>epithalamin</strong>, a peptide complex extracted from the pineal gland. The pineal gland governs melatonin production and helps set the body's daily (circadian) clock, which is why Epitalon research so often touches on both <em>cellular aging</em> and <em>sleep/rhythm</em> at the same time.</p>
+      <p><em>In plain terms:</em> researchers took a natural pineal extract that appeared to influence aging markers, identified a small active peptide within that family, and synthesized a clean four-amino-acid version so it could be studied consistently.</p>
+
+      <h2>The Telomerase Mechanism</h2>
+      <p>The headline research interest in Epitalon is <strong>telomeres</strong> — the protective caps at the ends of chromosomes that shorten each time a cell divides. When they get too short, the cell stops dividing (senescence). The enzyme <strong>telomerase</strong> can rebuild telomeres, but most adult somatic cells switch it off.</p>
+      <p>In a widely cited 2003 study, Khavinson and colleagues reported that adding Epitalon to cultures of human fetal fibroblasts — cells that are normally <strong>telomerase-negative</strong> — induced expression of the telomerase catalytic subunit, restored enzymatic activity, and produced measurable <strong>telomere elongation</strong>. The authors interpreted this as reactivation of the telomerase gene in somatic cells. This is the mechanistic finding most often referenced when Epitalon is discussed as a "longevity" peptide.</p>
+      <p>It is worth stating the caveat clearly: telomerase reactivation in cell culture is a mechanistic observation, not a demonstration of extended human healthspan. The relationship between telomere length and aging in whole organisms is genuinely complex.</p>
+
+      <h2>Melatonin and Circadian Rhythm</h2>
+      <p>Because Epitalon traces back to a pineal source, a second research thread examines its effect on <strong>melatonin</strong> and the daily rhythm of its secretion. Work in older animals and elderly human subjects has reported a <strong>normalizing effect on the daily melatonin rhythm</strong> — nudging a blunted, age-shifted pattern back toward a more youthful profile. This connects the peptide's longevity research to the more concrete, measurable endpoint of circadian regulation.</p>
+
+      <h2>Animal Research on Aging and Tumors</h2>
+      <p>A substantial part of the Epitalon and epithalamin literature comes from long-term studies in mice, rats, and even fruit flies. Reported findings across this body of work include effects on <strong>biomarkers of aging</strong>, reductions in <strong>chromosome aberrations</strong>, slowed age-related loss of reproductive (estrous) function, and altered spontaneous tumor incidence, with some studies reporting increased mean or maximum lifespan in the model organism. Results are not uniform across every study and model — some showed lifespan effects, others did not — which is exactly why researchers treat the animal data as promising but not settled.</p>
+
+      <h2>Safety Considerations</h2>
+      <p>In the available research, Epitalon has generally shown a favorable tolerability profile, with the short tetrapeptide structure and low doses used in studies producing few reported adverse effects beyond injection-site reactions. However, human clinical data remain limited in scale and are concentrated within a small number of research groups, so the long-term safety picture is not as thoroughly characterized as for more widely studied compounds. As with all research peptides, Epitalon is intended strictly for laboratory research use; researchers should confirm the regulatory status in their jurisdiction.</p>
+
+      <h2>Conclusion</h2>
+      <p>Epitalon is one of the most mechanistically intriguing peptides in the longevity research space: a four-amino-acid pineal analog with reproducible cell-culture evidence of telomerase activation and telomere elongation, plus a parallel line of research on melatonin and circadian rhythm. The animal literature adds suggestive data on aging biomarkers and tumor incidence. The honest summary is that the <strong>mechanistic and preclinical case is strong and unusually specific</strong>, while large, independent human trials remain the missing piece — a common pattern for peptides in this category.</p>
+    </>),
+    references: [
+      { journal: "BULL EXP BIOL MED", title: "Epithalon peptide induces telomerase activity and telomere elongation in human somatic cells", year: 2003, identifier: "DOI: 10.1023/A:1025493705728", authors: "Khavinson VKh, Bondarev IE, Butyugov AA", url: "https://link.springer.com/article/10.1023/A:1025493705728" },
+      { journal: "BIOGERONTOLOGY", title: "Effect of Epitalon on biomarkers of aging, life span and spontaneous tumor incidence in female Swiss-derived SHR mice", year: 2003, identifier: "DOI: 10.1023/A:1025114230714", authors: "Anisimov VN, Khavinson VKh et al.", url: "https://link.springer.com/article/10.1023/A:1025114230714" },
+      { journal: "NEURO ENDOCRINOL LETT", title: "Normalizing effect of the pineal gland peptides on the daily melatonin rhythm in old monkeys and elderly people", year: 2007, identifier: "PMID: 17969590", authors: "Korkushko OV et al.", url: "https://pubmed.ncbi.nlm.nih.gov/17969590/" },
+      { journal: "BIOGERONTOLOGY", title: "Effect of Ala-Glu-Asp-Gly peptide on life span and development of spontaneous tumors in female rats", year: 2008, identifier: "PMID: 18856211", authors: "Vinogradova IA et al.", url: "https://pubmed.ncbi.nlm.nih.gov/18856211/" },
+      { journal: "WIKIPEDIA", title: "Epitalon", url: "https://en.wikipedia.org/wiki/Epitalon" },
+    ],
+    relatedProductIds: ["epitalon", "nad", "motsc"],
+  },
 ];
 
 // ─── Scheduled publishing ────────────────────────────────────────────────────
