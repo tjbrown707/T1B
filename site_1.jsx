@@ -444,11 +444,12 @@ function useScrollReveal() {
 }
 
 // ─── Animated Count-Up Component ─────────────────────────────────────────────
-function CountUp({ end, duration = 1500, suffix = "", prefix = "" }) {
+function CountUp({ end, duration = 1500, suffix = "", prefix = "", start = true }) {
   const [count, setCount] = useState(0);
   const ref = useRef(null);
   const started = useRef(false);
   useEffect(() => {
+    if (!start) return undefined;
     const observer = new IntersectionObserver((entries) => {
       entries.forEach((entry) => {
         if (entry.isIntersecting && !started.current) {
@@ -468,7 +469,7 @@ function CountUp({ end, duration = 1500, suffix = "", prefix = "" }) {
     }, { threshold: 0.3 });
     if (ref.current) observer.observe(ref.current);
     return () => observer.disconnect();
-  }, [end, duration]);
+  }, [end, duration, start]);
   return <span ref={ref}>{prefix}{count}{suffix}</span>;
 }
 
@@ -1193,7 +1194,7 @@ function Header({ cartCount = 0 }) {
   );
 }
 
-function Hero() {
+function Hero({ statsActive = true }) {
   const navigate = useNavigate();
   const [scrollY, setScrollY] = useState(0);
   const [isMobile, setIsMobile] = useState(typeof window !== "undefined" && window.innerWidth < 700);
@@ -1417,7 +1418,7 @@ function Hero() {
                 color: "var(--red-primary)",
                 letterSpacing: "0.02em",
                 marginBottom: 4,
-              }}><CountUp end={stat.value} prefix={stat.prefix || ""} suffix={stat.suffix} duration={1800} /></div>
+              }}><CountUp end={stat.value} prefix={stat.prefix || ""} suffix={stat.suffix} duration={1800} start={statsActive} /></div>
               <div style={{
                 fontFamily: "'Rajdhani', sans-serif",
                 fontSize: 12,
@@ -5892,13 +5893,13 @@ function AgeGate({ onConfirm }) {
 // ─── Routed Page Components ───────────────────────────────────────────────────
 const FEATURED_IDS = ["glp3rt-10", "tesamorelin", "bpc157-10", "tb500", "klow", "motsc"];
 
-function HomePage({ onAddToCart, onSelectProduct }) {
+function HomePage({ onAddToCart, onSelectProduct, ageVerified }) {
   const navigate = useNavigate();
   const featuredProducts = FEATURED_IDS.map(id => PRODUCTS.find(p => p.id === id)).filter(Boolean);
   useRouteMeta("/");
   useScrollReveal();
   return (<>
-    <Hero />
+    <Hero statsActive={ageVerified} />
 
     {/* Featured Products */}
     <section className="scroll-reveal" style={{ maxWidth: 1400, margin: "0 auto", padding: "44px 24px 60px" }}>
@@ -6413,7 +6414,7 @@ export default function App() {
         />
       )}
       <Routes>
-        <Route path="/" element={<HomePage onAddToCart={addToCart} onSelectProduct={setSelectedProduct} />} />
+        <Route path="/" element={<HomePage onAddToCart={addToCart} onSelectProduct={setSelectedProduct} ageVerified={ageVerified} />} />
         <Route path="/products" element={<ProductsPage searchQuery={searchQuery} setSearchQuery={setSearchQuery} onAddToCart={addToCart} onSelectProduct={setSelectedProduct} />} />
         <Route path="/product/:id" element={<ProductPage onAddToCart={addToCart} />} />
         <Route path="/calculator" element={<PeptideCalculator />} />
