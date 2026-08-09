@@ -70,6 +70,31 @@ test("an article with no date is treated as published", () => {
   assert.equal(isPublished({ title: "x" }), true);
 });
 
+// isPublished takes an optional `today`. Passing it straight to Array.filter
+// feeds the array index into that parameter and hides every article — which is
+// exactly what shipped and blanked the research library. Both the guard below
+// and the source check keep that from recurring.
+test("isPublished ignores the extra arguments Array.filter supplies", () => {
+  const article = { title: "x", date: "2020-01-01" };
+  assert.equal(
+    [article].filter(isPublished).length, 1,
+    "isPublished must survive being used as a bare filter callback"
+  );
+  assert.equal([article, article, article].filter(isPublished).length, 3);
+});
+
+test("no callback with a defaulted parameter is passed bare to filter/map", () => {
+  const source = readFileSync("site_1.jsx", "utf8")
+    .split("\n")
+    .filter(line => !line.trim().startsWith("//")) // don't flag prose about the bug
+    .join("\n");
+  const offenders = [...source.matchAll(/\.(?:filter|map|find|some|every)\(\s*(isPublished|todayISO|applySale|lineUnitPrice|clampQuantity)\s*\)/g)];
+  assert.deepEqual(
+    offenders.map(m => m[0]), [],
+    "wrap it — Array callbacks pass (element, index, array) into the default parameter"
+  );
+});
+
 // complianceHold withdraws an article from the site without deleting it. The
 // point of routing it through isPublished() is that the sitemap, the prerender
 // list and the build check all inherit the exclusion automatically.

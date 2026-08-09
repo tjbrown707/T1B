@@ -31,9 +31,19 @@ export function todayISO(now = new Date()) {
 // prerenderer and the build integrity check all read publishedArticleMeta(),
 // setting the flag removes the article from every one of them at once; there is
 // no second list to remember to update.
-export function isPublished(article, today = todayISO()) {
+export function isPublished(article, today) {
   if (article?.complianceHold) return false;
-  return !article?.date || article.date <= today;
+  // `today` is honoured only when it actually looks like an ISO date.
+  //
+  // A default parameter is not enough here. Array callbacks are invoked as
+  // (element, index, array), so `articles.filter(isPublished)` passes the
+  // index in as `today` — and "2026-06-27" <= 0 is false for every article,
+  // which silently emptied the entire research library in production. Callers
+  // should still wrap, but the function no longer depends on them doing so.
+  const cutoff = typeof today === "string" && /^\d{4}-\d{2}-\d{2}$/.test(today)
+    ? today
+    : todayISO();
+  return !article?.date || article.date <= cutoff;
 }
 
 export function publishedArticleMeta(today = todayISO()) {

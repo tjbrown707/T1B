@@ -96,6 +96,21 @@ if (hasDist) {
   }
   if (!existsSync(join(DIST, "404.html"))) fail("dist/404.html is missing — unknown URLs would not return a 404.");
 
+  // The prerender fallback stylesheet must never target #root. React clears
+  // #root's children on mount but leaves the element itself, so a rule on
+  // #root stays in force over the live application — which is how a
+  // "max-width: 960px" meant for the no-JS fallback ended up clamping the
+  // real site and breaking the full-bleed hero. The app's own stylesheet is
+  // injected at runtime, so anything matching here came from the prerenderer.
+  for (const route of allRoutes(today).slice(0, 5)) {
+    const file = route.path === "/" ? "index.html" : `${route.path.replace(/^\//, "")}.html`;
+    const target = join(DIST, file);
+    if (!existsSync(target)) continue;
+    if (/#root\s*\{/.test(readFileSync(target, "utf8"))) {
+      fail(`dist/${file} ships a stylesheet rule targeting #root; scope it to the fallback wrapper instead.`);
+    }
+  }
+
   // Structured data must describe the page it is on. If a single document
   // carries every product, it describes none of them.
   const home = readFileSync(join(DIST, "index.html"), "utf8");

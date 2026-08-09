@@ -411,7 +411,10 @@ const ARTICLES = ARTICLE_META;
 // 404.
 
 function publishedArticles() {
-  return ARTICLES.filter(isPublished);
+  // Wrapped, not passed by reference: Array.filter calls back with
+  // (element, index, array), so `ARTICLES.filter(isPublished)` fed the index
+  // into isPublished's `today` parameter and hid every article.
+  return ARTICLES.filter(article => isPublished(article));
 }
 
 function getArticleBySlug(slug) {

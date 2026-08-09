@@ -34,7 +34,7 @@ const ROUTES = [
   { path: "/products", expect: "BPC-157" },
   { path: "/product/bpc157-10", expect: "BPC-157" },
   { path: "/product/tesamorelin", expect: "CERTIFICATE OF ANALYSIS" }, // summary now reconciles
-  { path: "/research", expect: "Research" },
+  { path: "/research", expect: "BPC-157: Mechanism of Action" }, // a real article, not the heading
   { path: "/research/bpc-157-mechanism-of-action", expect: "BPC-157" },
   { path: "/lab-results", expect: "CERTIFICATES OF ANALYSIS" },
   { path: "/cart", expect: "Your cart is empty" },
@@ -100,6 +100,8 @@ for (const { path: route, expect } of ROUTES) {
   } catch (err) {
     errors.push(`dismiss threw: ${err.message}`);
   }
+
+
 
   const dismissed = afterDismiss.length > 0 && !afterDismiss.includes("AGE VERIFICATION");
   const ok = hasContent && gateShowing && dismissed && errors.length === 0;

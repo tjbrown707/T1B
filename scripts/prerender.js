@@ -93,28 +93,34 @@ const linkList = (items) =>
 
 // All of the app's styling is injected by JavaScript, so without this the
 // snapshot would render as black-on-white default HTML — a white flash before
-// React paints, and an ugly page for anyone browsing without scripts. These
-// rules are deliberately minimal and match the site's dark palette. Nothing is
-// hidden: the fallback is the real page for non-JS clients, and hiding it from
-// people while showing it to crawlers would be cloaking.
+// React paints, and an ugly page for anyone browsing without scripts.
+//
+// EVERY rule is scoped to #prerender-fallback, the wrapper React destroys on
+// mount. An earlier version styled #root directly, which does NOT go away —
+// React clears the element's children but the element and its CSS remain — so
+// `#root { max-width: 960px }` silently clamped the whole live site to a
+// narrow column and broke the full-bleed hero. Only `html` carries a colour,
+// because the app styles `body` and would otherwise be fighting this file.
+//
+// Nothing is hidden: the fallback is the real page for non-JS clients, and
+// hiding it from people while showing it to crawlers would be cloaking.
 const FALLBACK_STYLE = `<style>
-  body { margin: 0; background: #0a0a0a; color: #c9c9c9;
-         font: 16px/1.7 system-ui, -apple-system, "Segoe UI", sans-serif; }
-  #root { max-width: 960px; margin: 0 auto; padding: 24px; }
-  #root a { color: #e0e0e0; }
-  #root h1, #root h2 { color: #fff; line-height: 1.25; }
-  #root header, #root footer { border-color: #262626; }
-  #root header { border-bottom: 1px solid #262626; padding-bottom: 12px; }
-  #root footer { border-top: 1px solid #262626; margin-top: 32px; padding-top: 12px; }
-  #root nav ul { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: 16px; }
-  #root nav[aria-label="Breadcrumb"] ol { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+  html { background: #0a0a0a; }
+  #prerender-fallback { max-width: 960px; margin: 0 auto; padding: 24px;
+    color: #c9c9c9; font: 16px/1.7 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  #prerender-fallback a { color: #e0e0e0; }
+  #prerender-fallback h1, #prerender-fallback h2 { color: #fff; line-height: 1.25; }
+  #prerender-fallback header { border-bottom: 1px solid #262626; padding-bottom: 12px; }
+  #prerender-fallback footer { border-top: 1px solid #262626; margin-top: 32px; padding-top: 12px; }
+  #prerender-fallback nav ul { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: 16px; }
+  #prerender-fallback nav[aria-label="Breadcrumb"] ol { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
 </style>`;
 
 function chrome(inner) {
-  return `<header><a href="/">${esc(SITE_NAME)}</a><nav aria-label="Primary">${linkList(NAV)}</nav></header>
+  return `<div id="prerender-fallback"><header><a href="/">${esc(SITE_NAME)}</a><nav aria-label="Primary">${linkList(NAV)}</nav></header>
 <main>${inner}</main>
 <footer><nav aria-label="Footer">${linkList(FOOTER)}</nav>
-<p>Research use only. Not for human or veterinary use. Contact <a href="mailto:${esc(CONTACT_EMAIL)}">${esc(CONTACT_EMAIL)}</a>.</p></footer>`;
+<p>Research use only. Not for human or veterinary use. Contact <a href="mailto:${esc(CONTACT_EMAIL)}">${esc(CONTACT_EMAIL)}</a>.</p></footer></div>`;
 }
 
 const breadcrumb = (trail) => `<nav aria-label="Breadcrumb"><ol>${
