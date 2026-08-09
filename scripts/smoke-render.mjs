@@ -86,6 +86,14 @@ for (const { path: route, expect } of ROUTES) {
   // expected to have rendered even while the gate is still up.
   const gateShowing = text.includes("AGE VERIFICATION");
   const hasContent = text.includes(expect);
+  const heroBackground = route === "/"
+    ? [...window.document.querySelectorAll("div")]
+      .find(el => el.style.backgroundImage.includes("herobackground.jpg"))
+    : null;
+  const heroFillsDesktop = route !== "/" || (
+    heroBackground?.style.backgroundSize === "cover" &&
+    heroBackground?.style.backgroundPosition === "center top"
+  );
 
   // Now dismiss the gate the way a visitor would and confirm the page survives.
   let afterDismiss = "";
@@ -104,7 +112,7 @@ for (const { path: route, expect } of ROUTES) {
 
 
   const dismissed = afterDismiss.length > 0 && !afterDismiss.includes("AGE VERIFICATION");
-  const ok = hasContent && gateShowing && dismissed && errors.length === 0;
+  const ok = hasContent && gateShowing && dismissed && heroFillsDesktop && errors.length === 0;
   if (!ok) failures++;
 
   console.log(
@@ -113,6 +121,7 @@ for (const { path: route, expect } of ROUTES) {
     `${text.length}→${afterDismiss.length} chars`
   );
   if (!hasContent) console.log(`      ! expected to find "${expect}"`);
+  if (!heroFillsDesktop) console.log("      ! hero background no longer fills the desktop viewport");
   for (const e of errors.slice(0, 4)) console.log(`      ! ${e.slice(0, 300)}`);
   dom.window.close();
 }

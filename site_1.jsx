@@ -1151,11 +1151,19 @@ function Hero() {
         position: "absolute",
         inset: 0,
         backgroundImage: `url('/herobackground.jpg')`,
-        backgroundSize: isMobile ? "150% auto" : "auto 100%",
-        backgroundPosition: `center ${(isMobile ? 25 : 45) + scrollY * 0.012}%`,
+        // The prerender regression briefly narrowed the entire page to 960px,
+        // which made this height-sized image look much fuller. Now that the
+        // page is correctly full width, crop only the desktop hero instead of
+        // shrinking the whole site around it. Top anchoring keeps the vial caps
+        // visible while the image fills wide screens edge to edge.
+        backgroundSize: isMobile ? "150% auto" : "cover",
+        backgroundPosition: isMobile
+          ? `center ${25 + scrollY * 0.012}%`
+          : "center top",
         backgroundRepeat: "no-repeat",
         opacity: 0.52,
         pointerEvents: "none",
+        transformOrigin: isMobile ? "center center" : "center top",
         animation: "heroZoom 24s ease-in-out infinite alternate",
       }} />
 
