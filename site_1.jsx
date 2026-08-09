@@ -572,18 +572,18 @@ document.head.appendChild(fontLink);
 const style = document.createElement("style");
 style.textContent = `
   :root {
-    --bg-primary: #0a0a0a;
-    --bg-card: #111111;
-    --bg-card-hover: #1a1a1a;
-    --bg-modal: #0d0d0d;
-    --red-primary: #c41e2a;
-    --red-glow: #ff2d3b;
-    --red-dark: #8b1520;
-    --text-primary: #f0f0f0;
-    --text-secondary: #888888;
-    --text-dim: #555555;
-    --border: #222222;
-    --border-hover: #333333;
+    --bg-primary: #090a0c;
+    --bg-card: #111316;
+    --bg-card-hover: #181b20;
+    --bg-modal: #0d0f12;
+    --red-primary: #d93642;
+    --red-glow: #ff5964;
+    --red-dark: #9f1e29;
+    --text-primary: #f4f6f8;
+    --text-secondary: #a8afb9;
+    --text-dim: #7f8792;
+    --border: #292d33;
+    --border-hover: #3b414a;
   }
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -592,7 +592,9 @@ style.textContent = `
     background: var(--bg-primary);
     color: var(--text-primary);
     font-family: 'Rajdhani', sans-serif;
+    font-weight: 500;
     -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
     overflow-x: hidden;
   }
 
@@ -601,6 +603,18 @@ style.textContent = `
   ::-webkit-scrollbar { width: 6px; }
   ::-webkit-scrollbar-track { background: var(--bg-primary); }
   ::-webkit-scrollbar-thumb { background: var(--red-dark); border-radius: 3px; }
+
+  ::selection { background: rgba(217, 54, 66, 0.35); color: #fff; }
+  ::placeholder { color: #747c87; opacity: 1; }
+
+  a:focus-visible,
+  button:focus-visible,
+  input:focus-visible,
+  textarea:focus-visible,
+  [role="button"]:focus-visible {
+    outline: 2px solid var(--red-glow);
+    outline-offset: 3px;
+  }
 
   @keyframes fadeUp {
     from { opacity: 0; transform: translateY(30px); }
@@ -723,12 +737,53 @@ style.textContent = `
     box-shadow: 0 16px 40px rgba(196, 30, 42, 0.15);
   }
 
+  .product-card-title { overflow-wrap: anywhere; }
+
+  .featured-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+
   .hero-grid-line {
     position: absolute;
     background: linear-gradient(to bottom, transparent, rgba(196,30,42,0.06), transparent);
     width: 1px;
     height: 100%;
     top: 0;
+  }
+
+  @media (max-width: 900px) {
+    .featured-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  }
+
+  @media (max-width: 640px) {
+    .footer-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+      gap: 32px 24px !important;
+    }
+    .footer-brand { grid-column: 1 / -1; }
+  }
+
+  @media (max-width: 520px) {
+    .product-card-info { padding: 14px 12px 16px !important; }
+    .product-card-title {
+      font-size: 15px !important;
+      letter-spacing: 0.03em !important;
+      line-height: 1.2;
+    }
+    .product-card-price { font-size: 22px !important; }
+    .product-card button {
+      font-size: 11px !important;
+      letter-spacing: 0.1em !important;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      scroll-behavior: auto !important;
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
   }
 `;
 document.head.appendChild(style);
@@ -885,6 +940,7 @@ function CartPopup({ cart, visible, onClose }) {
 
 function Header({ cartCount = 0 }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const { isLoggedIn } = useAuth();
   const [isMobile, setIsMobile] = useState(window.innerWidth < 640);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -895,6 +951,20 @@ function Header({ cartCount = 0 }) {
   }, []);
 
   const accountLabel = isLoggedIn ? "Account" : "Sign In";
+  const navPath = {
+    Products: "/products",
+    Research: "/research",
+    "Lab Results": "/lab-results",
+    Calculator: "/calculator",
+    Contact: "/contact",
+  };
+  const isActiveNav = (item) => {
+    const path = navPath[item];
+    if (!path) return false;
+    return item === "Products"
+      ? location.pathname === path || location.pathname.startsWith("/product/")
+      : location.pathname === path || location.pathname.startsWith(`${path}/`);
+  };
 
   // Close menu when navigating
   const handleNav = (dest) => {
@@ -942,7 +1012,7 @@ function Header({ cartCount = 0 }) {
       <div style={{
         maxWidth: 1400,
         margin: "0 auto",
-        padding: isMobile ? "6px 16px" : "6px 24px",
+        padding: isMobile ? "4px 16px" : "4px 24px",
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
@@ -960,7 +1030,7 @@ function Header({ cartCount = 0 }) {
             src="/logo_transparent.png"
             alt="Tier One BioSystems"
             style={{
-              height: 90,
+              height: isMobile ? 72 : 80,
               width: "auto",
               objectFit: "contain",
             }}
@@ -979,13 +1049,15 @@ function Header({ cartCount = 0 }) {
                 fontSize: 13,
                 letterSpacing: "0.15em",
                 textTransform: "uppercase",
-                color: "var(--text-secondary)",
+                color: isActiveNav(item) ? "var(--red-primary)" : "var(--text-secondary)",
                 cursor: "pointer",
                 transition: "color 0.2s",
                 position: "relative",
+                borderBottom: isActiveNav(item) ? "1px solid var(--red-primary)" : "1px solid transparent",
+                paddingBottom: 4,
               }}
               onMouseEnter={e => e.target.style.color = "var(--red-primary)"}
-              onMouseLeave={e => e.target.style.color = "var(--text-secondary)"}
+              onMouseLeave={e => e.target.style.color = isActiveNav(item) ? "var(--red-primary)" : "var(--text-secondary)"}
             >{item}</span>
           ))}
 
@@ -1019,12 +1091,11 @@ function Header({ cartCount = 0 }) {
 
           {/* Cart icon (always visible) */}
           <div role="button" tabIndex={0} aria-label="Shopping cart" onClick={() => { setMenuOpen(false); navigate("/cart"); }} onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setMenuOpen(false); navigate("/cart"); } }} style={{ position: "relative", display: "inline-flex", cursor: "pointer" }}>
-            <span style={{
-              fontFamily: "'Rajdhani', sans-serif",
-              fontSize: 22,
-              color: "var(--text-secondary)",
-              userSelect: "none",
-            }}>🛒</span>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={location.pathname === "/cart" ? "var(--red-primary)" : "var(--text-secondary)"} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="9" cy="20" r="1" />
+              <circle cx="19" cy="20" r="1" />
+              <path d="M3 4h2l2.4 10.4a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 1.9-1.4L21 8H6" />
+            </svg>
             {cartCount > 0 && (
               <span style={{
                 position: "absolute",
@@ -1048,8 +1119,11 @@ function Header({ cartCount = 0 }) {
           {/* Hamburger button (mobile only) */}
           {isMobile && (
             <div
+              role="button"
+              tabIndex={0}
               aria-label={menuOpen ? "Close menu" : "Open menu"}
               onClick={() => setMenuOpen(!menuOpen)}
+              onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setMenuOpen(!menuOpen); } }}
               style={{
                 cursor: "pointer",
                 display: "flex",
@@ -1137,8 +1211,8 @@ function Hero() {
   return (
     <section style={{
       position: "relative",
-      paddingTop: 120,
-      paddingBottom: 80,
+      paddingTop: isMobile ? 104 : 116,
+      paddingBottom: isMobile ? 64 : 80,
       overflow: "hidden",
       textAlign: "center",
       minHeight: "clamp(380px, 55vh, 620px)",
@@ -1161,7 +1235,7 @@ function Hero() {
           ? `center ${25 + scrollY * 0.012}%`
           : "center top",
         backgroundRepeat: "no-repeat",
-        opacity: 0.52,
+        opacity: 0.62,
         pointerEvents: "none",
         transformOrigin: isMobile ? "center center" : "center top",
         animation: "heroZoom 24s ease-in-out infinite alternate",
@@ -1171,7 +1245,7 @@ function Hero() {
       <div style={{
         position: "absolute",
         inset: 0,
-        background: "linear-gradient(to bottom, rgba(10,10,10,0.4) 0%, rgba(10,10,10,0.7) 50%, rgba(10,10,10,0.95) 100%)",
+        background: "linear-gradient(to bottom, rgba(9,10,12,0.36) 0%, rgba(9,10,12,0.7) 52%, rgba(9,10,12,0.97) 100%)",
         pointerEvents: "none",
       }} />
 
@@ -1253,9 +1327,9 @@ function Hero() {
           lineHeight: 1.7,
           letterSpacing: "0.02em",
           marginBottom: 28,
-          background: "rgba(10,10,10,0.6)",
+          background: "rgba(9,10,12,0.76)",
           padding: "14px 18px",
-          borderLeft: "2px solid rgba(196,30,42,0.4)",
+          borderLeft: "2px solid var(--red-primary)",
         }}>
           Industry-leading research peptides synthesized to the highest standards.
           Every compound is independently verified — because precision is non-negotiable.
@@ -1275,6 +1349,7 @@ function Hero() {
               letterSpacing: "0.1em",
               padding: "8px 16px",
               border: "1px solid rgba(196,30,42,0.4)",
+              background: "rgba(9,10,12,0.58)",
               color: "var(--red-primary)",
               animation: `fadeUp ${0.8 + i * 0.15}s ease-out`,
             }}>{badge}</span>
@@ -1330,8 +1405,8 @@ function Hero() {
           ].map((stat, i) => (
             <div key={i} style={{
               padding: "18px 16px",
-              border: "1px solid rgba(196,30,42,0.2)",
-              background: "rgba(10,10,10,0.5)",
+              border: "1px solid rgba(217,54,66,0.28)",
+              background: "rgba(9,10,12,0.72)",
               backdropFilter: "blur(8px)",
               textAlign: "center",
             }}>
@@ -1452,10 +1527,11 @@ function ProductCard({ product, index, onClick, onAddToCart }) {
       </div>
 
       {/* Info */}
-      <div style={{ padding: "16px 18px 20px", flex: 1, display: "flex", flexDirection: "column" }}>
+      <div className="product-card-info" style={{ padding: "16px 18px 20px", flex: 1, display: "flex", flexDirection: "column" }}>
         <a
           href={href}
           onClick={openQuickView}
+          className="product-card-title"
           style={{
             fontFamily: "'Orbitron', sans-serif",
             fontWeight: 700,
@@ -1478,11 +1554,11 @@ function ProductCard({ product, index, onClick, onAddToCart }) {
 
         <div style={{ marginTop: "auto", display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
           {isSaleActive() ? (<>
-            <span style={{ fontFamily: "'Orbitron', sans-serif", fontWeight: 700, fontSize: 26, color: "var(--text-primary)" }}>${applySale(product.price)}</span>
+            <span className="product-card-price" style={{ fontFamily: "'Orbitron', sans-serif", fontWeight: 700, fontSize: 26, color: "var(--text-primary)" }}>${applySale(product.price)}</span>
             <span style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 15, color: "var(--text-dim)", textDecoration: "line-through" }}>${product.price}</span>
             <span style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 16, color: "var(--red-primary)", fontWeight: 700 }}>5+ @ ${applySale(product.bulk)}</span>
           </>) : (<>
-            <span style={{ fontFamily: "'Orbitron', sans-serif", fontWeight: 700, fontSize: 26, color: "var(--text-primary)" }}>${product.price}</span>
+            <span className="product-card-price" style={{ fontFamily: "'Orbitron', sans-serif", fontWeight: 700, fontSize: 26, color: "var(--text-primary)" }}>${product.price}</span>
             <span style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 18, color: "var(--red-primary)", fontWeight: 700 }}>5+ @ ${product.bulk}</span>
           </>)}
         </div>
@@ -1862,14 +1938,18 @@ function ProductQuickView({ product, onClose, onAddToCart, onViewDetails }) {
 
         {/* Image */}
         <div style={{
-          background: "#080808",
+          // The catalog photos use a nearly-black studio backdrop. Matching
+          // that tone here and seating the image directly on the lower edge
+          // prevents the square JPEG boundary from showing around the vial or
+          // cutting across its reflection.
+          background: "#010403",
           display: "flex",
-          alignItems: "center",
+          alignItems: "flex-end",
           justifyContent: "center",
           overflow: "hidden",
           height: isMobile ? 280 : 360,
         }}>
-          <img src={product.image} alt={product.name} style={{ maxHeight: "100%", maxWidth: "100%", objectFit: "contain", padding: 16 }} />
+          <img src={product.image} alt={product.name} style={{ display: "block", width: "auto", height: "100%", maxWidth: "100%", objectFit: "contain" }} />
         </div>
 
         {/* Info */}
@@ -2014,7 +2094,7 @@ function Footer() {
       borderTop: "1px solid var(--border)",
       paddingTop: 60,
     }}>
-      <div style={{
+      <div className="footer-grid" style={{
         maxWidth: 1200,
         margin: "0 auto",
         padding: "0 24px",
@@ -2023,7 +2103,7 @@ function Footer() {
         gap: 40,
         marginBottom: 40,
       }}>
-        <div>
+        <div className="footer-brand">
           <div style={headingStyle}>Tier One Bio</div>
           <div style={{
             fontFamily: "'Rajdhani', sans-serif",
@@ -4353,11 +4433,12 @@ function LabResultsPage() {
                 onClick={() => setExpandedProduct(isExpanded ? null : product.coaKey)}
                 style={{
                   display: "flex",
-                  alignItems: "center",
+                  alignItems: isMobile ? "stretch" : "center",
+                  flexDirection: isMobile ? "column" : "row",
                   justifyContent: "space-between",
                   padding: isMobile ? "16px 16px" : "18px 28px",
                   cursor: "pointer",
-                  gap: 16,
+                  gap: isMobile ? 12 : 16,
                   width: "100%",
                   background: "none",
                   border: "none",
@@ -4372,9 +4453,10 @@ function LabResultsPage() {
                     fontWeight: 700,
                     fontSize: isMobile ? 14 : 16,
                     letterSpacing: "0.03em",
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
+                    whiteSpace: isMobile ? "normal" : "nowrap",
+                    overflow: isMobile ? "visible" : "hidden",
+                    textOverflow: isMobile ? "clip" : "ellipsis",
+                    lineHeight: 1.35,
                   }}>{product.displayName}</div>
                   <div style={{
                     fontFamily: "'Rajdhani', sans-serif",
@@ -4385,7 +4467,7 @@ function LabResultsPage() {
                   }}>Lot: {coa.lotNumber}</div>
                 </div>
 
-                <div style={{ display: "flex", alignItems: "center", gap: 16, flexShrink: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: isMobile ? "space-between" : "flex-start", gap: 16, flexShrink: 0, width: isMobile ? "100%" : "auto" }}>
                   <span style={{
                     fontFamily: "'Orbitron', sans-serif",
                     fontSize: 11,
@@ -4395,7 +4477,7 @@ function LabResultsPage() {
                     background: "rgba(34,197,94,0.1)",
                     border: "1px solid rgba(34,197,94,0.3)",
                     color: "#22c55e",
-                  }}>ALL TESTS PASSED</span>
+                  }}>{isMobile ? "PASSED" : "ALL TESTS PASSED"}</span>
                   <span style={{
                     fontFamily: "'Rajdhani', sans-serif",
                     fontSize: 20,
@@ -5533,8 +5615,8 @@ function ResearchPage() {
                       ))}
                     </div>
                     <h2 style={{ fontFamily: "'Orbitron', sans-serif", fontWeight: 800, fontSize: 18, letterSpacing: "0.02em", lineHeight: 1.25, marginBottom: 10, color: "var(--text-primary)" }}>{article.title}</h2>
-                    <p style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 14, color: "var(--text-secondary)", lineHeight: 1.55, marginBottom: 14, flex: 1 }}>{article.excerpt}</p>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontFamily: "'Rajdhani', sans-serif", fontSize: 12, color: "var(--text-dim)", paddingTop: 12, borderTop: "1px solid var(--border)" }}>
+                    <p style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 16, fontWeight: 500, color: "var(--text-secondary)", lineHeight: 1.65, marginBottom: 16, flex: 1 }}>{article.excerpt}</p>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontFamily: "'Rajdhani', sans-serif", fontSize: 13, color: "var(--text-dim)", paddingTop: 12, borderTop: "1px solid var(--border)" }}>
                       <span>{formatArticleDate(article.date)}</span>
                       <span>{article.readingTimeMinutes} min read</span>
                     </div>
@@ -5663,7 +5745,7 @@ function formatArticleDate(iso) {
 
 function AgeGate({ onConfirm }) {
   return (
-    <div style={{
+    <div role="dialog" aria-modal="true" aria-labelledby="age-verification-title" style={{
       position: "fixed",
       inset: 0,
       zIndex: 9999,
@@ -5702,7 +5784,7 @@ function AgeGate({ onConfirm }) {
         }} />
 
         {/* Age verification */}
-        <h2 style={{
+        <h2 id="age-verification-title" style={{
           fontFamily: "'Orbitron', sans-serif",
           fontWeight: 800,
           fontSize: 22,
@@ -5815,11 +5897,11 @@ function HomePage({ onAddToCart, onSelectProduct }) {
     <Hero />
 
     {/* Featured Products */}
-    <section className="scroll-reveal" style={{ maxWidth: 1400, margin: "0 auto", padding: "0 24px 60px" }}>
+    <section className="scroll-reveal" style={{ maxWidth: 1400, margin: "0 auto", padding: "44px 24px 60px" }}>
       <div style={{ textAlign: "center", marginBottom: 40 }}>
         <div style={{
           fontFamily: "'Orbitron', sans-serif",
-          fontSize: 11,
+          fontSize: 13,
           fontWeight: 600,
           letterSpacing: "0.2em",
           color: "var(--red-primary)",
@@ -5833,7 +5915,7 @@ function HomePage({ onAddToCart, onSelectProduct }) {
         }}>FEATURED COMPOUNDS</h2>
       </div>
 
-      <div style={{
+      <div className="featured-grid" style={{
         display: "grid",
         gridTemplateColumns: "repeat(auto-fill, minmax(min(260px, 45%), 1fr))",
         gap: 20,
@@ -6315,7 +6397,7 @@ export default function App() {
           }
         }} />
       )}
-      <div inert={!ageVerified ? "" : undefined}>
+      <div inert={!ageVerified ? true : undefined}>
       <Header cartCount={cart.reduce((sum, i) => sum + i.qty, 0)} />
       <CartPopup cart={cart} visible={cartPopupVisible} onClose={() => setCartPopupVisible(false)} />
       {selectedProduct && (
