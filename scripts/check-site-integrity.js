@@ -91,7 +91,7 @@ if (sitemap) {
 // ── 4. Prerender output must exist for every route ──────────────────────────
 if (hasDist) {
   for (const route of allRoutes(today)) {
-    const file = route.path === "/" ? "index.html" : `${route.path.replace(/^\//, "")}/index.html`;
+    const file = route.path === "/" ? "index.html" : `${route.path.replace(/^\//, "")}.html`;
     if (!existsSync(join(DIST, file))) fail(`Prerendered page missing: dist/${file}`);
   }
   if (!existsSync(join(DIST, "404.html"))) fail("dist/404.html is missing — unknown URLs would not return a 404.");
@@ -105,14 +105,14 @@ if (hasDist) {
   }
 
   // The prerendered head must not still be the homepage's on a deep route.
-  const sample = join(DIST, "product", PRODUCTS[0].id, "index.html");
+  const sample = join(DIST, "product", `${PRODUCTS[0].id}.html`);
   if (existsSync(sample)) {
     const html = readFileSync(sample, "utf8");
     if (!html.includes(`<title>${PRODUCTS[0].name} ${PRODUCTS[0].dose}`)) {
-      fail(`dist/product/${PRODUCTS[0].id}/index.html does not carry its own <title>.`);
+      fail(`dist/product/${PRODUCTS[0].id}.html does not carry its own <title>.`);
     }
     if (!html.includes(`href="/products"`)) {
-      fail(`dist/product/${PRODUCTS[0].id}/index.html has no crawlable link back to the catalog.`);
+      fail(`dist/product/${PRODUCTS[0].id}.html has no crawlable link back to the catalog.`);
     }
   }
 } else {

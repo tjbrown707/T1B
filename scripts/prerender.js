@@ -289,7 +289,12 @@ for (const route of routes) {
       : route.article ? articleBody(route)
         : staticBody(route, articles)
   );
-  const filePath = route.path === "/" ? "index.html" : `${route.path.replace(/^\//, "")}/index.html`;
+  // "<path>.html", not "<path>/index.html". Netlify serves a directory index
+  // only after 301-redirecting to add a trailing slash, which would put a
+  // redirect hop in front of every product page and land crawlers on a URL
+  // that disagrees with the canonical tag and the sitemap. A flat .html file
+  // is served at the extensionless URL directly.
+  const filePath = route.path === "/" ? "index.html" : `${route.path.replace(/^\//, "")}.html`;
   write(route, body, filePath);
 }
 
