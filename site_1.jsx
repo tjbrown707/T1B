@@ -5749,19 +5749,22 @@ function AgeGate({ onConfirm }) {
       position: "fixed",
       inset: 0,
       zIndex: 9999,
-      background: "rgba(0,0,0,0.95)",
-      backdropFilter: "blur(20px)",
+      background: "rgba(0,0,0,0.68)",
+      backdropFilter: "blur(7px)",
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
-      padding: 24,
+      padding: 16,
     }}>
       <div style={{
-        maxWidth: 520,
+        maxWidth: 460,
         width: "100%",
-        background: "var(--bg-card)",
-        border: "1px solid rgba(196,30,42,0.3)",
-        padding: "48px 36px",
+        maxHeight: "calc(100vh - 32px)",
+        overflowY: "auto",
+        background: "rgba(17,19,22,0.98)",
+        border: "1px solid rgba(217,54,66,0.38)",
+        boxShadow: "0 28px 80px rgba(0,0,0,0.62)",
+        padding: "30px 30px 28px",
         textAlign: "center",
         animation: "fadeIn 0.4s ease-out",
       }}>
@@ -5770,9 +5773,9 @@ function AgeGate({ onConfirm }) {
           src="/logo_transparent.png"
           alt="Tier One BioSystems"
           style={{
-            height: 120,
+            height: 90,
             width: "auto",
-            marginBottom: 28,
+            marginBottom: 16,
           }}
         />
 
@@ -5780,16 +5783,16 @@ function AgeGate({ onConfirm }) {
         <div style={{
           height: 1,
           background: "linear-gradient(to right, transparent, rgba(196,30,42,0.3), transparent)",
-          marginBottom: 28,
+          marginBottom: 20,
         }} />
 
         {/* Age verification */}
         <h2 id="age-verification-title" style={{
           fontFamily: "'Orbitron', sans-serif",
           fontWeight: 800,
-          fontSize: 22,
+          fontSize: 20,
           letterSpacing: "0.05em",
-          marginBottom: 16,
+          marginBottom: 10,
           color: "var(--text-primary)",
         }}>AGE VERIFICATION</h2>
 
@@ -5798,8 +5801,8 @@ function AgeGate({ onConfirm }) {
           fontSize: 17,
           fontWeight: 500,
           color: "var(--text-secondary)",
-          lineHeight: 1.7,
-          marginBottom: 28,
+          lineHeight: 1.55,
+          marginBottom: 18,
         }}>
           You must be <span style={{ color: "var(--red-primary)", fontWeight: 700 }}>18 years or older</span> to
           access this website.
@@ -5807,10 +5810,10 @@ function AgeGate({ onConfirm }) {
 
         {/* Disclaimer box */}
         <div style={{
-          padding: "18px 20px",
-          border: "1px solid rgba(196,30,42,0.15)",
-          background: "rgba(196,30,42,0.03)",
-          marginBottom: 32,
+          padding: "14px 16px",
+          border: "1px solid rgba(217,54,66,0.2)",
+          background: "rgba(217,54,66,0.045)",
+          marginBottom: 22,
           textAlign: "left",
         }}>
           <div style={{
@@ -5823,9 +5826,10 @@ function AgeGate({ onConfirm }) {
           }}>RESEARCH USE ONLY</div>
           <p style={{
             fontFamily: "'Rajdhani', sans-serif",
-            fontSize: 15,
+            fontSize: 14,
+            fontWeight: 500,
             color: "var(--text-secondary)",
-            lineHeight: 1.7,
+            lineHeight: 1.55,
             margin: 0,
           }}>
             All products sold on this website are intended strictly for laboratory and
@@ -5838,7 +5842,7 @@ function AgeGate({ onConfirm }) {
         </div>
 
         {/* Buttons */}
-        <div style={{ display: "flex", gap: 16, justifyContent: "center", flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
           <button
             onClick={() => onConfirm(true)}
             style={{
@@ -5846,7 +5850,7 @@ function AgeGate({ onConfirm }) {
               fontSize: 13,
               fontWeight: 700,
               letterSpacing: "0.15em",
-              padding: "14px 36px",
+              padding: "12px 20px",
               background: "var(--red-primary)",
               border: "1px solid var(--red-primary)",
               color: "#fff",
@@ -5854,7 +5858,7 @@ function AgeGate({ onConfirm }) {
               textTransform: "uppercase",
               transition: "all 0.2s",
               flex: 1,
-              minWidth: 180,
+              minWidth: 160,
             }}
             onMouseEnter={e => { e.target.style.background = "transparent"; e.target.style.color = "var(--red-primary)"; }}
             onMouseLeave={e => { e.target.style.background = "var(--red-primary)"; e.target.style.color = "#fff"; }}
@@ -5866,7 +5870,7 @@ function AgeGate({ onConfirm }) {
               fontSize: 13,
               fontWeight: 700,
               letterSpacing: "0.15em",
-              padding: "14px 36px",
+              padding: "12px 20px",
               background: "transparent",
               border: "1px solid var(--border)",
               color: "var(--text-secondary)",
@@ -5874,7 +5878,7 @@ function AgeGate({ onConfirm }) {
               textTransform: "uppercase",
               transition: "all 0.2s",
               flex: 1,
-              minWidth: 180,
+              minWidth: 160,
             }}
           >I AM UNDER 18</button>
         </div>

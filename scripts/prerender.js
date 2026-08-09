@@ -102,18 +102,34 @@ const linkList = (items) =>
 // narrow column and broke the full-bleed hero. Only `html` carries a colour,
 // because the app styles `body` and would otherwise be fighting this file.
 //
-// Nothing is hidden: the fallback is the real page for non-JS clients, and
-// hiding it from people while showing it to crawlers would be cloaking.
+// Nothing is removed or hidden from the document: the fallback remains the
+// real page for crawlers and non-JS clients. The two pseudo-elements only give
+// the first paint the same age-gate treatment React is about to render, so the
+// plain fallback text cannot flash before the app mounts. React clears the
+// wrapper and both pseudo-elements atomically when it renders the real page.
 const FALLBACK_STYLE = `<style>
   html { background: #0a0a0a; }
+  @keyframes release-prerender-gate { to { opacity: 0; visibility: hidden; } }
   #prerender-fallback { max-width: 960px; margin: 0 auto; padding: 24px;
     color: #c9c9c9; font: 16px/1.7 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  #prerender-fallback::before { content: ""; position: fixed; inset: 0; z-index: 9997;
+    background: rgba(0,0,0,.9); backdrop-filter: blur(10px);
+    animation: release-prerender-gate .2s linear 4s forwards; }
+  #prerender-fallback::after { content: ""; position: fixed; z-index: 9998;
+    top: 50%; left: 50%; transform: translate(-50%,-50%); box-sizing: border-box;
+    width: calc(100% - 32px); max-width: 460px; height: min(554px, calc(100vh - 32px));
+    border: 1px solid rgba(217,54,66,.38); background: #111316 url('/logo_transparent.png') center 30px / 90px auto no-repeat;
+    box-shadow: 0 28px 80px rgba(0,0,0,.62);
+    animation: release-prerender-gate .2s linear 4s forwards; }
   #prerender-fallback a { color: #e0e0e0; }
   #prerender-fallback h1, #prerender-fallback h2 { color: #fff; line-height: 1.25; }
   #prerender-fallback header { border-bottom: 1px solid #262626; padding-bottom: 12px; }
   #prerender-fallback footer { border-top: 1px solid #262626; margin-top: 32px; padding-top: 12px; }
   #prerender-fallback nav ul { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: 16px; }
   #prerender-fallback nav[aria-label="Breadcrumb"] ol { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+  @media (max-width: 480px) {
+    #prerender-fallback::after { height: min(672px, calc(100vh - 24px)); width: calc(100% - 24px); }
+  }
 </style>`;
 
 function chrome(inner) {
