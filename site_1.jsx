@@ -1272,17 +1272,11 @@ function Header({ cartCount = 0 }) {
 
 function Hero({ statsActive = true }) {
   const navigate = useNavigate();
-  const [scrollY, setScrollY] = useState(0);
   const [isMobile, setIsMobile] = useState(typeof window !== "undefined" && window.innerWidth < 700);
   useEffect(() => {
-    const onScroll = () => setScrollY(window.scrollY);
     const onResize = () => setIsMobile(window.innerWidth < 700);
-    window.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("resize", onResize);
-    return () => {
-      window.removeEventListener("scroll", onScroll);
-      window.removeEventListener("resize", onResize);
-    };
+    return () => window.removeEventListener("resize", onResize);
   }, []);
 
   return (
@@ -1301,20 +1295,17 @@ function Hero({ statsActive = true }) {
       <div style={{
         position: "absolute",
         inset: 0,
-        backgroundImage: isMobile
-          ? "url('/hero-lab-noir-mobile.webp')"
-          : "url('/hero-lab-noir.webp')",
-        // Keep the foreground vial anchored on the right while preserving the
-        // dark copy area on desktop and the vial-focused crop on mobile.
-        backgroundSize: isMobile ? "auto 100%" : "cover",
-        backgroundPosition: isMobile
-          ? `right ${-Math.min(scrollY * 0.015, 12)}px`
-          : "center top",
+        backgroundColor: "#090a0c",
+        backgroundImage: "url('/hero-lab-noir.webp')",
+        // Mobile reuses the exact selected desktop artwork at a smaller scale,
+        // keeping the complete vial and logo visible beneath the copy area.
+        backgroundSize: isMobile ? "auto 67%" : "cover",
+        backgroundPosition: isMobile ? "right bottom" : "center top",
         backgroundRepeat: "no-repeat",
         opacity: isMobile ? 0.68 : 0.78,
         pointerEvents: "none",
         transformOrigin: isMobile ? "center center" : "center top",
-        animation: "heroZoom 24s ease-in-out infinite alternate",
+        animation: isMobile ? "none" : "heroZoom 24s ease-in-out infinite alternate",
       }} />
 
       {/* Dark overlay for text readability */}
