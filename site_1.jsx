@@ -1296,13 +1296,13 @@ function Hero({ statsActive = true }) {
         position: "absolute",
         inset: 0,
         backgroundColor: "#090a0c",
-        backgroundImage: "url('/hero-lab-noir.webp')",
-        // Mobile keeps the selected artwork intact but pulls it farther back,
-        // placing the vial below the primary copy instead of behind the CTAs.
-        backgroundSize: isMobile ? "auto 45%" : "cover",
-        backgroundPosition: isMobile ? "right 95%" : "center top",
+        backgroundImage: `url('${isMobile ? "/hero-lab-noir-mobile.webp" : "/hero-lab-noir.webp"}')`,
+        // Mobile uses its portrait composition, shifted right into the open
+        // column beside the proof points while the desktop crop stays intact.
+        backgroundSize: isMobile ? "auto 90%" : "cover",
+        backgroundPosition: isMobile ? "calc(100% + 60px) calc(50% - 70px)" : "center top",
         backgroundRepeat: "no-repeat",
-        opacity: isMobile ? 0.62 : 0.78,
+        opacity: isMobile ? 0.66 : 0.78,
         pointerEvents: "none",
         transformOrigin: isMobile ? "center center" : "center top",
         animation: isMobile ? "none" : "heroZoom 24s ease-in-out infinite alternate",
