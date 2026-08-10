@@ -1297,16 +1297,15 @@ function Hero({ statsActive = true }) {
       alignItems: "center",
       justifyContent: "center",
     }}>
-      {/* Art-directed desktop/mobile production imagery with zoom + parallax */}
+      {/* Lab Noir hero imagery with zoom + parallax */}
       <div style={{
         position: "absolute",
         inset: 0,
         backgroundImage: isMobile
-          ? "url('/hero-lab-noir-first-mobile.webp')"
-          : "url('/hero-lab-noir-first.webp')",
-        // Desktop keeps the full-width production line. Mobile uses a separate
-        // portrait composition and anchors its vial to the right rather than
-        // forcing the desktop image through an unreadable narrow crop.
+          ? "url('/hero-lab-noir-mobile.webp')"
+          : "url('/hero-lab-noir.webp')",
+        // Keep the foreground vial anchored on the right while preserving the
+        // dark copy area on desktop and the vial-focused crop on mobile.
         backgroundSize: isMobile ? "auto 100%" : "cover",
         backgroundPosition: isMobile
           ? `right ${-Math.min(scrollY * 0.015, 12)}px`
