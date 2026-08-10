@@ -67,9 +67,16 @@ catch { fail("public/sitemap.xml is missing — run `npm run sitemap`."); }
 
 if (sitemap) {
   const listed = new Set([...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map(m => m[1]));
+  const listedImages = new Set([...sitemap.matchAll(/<image:loc>([^<]+)<\/image:loc>/g)].map(m => m[1]));
   for (const route of sitemapRoutes(today)) {
     if (!listed.has(canonicalUrl(route.path))) {
       fail(`Sitemap is stale: ${route.path} is indexable but not listed. Run \`npm run sitemap\`.`);
+    }
+    if (route.image) {
+      const imageUrl = route.image.startsWith("http") ? route.image : canonicalUrl(route.image);
+      if (!listedImages.has(imageUrl)) {
+        fail(`Sitemap is missing the image for ${route.path}. Run \`npm run sitemap\`.`);
+      }
     }
   }
   for (const route of allRoutes(today)) {

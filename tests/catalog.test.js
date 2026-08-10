@@ -1,5 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 
 import { PRODUCTS } from "../src/data/catalog.js";
 import { ARTICLE_META } from "../src/data/articles.js";
@@ -24,6 +26,8 @@ test("every product has the fields the storefront and schema depend on", () => {
 test("product images are site-relative paths", () => {
   for (const product of PRODUCTS) {
     assert.match(product.image, /^\/[\w.-]+\.(jpg|png|webp|avif)$/, `${product.id} image looks wrong`);
+    assert.doesNotMatch(product.image, /-v\d+\./, `${product.id} image has a temporary versioned filename`);
+    assert.ok(existsSync(join("public", product.image.slice(1))), `${product.id} image file is missing`);
   }
 });
 

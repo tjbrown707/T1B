@@ -13,7 +13,7 @@
 
 import { PRODUCTS } from "./catalog.js";
 import { ARTICLE_META } from "./articles.js";
-import { SITE_DOMAIN } from "./site.js";
+import { SITE_DOMAIN, SITE_NAME } from "./site.js";
 
 // ─── Article publication gating ──────────────────────────────────────────────
 // Dates are ISO (YYYY-MM-DD), so a string comparison is a date comparison.
@@ -54,11 +54,24 @@ export function publishedArticleMeta(today = todayISO()) {
 // Used by the product/article pages AND by the prerenderer, so the two cannot
 // disagree about what a page is called.
 
+export const PRODUCT_IMAGE_WIDTH = 1254;
+export const PRODUCT_IMAGE_HEIGHT = 1254;
+
+// Product photography is reused in cards, quick views, the cart, link previews
+// and structured data. One concise description keeps every copy consistent
+// without stuffing the same product name into unrelated keywords.
+export function productImageAlt(product) {
+  return `${SITE_NAME} ${product.name} ${product.dose} research vial`;
+}
+
 export function productMeta(product) {
   return {
     title: `${product.name} ${product.dose}`,
     description: `${product.name} ${product.dose} — ${(product.research || "").slice(0, 150)}`,
     image: product.image,
+    imageAlt: productImageAlt(product),
+    imageWidth: PRODUCT_IMAGE_WIDTH,
+    imageHeight: PRODUCT_IMAGE_HEIGHT,
     type: "website",
   };
 }
@@ -68,6 +81,7 @@ export function articleMeta(article) {
     title: article.metaTitle || article.title,
     description: article.metaDescription || article.excerpt || "",
     image: article.heroImage,
+    imageAlt: article.heroImage ? `${article.title} — ${SITE_NAME} research article` : undefined,
     type: "article",
   };
 }

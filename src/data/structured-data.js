@@ -9,7 +9,12 @@
 
 import { SITE_DOMAIN, SITE_NAME, CONTACT_EMAIL } from "./site.js";
 import { applySale } from "./pricing.js";
-import { canonicalUrl } from "./routes.js";
+import {
+  canonicalUrl,
+  productImageAlt,
+  PRODUCT_IMAGE_WIDTH,
+  PRODUCT_IMAGE_HEIGHT,
+} from "./routes.js";
 
 const absolute = (path) =>
   !path ? `${SITE_DOMAIN}/logo-wide.png` : (path.startsWith("http") ? path : `${SITE_DOMAIN}${path}`);
@@ -45,6 +50,7 @@ export function breadcrumbLd(trail) {
 
 export function productLd(product) {
   const url = canonicalUrl(`/product/${product.id}`);
+  const imageUrl = absolute(product.image);
   return {
     "@type": "Product",
     "@id": `${url}#product`,
@@ -53,7 +59,15 @@ export function productLd(product) {
     sku: product.id,
     category: product.category,
     brand: { "@type": "Brand", name: SITE_NAME },
-    image: [absolute(product.image)],
+    image: [{
+      "@type": "ImageObject",
+      url: imageUrl,
+      contentUrl: imageUrl,
+      caption: productImageAlt(product),
+      width: PRODUCT_IMAGE_WIDTH,
+      height: PRODUCT_IMAGE_HEIGHT,
+      representativeOfPage: true,
+    }],
     url,
     // Deliberately no `availability` and no `priceValidUntil`. There is no
     // stock system behind this catalog, so marking all 27 products InStock

@@ -154,6 +154,10 @@ test("product schema describes one product and claims no stock it cannot back up
   const graph = productGraph(PRODUCTS[0])["@graph"];
   const products = graph.filter(node => node["@type"] === "Product");
   assert.equal(products.length, 1);
+  assert.equal(products[0].image[0]["@type"], "ImageObject");
+  assert.match(products[0].image[0].caption, /research vial$/);
+  assert.equal(products[0].image[0].width, 1254);
+  assert.equal(products[0].image[0].height, 1254);
   assert.equal(products[0].offers.availability, undefined, "must not assert InStock");
   assert.equal(products[0].offers.priceValidUntil, undefined, "must not assert a validity date");
   assert.ok(graph.some(node => node["@type"] === "BreadcrumbList"));

@@ -122,6 +122,7 @@ const FALLBACK_STYLE = `<style>
     box-shadow: 0 28px 80px rgba(0,0,0,.62);
     animation: release-prerender-gate .2s linear 4s forwards; }
   #prerender-fallback a { color: #e0e0e0; }
+  #prerender-fallback img { display: block; max-width: 100%; height: auto; }
   #prerender-fallback h1, #prerender-fallback h2 { color: #fff; line-height: 1.25; }
   #prerender-fallback header { border-bottom: 1px solid #262626; padding-bottom: 12px; }
   #prerender-fallback footer { border-top: 1px solid #262626; margin-top: 32px; padding-top: 12px; }
@@ -166,6 +167,7 @@ function productBody(route) {
   const related = PRODUCTS.filter(other => other.name === p.name && other.id !== p.id);
   return `${breadcrumb([["/", "Home"], ["/products", "Products"], [route.path, `${p.name} ${p.dose}`]])}
 <h1>${esc(p.name)} ${esc(p.dose)}</h1>
+<figure><img src="${esc(p.image)}" alt="${esc(route.imageAlt)}" width="${esc(route.imageWidth)}" height="${esc(route.imageHeight)}" /></figure>
 <p><strong>$${esc(price)}</strong> — ${esc(p.category)} — purity ${esc(p.purity)}</p>
 <p>${esc(p.research)}</p>
 ${p.sequence ? `<p><strong>Sequence:</strong> ${esc(p.sequence)}</p>` : ""}
@@ -241,6 +243,7 @@ function headFor(route, articles) {
   const fullTitle = route.title ? `${route.title}${TITLE_SUFFIX}` : DEFAULT_TITLE;
   const canonical = canonicalUrl(route.path);
   const image = absolute(route.image);
+  const imageAlt = route.imageAlt || (route.image ? fullTitle : `${SITE_NAME} logo`);
   return [
     `<title>${esc(fullTitle)}</title>`,
     `<meta name="description" content="${esc(route.description)}" />`,
@@ -251,11 +254,15 @@ function headFor(route, articles) {
     `<meta property="og:url" content="${esc(canonical)}" />`,
     `<meta property="og:type" content="${esc(route.type || "website")}" />`,
     `<meta property="og:image" content="${esc(image)}" />`,
+    `<meta property="og:image:alt" content="${esc(imageAlt)}" />`,
+    route.imageWidth ? `<meta property="og:image:width" content="${esc(route.imageWidth)}" />` : "",
+    route.imageHeight ? `<meta property="og:image:height" content="${esc(route.imageHeight)}" />` : "",
     `<meta property="og:site_name" content="${esc(SITE_NAME)}" />`,
     `<meta name="twitter:card" content="summary_large_image" />`,
     `<meta name="twitter:title" content="${esc(fullTitle)}" />`,
     `<meta name="twitter:description" content="${esc(route.description)}" />`,
     `<meta name="twitter:image" content="${esc(image)}" />`,
+    `<meta name="twitter:image:alt" content="${esc(imageAlt)}" />`,
     structuredData(route, articles),
     FALLBACK_STYLE,
   ].filter(Boolean).join("\n    ");

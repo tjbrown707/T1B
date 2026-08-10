@@ -19,6 +19,9 @@ import {
   articleMeta,
   canonicalUrl,
   isPublished,
+  productImageAlt,
+  PRODUCT_IMAGE_WIDTH,
+  PRODUCT_IMAGE_HEIGHT,
 } from "./src/data/routes.js";
 import { productGraph, articleGraph } from "./src/data/structured-data.js";
 
@@ -480,7 +483,14 @@ function CountUp({ end, duration = 1500, suffix = "", prefix = "", start = true 
 // `image` is a site-relative path (e.g. "/bpc157-10.jpg"); `type` is the
 // OpenGraph type, "article" on research pages and "website" everywhere else.
 function usePageMeta(title, description, options = {}) {
-  const { image, type = "website", noindex = false } = options;
+  const {
+    image,
+    imageAlt,
+    imageWidth,
+    imageHeight,
+    type = "website",
+    noindex = false,
+  } = options;
   useEffect(() => {
     const suffix = TITLE_SUFFIX;
     const fullTitle = title ? title + suffix : DEFAULT_TITLE;
@@ -489,9 +499,12 @@ function usePageMeta(title, description, options = {}) {
     // Find-or-create. The previous version only wrote to tags that already
     // existed in index.html and silently did nothing otherwise, which is why
     // og:image never appeared on any page — the tag was never in the HTML.
-    const upsertMeta = (attr, key, value) => {
-      if (!value) return;
+    const syncMeta = (attr, key, value) => {
       let el = document.head.querySelector(`meta[${attr}="${key}"]`);
+      if (!value) {
+        el?.remove();
+        return;
+      }
       if (!el) {
         el = document.createElement("meta");
         el.setAttribute(attr, key);
@@ -517,26 +530,31 @@ function usePageMeta(title, description, options = {}) {
     const absoluteImage = image
       ? (image.startsWith("http") ? image : `${SITE_DOMAIN}${image}`)
       : `${SITE_DOMAIN}/logo-wide.png`;
+    const resolvedImageAlt = imageAlt || (image ? fullTitle : "Tier One BioSystems logo");
 
-    upsertMeta("name", "description", description);
-    upsertMeta("property", "og:title", fullTitle);
-    upsertMeta("property", "og:description", description);
-    upsertMeta("property", "og:url", canonical);
-    upsertMeta("property", "og:type", type);
-    upsertMeta("property", "og:image", absoluteImage);
-    upsertMeta("name", "twitter:title", fullTitle);
-    upsertMeta("name", "twitter:description", description);
-    upsertMeta("name", "twitter:image", absoluteImage);
+    syncMeta("name", "description", description);
+    syncMeta("property", "og:title", fullTitle);
+    syncMeta("property", "og:description", description);
+    syncMeta("property", "og:url", canonical);
+    syncMeta("property", "og:type", type);
+    syncMeta("property", "og:image", absoluteImage);
+    syncMeta("property", "og:image:alt", resolvedImageAlt);
+    syncMeta("property", "og:image:width", imageWidth);
+    syncMeta("property", "og:image:height", imageHeight);
+    syncMeta("name", "twitter:title", fullTitle);
+    syncMeta("name", "twitter:description", description);
+    syncMeta("name", "twitter:image", absoluteImage);
+    syncMeta("name", "twitter:image:alt", resolvedImageAlt);
 
     // Cart, login, signup and account pages are useless as search results and
     // dilute the pages that matter, so they are served but never indexed. The
     // prerendered HTML carries the same directive — see scripts/prerender.js.
-    upsertMeta("name", "robots", noindex ? "noindex, follow" : "index, follow");
+    syncMeta("name", "robots", noindex ? "noindex, follow" : "index, follow");
 
     return () => {
       document.title = DEFAULT_TITLE;
     };
-  }, [title, description, image, type, noindex]);
+  }, [title, description, image, imageAlt, imageWidth, imageHeight, type, noindex]);
 }
 
 // Replaces the route-level JSON-LD in the document head.
@@ -559,7 +577,14 @@ function applyRouteJsonLd(graph) {
 // the prerendered HTML and the client-rendered page cannot drift apart.
 function useRouteMeta(path) {
   const meta = routeMeta(path);
-  usePageMeta(meta.title, meta.description, { noindex: meta.noindex, image: meta.image, type: meta.type });
+  usePageMeta(meta.title, meta.description, {
+    noindex: meta.noindex,
+    image: meta.image,
+    imageAlt: meta.imageAlt,
+    imageWidth: meta.imageWidth,
+    imageHeight: meta.imageHeight,
+    type: meta.type,
+  });
   return meta;
 }
 
@@ -863,7 +888,13 @@ function CartPopup({ cart, visible, onClose }) {
               flexShrink: 0,
               border: "1px solid rgba(196,30,42,0.2)",
             }}>
-              <img src={item.image} alt={item.name} style={{
+              <img
+                src={item.image}
+                alt={productImageAlt(item)}
+                width={PRODUCT_IMAGE_WIDTH}
+                height={PRODUCT_IMAGE_HEIGHT}
+                decoding="async"
+                style={{
                 width: "100%",
                 height: "100%",
                 objectFit: "cover",
@@ -1516,8 +1547,11 @@ function ProductCard({ product, index, onClick, onAddToCart }) {
         >
           <img
             src={product.image}
-            alt={product.name}
+            alt={productImageAlt(product)}
+            width={PRODUCT_IMAGE_WIDTH}
+            height={PRODUCT_IMAGE_HEIGHT}
             loading="lazy"
+            decoding="async"
             style={{
               width: "100%",
               height: "100%",
@@ -1950,7 +1984,14 @@ function ProductQuickView({ product, onClose, onAddToCart, onViewDetails }) {
           overflow: "hidden",
           height: isMobile ? 280 : 360,
         }}>
-          <img src={product.image} alt={product.name} style={{ display: "block", width: "auto", height: "100%", maxWidth: "100%", objectFit: "contain" }} />
+          <img
+            src={product.image}
+            alt={productImageAlt(product)}
+            width={PRODUCT_IMAGE_WIDTH}
+            height={PRODUCT_IMAGE_HEIGHT}
+            decoding="async"
+            style={{ display: "block", width: "auto", height: "100%", maxWidth: "100%", objectFit: "contain" }}
+          />
         </div>
 
         {/* Info */}
@@ -3910,7 +3951,14 @@ function CartPage({ cart, setCart }) {
                       background: "#080808",
                       overflow: "hidden",
                     }}>
-                      <img src={item.image} alt={item.name} style={{ width: "100%", height: "100%", objectFit: "contain", padding: 4 }} />
+                      <img
+                        src={item.image}
+                        alt={productImageAlt(item)}
+                        width={PRODUCT_IMAGE_WIDTH}
+                        height={PRODUCT_IMAGE_HEIGHT}
+                        decoding="async"
+                        style={{ width: "100%", height: "100%", objectFit: "contain", padding: 4 }}
+                      />
                     </div>
                     <div style={{ minWidth: 0, flex: 1 }}>
                     <div style={{
@@ -5643,7 +5691,7 @@ function ArticlePage() {
   usePageMeta(
     meta ? meta.title : "Article Not Found",
     meta ? meta.description : "",
-    { image: meta?.image, type: "article", noindex: !article }
+    { image: meta?.image, imageAlt: meta?.imageAlt, type: "article", noindex: !article }
   );
   // Same graph the prerenderer bakes into this page's HTML, plus the breadcrumb
   // trail that was missing before.
@@ -5715,7 +5763,15 @@ function ArticlePage() {
               {related.map(p => (
                 <a key={p.id} href={`/product/${p.id}`} onClick={(e) => { e.preventDefault(); navigate(`/product/${p.id}`); }} style={{ display: "block", textDecoration: "none", border: "1px solid var(--border)", background: "var(--bg-card)", padding: 16, transition: "all 0.2s" }} onMouseEnter={e => e.currentTarget.style.borderColor = "rgba(196,30,42,0.4)"} onMouseLeave={e => e.currentTarget.style.borderColor = "var(--border)"}>
                   <div style={{ height: 110, display: "flex", alignItems: "center", justifyContent: "center", background: "#080808", marginBottom: 12 }}>
-                    <img src={p.image} alt={p.name} loading="lazy" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", padding: 6 }} />
+                    <img
+                      src={p.image}
+                      alt={productImageAlt(p)}
+                      width={PRODUCT_IMAGE_WIDTH}
+                      height={PRODUCT_IMAGE_HEIGHT}
+                      loading="lazy"
+                      decoding="async"
+                      style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", padding: 6 }}
+                    />
                   </div>
                   <div style={{ fontFamily: "'Orbitron', sans-serif", fontWeight: 700, fontSize: 14, color: "var(--text-primary)", marginBottom: 4 }}>{p.name}</div>
                   <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 13, color: "var(--text-secondary)", marginBottom: 10 }}>{p.dose}</div>
@@ -6055,7 +6111,13 @@ function ProductPage({ onAddToCart }) {
   usePageMeta(
     meta ? meta.title : "Product Not Found",
     meta ? meta.description : "",
-    { image: meta?.image, noindex: !product }
+    {
+      image: meta?.image,
+      imageAlt: meta?.imageAlt,
+      imageWidth: meta?.imageWidth,
+      imageHeight: meta?.imageHeight,
+      noindex: !product,
+    }
   );
   // Product schema for crawlers that DO run JavaScript. The prerendered HTML
   // already carries the identical graph (both come from productGraph), so this
@@ -6086,7 +6148,15 @@ function ProductPage({ onAddToCart }) {
           overflow: "hidden",
           maxHeight: isMobile ? 300 : 450,
         }}>
-          <img src={product.image} alt={product.name} loading="lazy" style={{
+          <img
+            src={product.image}
+            alt={productImageAlt(product)}
+            width={PRODUCT_IMAGE_WIDTH}
+            height={PRODUCT_IMAGE_HEIGHT}
+            loading="eager"
+            fetchPriority="high"
+            decoding="async"
+            style={{
             width: "100%",
             height: "100%",
             objectFit: "contain",
