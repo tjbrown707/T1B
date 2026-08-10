@@ -38,6 +38,7 @@ import {
 } from "./src/data/pricing.js";
 import { getLabResults, isLabResultWithheld } from "./src/data/lab-integrity.js";
 import { readStoredCart, clampQuantity, MAX_CART_QUANTITY } from "./src/data/cart.js";
+import { ORDER_STATUSES, normalizeStatus } from "./src/data/order-status.js";
 import {
   lineUnitPrice,
   orderTotals,
@@ -5346,9 +5347,9 @@ function AccountPage() {
                   <span style={{
                     display: "inline-block",
                     padding: "4px 12px",
-                    border: "1px solid rgba(34,197,94,0.4)",
-                    background: "rgba(34,197,94,0.08)",
-                    color: "#22c55e",
+                    border: `1px solid ${orderStatusColors(o.status).border}`,
+                    background: orderStatusColors(o.status).bg,
+                    color: orderStatusColors(o.status).fg,
                     fontFamily: "'Orbitron', sans-serif",
                     fontSize: 10,
                     fontWeight: 700,
@@ -5383,6 +5384,274 @@ function formatOrderDate(iso) {
   } catch {
     return "";
   }
+}
+
+// Every status used to render in confirmation-green, AWAITING PAYMENT included
+// — the one status that specifically means nobody has checked the money
+// arrived. Deriving the colour from the status stops the page reassuring a
+// reader about an order that has not been reconciled.
+function orderStatusColors(status) {
+  switch (normalizeStatus(status)) {
+    case "CONFIRMED":
+    case "DELIVERED":
+      return { fg: "#22c55e", border: "rgba(34,197,94,0.4)", bg: "rgba(34,197,94,0.08)" };
+    case "SHIPPED":
+      return { fg: "#38bdf8", border: "rgba(56,189,248,0.4)", bg: "rgba(56,189,248,0.08)" };
+    case "AWAITING PAYMENT":
+      return { fg: "#f59e0b", border: "rgba(245,158,11,0.45)", bg: "rgba(245,158,11,0.10)" };
+    default:
+      return { fg: "#9ca3af", border: "rgba(156,163,175,0.4)", bg: "rgba(156,163,175,0.08)" };
+  }
+}
+
+// ─── Order administration (staff) ────────────────────────────────────────────
+// Exists so that marking an order paid does not require opening the Supabase
+// dashboard. The page is only a view: it can display nothing and change nothing
+// without /.netlify/functions/admin-orders agreeing the caller is on the
+// ADMIN_EMAILS allowlist, so knowing this URL grants no access on its own.
+
+function AdminOrdersPage() {
+  useRouteMeta("/admin");
+  const { isLoggedIn, loading: authLoading } = useAuth();
+
+  const [orders, setOrders] = useState(null); // null = not loaded yet
+  const [loadError, setLoadError] = useState("");
+  const [pending, setPending] = useState(""); // order_number currently saving
+  const [flash, setFlash] = useState({ orderNumber: "", text: "", type: "" });
+
+  useEffect(() => {
+    if (!isLoggedIn) return undefined;
+    let active = true;
+    (async () => {
+      try {
+        const { data } = await supabase.auth.getSession();
+        const accessToken = data?.session?.access_token;
+        if (!accessToken) {
+          if (active) { setLoadError("Your session has expired. Sign in again."); setOrders([]); }
+          return;
+        }
+        const res = await fetch("/.netlify/functions/admin-orders", {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        const payload = await res.json().catch(() => null);
+        if (!active) return;
+        if (!res.ok) {
+          setLoadError(payload?.error || `Could not load orders (HTTP ${res.status}).`);
+          setOrders([]);
+          return;
+        }
+        setOrders(Array.isArray(payload?.orders) ? payload.orders : []);
+      } catch {
+        if (active) { setLoadError("Could not reach the order service."); setOrders([]); }
+      }
+    })();
+    return () => { active = false; };
+  }, [isLoggedIn]);
+
+  async function changeStatus(order, nextStatus) {
+    if (!nextStatus || nextStatus === order.status) return;
+    setPending(order.order_number);
+    setFlash({ orderNumber: "", text: "", type: "" });
+    try {
+      const { data } = await supabase.auth.getSession();
+      const accessToken = data?.session?.access_token;
+      if (!accessToken) throw new Error("Your session has expired. Sign in again.");
+      const res = await fetch("/.netlify/functions/admin-orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({ orderNumber: order.order_number, status: nextStatus }),
+      });
+      const payload = await res.json().catch(() => null);
+      if (!res.ok || !payload?.order) throw new Error(payload?.error || `Could not save (HTTP ${res.status}).`);
+      // Adopt the row the server wrote back rather than the value sent, so the
+      // page shows what is actually stored and never a hopeful guess.
+      setOrders(list => (list || []).map(o =>
+        o.order_number === payload.order.order_number ? payload.order : o));
+      setFlash({ orderNumber: order.order_number, text: "Saved", type: "success" });
+    } catch (err) {
+      setFlash({ orderNumber: order.order_number, text: err.message || "Could not save.", type: "error" });
+    } finally {
+      setPending("");
+    }
+  }
+
+  const awaiting = (orders || []).filter(o => normalizeStatus(o.status) === "AWAITING PAYMENT");
+  const awaitingValue = awaiting.reduce((sum, o) => sum + Number(o.total || 0), 0);
+
+  const panel = {
+    border: "1px solid var(--border)",
+    background: "rgba(17,17,17,0.4)",
+    padding: "20px 24px",
+    fontFamily: "'Rajdhani', sans-serif",
+    fontSize: 16,
+    color: "var(--text-secondary)",
+  };
+  const label = {
+    fontFamily: "'Rajdhani', sans-serif",
+    fontSize: 12,
+    letterSpacing: "0.12em",
+    textTransform: "uppercase",
+    color: "var(--text-dim)",
+    marginBottom: 2,
+  };
+
+  return (
+    <div style={{ maxWidth: 900, margin: "0 auto", padding: "140px 24px 80px" }}>
+      <h1 style={{
+        fontFamily: "'Orbitron', sans-serif",
+        fontWeight: 800,
+        fontSize: 24,
+        letterSpacing: "0.05em",
+        marginBottom: 8,
+      }}>ORDER ADMINISTRATION</h1>
+      <p style={{
+        fontFamily: "'Rajdhani', sans-serif",
+        fontSize: 16,
+        color: "var(--text-dim)",
+        marginBottom: 28,
+      }}>
+        Only mark an order confirmed once you have seen the payment arrive in Cash App or Venmo.
+      </p>
+
+      {authLoading ? (
+        <div style={panel}>Checking your session…</div>
+      ) : !isLoggedIn ? (
+        <div style={panel}>
+          You need to be signed in.{" "}
+          <a href="/login?redirect=/admin" style={{ color: "var(--red-primary)" }}>Sign in</a>
+        </div>
+      ) : loadError ? (
+        <div style={{ ...panel, borderColor: "rgba(239,68,68,0.4)", color: "#f87171" }}>{loadError}</div>
+      ) : orders === null ? (
+        <div style={panel}>Loading orders…</div>
+      ) : orders.length === 0 ? (
+        <div style={panel}>No orders yet.</div>
+      ) : (
+        <>
+          <div style={{
+            ...panel,
+            marginBottom: 20,
+            display: "flex",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: 8,
+          }}>
+            <span>{orders.length} order{orders.length === 1 ? "" : "s"}</span>
+            <span style={{ color: awaiting.length ? "#f59e0b" : "var(--text-dim)" }}>
+              {awaiting.length} awaiting payment
+              {awaiting.length > 0 ? ` · $${awaitingValue.toFixed(2)}` : ""}
+            </span>
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            {orders.map(o => {
+              const colors = orderStatusColors(o.status);
+              const saving = pending === o.order_number;
+              const note = flash.orderNumber === o.order_number ? flash : null;
+              return (
+                <div key={o.id || o.order_number} style={{ border: "1px solid var(--border)", background: "rgba(17,17,17,0.4)", padding: "20px 24px" }}>
+                  <div style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                    gap: 8,
+                    marginBottom: 14,
+                    paddingBottom: 14,
+                    borderBottom: "1px solid var(--border)",
+                  }}>
+                    <div>
+                      <div style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 16, fontWeight: 800, color: "var(--red-primary)", letterSpacing: "0.05em" }}>{o.order_number}</div>
+                      <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 13, color: "var(--text-dim)", marginTop: 2 }}>
+                        {formatOrderDate(o.created_at)} · {o.payment_method || "—"}
+                      </div>
+                    </div>
+                    <div style={{ textAlign: "right" }}>
+                      <span style={{
+                        display: "inline-block",
+                        padding: "4px 12px",
+                        border: `1px solid ${colors.border}`,
+                        background: colors.bg,
+                        color: colors.fg,
+                        fontFamily: "'Orbitron', sans-serif",
+                        fontSize: 10,
+                        fontWeight: 700,
+                        letterSpacing: "0.12em",
+                        textTransform: "uppercase",
+                      }}>{o.status}</span>
+                      <div style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 18, fontWeight: 800, color: "var(--text-primary)", marginTop: 8 }}>${Number(o.total).toFixed(2)}</div>
+                    </div>
+                  </div>
+
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 24, marginBottom: 14 }}>
+                    <div style={{ minWidth: 200 }}>
+                      <div style={label}>Customer</div>
+                      <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 15, color: "var(--text-secondary)" }}>
+                        {o.customer_name}<br />
+                        {o.customer_email}<br />
+                        {o.customer_phone}
+                      </div>
+                    </div>
+                    <div style={{ minWidth: 200 }}>
+                      <div style={label}>Ship to</div>
+                      <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 15, color: "var(--text-secondary)" }}>
+                        {o.ship_address}<br />
+                        {o.ship_city}, {o.ship_state} {o.ship_zip}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 14 }}>
+                    {(o.items || []).map((it, i) => (
+                      <div key={i} style={{ display: "flex", justifyContent: "space-between", fontFamily: "'Rajdhani', sans-serif", fontSize: 15, color: "var(--text-secondary)" }}>
+                        <span>{it.name} {it.dose} <span style={{ color: "var(--text-dim)" }}>×{it.qty}</span></span>
+                        <span>${Number(it.lineTotal).toFixed(2)}</span>
+                      </div>
+                    ))}
+                    {o.discount_code ? (
+                      <div style={{ display: "flex", justifyContent: "space-between", fontFamily: "'Rajdhani', sans-serif", fontSize: 15, color: "var(--text-dim)" }}>
+                        <span>Discount ({o.discount_code})</span>
+                        <span>−${Number(o.discount_amount || 0).toFixed(2)}</span>
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 12, paddingTop: 14, borderTop: "1px solid var(--border)" }}>
+                    <label htmlFor={`status-${o.order_number}`} style={label}>Status</label>
+                    <select
+                      id={`status-${o.order_number}`}
+                      value={normalizeStatus(o.status)}
+                      disabled={saving}
+                      onChange={e => changeStatus(o, e.target.value)}
+                      style={{
+                        padding: "8px 12px",
+                        background: "#111",
+                        border: "1px solid var(--border)",
+                        color: "var(--text-primary)",
+                        fontFamily: "'Rajdhani', sans-serif",
+                        fontSize: 15,
+                        cursor: saving ? "wait" : "pointer",
+                      }}
+                    >
+                      {ORDER_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                    {saving ? <span style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 14, color: "var(--text-dim)" }}>Saving…</span> : null}
+                    {note ? (
+                      <span style={{
+                        fontFamily: "'Rajdhani', sans-serif",
+                        fontSize: 14,
+                        color: note.type === "error" ? "#f87171" : "#22c55e",
+                      }}>{note.text}</span>
+                    ) : null}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+    </div>
+  );
 }
 
 // ─── Age Verification Gate ────────────────────────────────────────────────────
@@ -6646,6 +6915,7 @@ export default function App() {
         <Route path="/signup" element={<AuthPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/account" element={<AccountPage />} />
+        <Route path="/admin" element={<AdminOrdersPage />} />
         <Route path="/about" element={<AboutPage />} />
         <Route path="/faq" element={<FAQPage />} />
         <Route path="/testing-standards" element={<TestingStandardsPage />} />

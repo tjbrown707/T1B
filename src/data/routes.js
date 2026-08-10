@@ -219,6 +219,17 @@ export const STATIC_ROUTES = [
     h1: "Set new password",
     noindex: true,
   },
+  // Staff only. Listed here because routeMeta() is the single source of page
+  // titles and the prerenderer walks this table — but the page shows nothing
+  // without a session, and the data behind it is gated server-side by
+  // ADMIN_EMAILS, not by this URL being hard to guess.
+  {
+    path: "/admin",
+    title: "Order Administration",
+    description: "Staff order management for Tier One BioSystems.",
+    h1: "Order administration",
+    noindex: true,
+  },
 ];
 
 const STATIC_BY_PATH = Object.fromEntries(STATIC_ROUTES.map(r => [r.path, r]));
