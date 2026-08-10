@@ -1297,24 +1297,25 @@ function Hero({ statsActive = true }) {
       alignItems: "center",
       justifyContent: "center",
     }}>
-      {/* Art-directed desktop/mobile production imagery */}
+      {/* Art-directed desktop/mobile production imagery with zoom + parallax */}
       <div style={{
         position: "absolute",
         inset: 0,
         backgroundImage: isMobile
-          ? "url('/hero-lab-noir-production-natural-mobile.webp')"
-          : "url('/hero-lab-noir-production-natural.webp')",
-        // Keep the artwork's native proportions. The hero content makes this
-        // section considerably taller than either source image; sizing the art
-        // to the section height enlarged and cropped the vial until it looked
-        // distorted, especially on narrow screens.
-        backgroundSize: isMobile ? "auto 72%" : "100% auto",
+          ? "url('/hero-lab-noir-first-mobile.webp')"
+          : "url('/hero-lab-noir-first.webp')",
+        // Desktop keeps the full-width production line. Mobile uses a separate
+        // portrait composition and anchors its vial to the right rather than
+        // forcing the desktop image through an unreadable narrow crop.
+        backgroundSize: isMobile ? "auto 100%" : "cover",
         backgroundPosition: isMobile
           ? `right ${-Math.min(scrollY * 0.015, 12)}px`
           : "center top",
         backgroundRepeat: "no-repeat",
         opacity: isMobile ? 0.68 : 0.78,
         pointerEvents: "none",
+        transformOrigin: isMobile ? "center center" : "center top",
+        animation: "heroZoom 24s ease-in-out infinite alternate",
       }} />
 
       {/* Dark overlay for text readability */}
