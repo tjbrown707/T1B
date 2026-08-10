@@ -662,9 +662,14 @@ style.textContent = `
     50% { box-shadow: 0 0 40px rgba(196, 30, 42, 0.3); }
   }
 
-  @keyframes scanLine {
-    0% { transform: translateY(-100%); }
-    100% { transform: translateY(100%); }
+  @property --card-glow-angle {
+    syntax: "<angle>";
+    initial-value: 0deg;
+    inherits: false;
+  }
+
+  @keyframes perimeterTrace {
+    to { --card-glow-angle: 360deg; }
   }
 
   @keyframes borderGlow {
@@ -759,26 +764,36 @@ style.textContent = `
     transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.4s ease, border-color 0.4s ease;
     -webkit-tap-highlight-color: transparent;
   }
+  .product-card::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    padding: 1px;
+    background: conic-gradient(
+      from var(--card-glow-angle),
+      transparent 0deg,
+      transparent 270deg,
+      rgba(196, 30, 42, 0.12) 292deg,
+      var(--red-glow) 328deg,
+      rgba(196, 30, 42, 0.35) 350deg,
+      transparent 360deg
+    );
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    mask-composite: exclude;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 3;
+    transition: opacity 0.25s ease;
+  }
+  .product-card.is-interacting::after {
+    opacity: 1;
+    animation: perimeterTrace 2.4s linear infinite;
+  }
   .product-card.is-interacting {
     transform: translateY(-6px);
     box-shadow: 0 16px 40px rgba(196, 30, 42, 0.18), inset 0 0 0 1px rgba(196, 30, 42, 0.12);
-  }
-  .product-card-scan {
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(
-      to bottom,
-      transparent 34%,
-      rgba(196, 30, 42, 0.025) 43%,
-      rgba(196, 30, 42, 0.2) 50%,
-      rgba(196, 30, 42, 0.025) 57%,
-      transparent 66%
-    );
-    animation: scanLine 1.8s ease-in-out infinite;
-    mix-blend-mode: screen;
-    pointer-events: none;
-    z-index: 2;
-    will-change: transform;
   }
 
   .product-card-title { overflow-wrap: anywhere; }
@@ -829,7 +844,7 @@ style.textContent = `
     .product-card.is-interacting .product-card-inner {
       transform: scale(1.035);
     }
-    .product-card-scan {
+    .product-card.is-interacting::after {
       animation-duration: 1.35s;
     }
   }
@@ -1553,11 +1568,6 @@ function ProductCard({ product, index, onClick, onAddToCart }) {
         flexDirection: "column",
       }}
     >
-      {/* Scan line effect while hovered, focused or touched */}
-      {isInteracting && (
-        <div className="product-card-scan" />
-      )}
-
       {/* Image */}
       <div style={{
         position: "relative",
