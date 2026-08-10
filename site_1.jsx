@@ -2623,8 +2623,7 @@ function Header({ cartCount = 0 }) {
       left: 0,
       right: 0,
       zIndex: 1000,
-      background: "linear-gradient(to bottom, rgba(10,10,10,0.98), rgba(10,10,10,0.92))",
-      backdropFilter: "blur(20px)",
+      background: "var(--bg-primary)",
       borderBottom: "1px solid rgba(196,30,42,0.15)",
     }}>
       {isSaleActive() && (
@@ -2663,11 +2662,11 @@ function Header({ cartCount = 0 }) {
           }}
         >
           <img
-            src="/logo_transparent.png"
+            src="/logo-wide.png"
             alt="Tier One BioSystems"
             style={{
-              height: 90,
-              width: "auto",
+              width: isMobile ? 180 : 240,
+              height: "auto",
               objectFit: "contain",
             }}
           />
@@ -6212,7 +6211,7 @@ function AuthPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
-  const { signIn, signUp, resendConfirmation, isLoggedIn, loading: authLoading } = useAuth();
+  const { signIn, signUp, resetPassword, resendConfirmation, isLoggedIn, loading: authLoading } = useAuth();
   const isSignup = location.pathname === "/signup";
   // Only allow same-site paths. A value like "//evil.com" or "https://evil.com"
   // would otherwise send a just-authenticated customer off to a phishing page.
@@ -6237,6 +6236,7 @@ function AuthPage() {
   const [notice, setNotice] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [resending, setResending] = useState(false);
+  const [resetting, setResetting] = useState(false);
   // Set when the customer arrived here from a dead confirmation link.
   const authError = searchParams.get("auth_error");
   const linkExpired = !!authError && /expired|invalid|access_denied/i.test(authError);
@@ -6280,6 +6280,22 @@ function AuthPage() {
       setError(cleanAuthError(err));
     } finally {
       setResending(false);
+    }
+  }
+
+  async function handlePasswordReset() {
+    if (resetting) return;
+    setError(""); setNotice("");
+    if (!email.trim()) { setError("Enter your email address first."); return; }
+    setResetting(true);
+    try {
+      const { error } = await resetPassword(email.trim());
+      if (error) setError(cleanAuthError(error));
+      else setNotice("If an account exists for that email, we've sent a password reset link. Check your inbox and spam folder.");
+    } catch (err) {
+      setError(cleanAuthError(err));
+    } finally {
+      setResetting(false);
     }
   }
 
@@ -6391,6 +6407,9 @@ function AuthPage() {
             <div>
               <label style={AUTH_LABEL_STYLE}>Password *</label>
               <input type="password" required value={password} onChange={e => setPassword(e.target.value)} style={AUTH_INPUT_STYLE} placeholder="Your password" autoComplete="current-password" />
+              <button type="button" onClick={handlePasswordReset} disabled={resetting} style={{ background: "none", border: 0, padding: "8px 0 0", color: "var(--red-primary)", fontFamily: "'Rajdhani', sans-serif", fontSize: 14, fontWeight: 600, cursor: resetting ? "not-allowed" : "pointer", textDecoration: "underline", textUnderlineOffset: 3 }}>
+                {resetting ? "Sending reset link…" : "Forgot your password?"}
+              </button>
             </div>
           </>
         )}
@@ -6462,17 +6481,73 @@ function AuthPage() {
   );
 }
 
+function ResetPasswordPage() {
+  const navigate = useNavigate();
+  const { isLoggedIn, loading: authLoading, updatePassword } = useAuth();
+  usePageMeta("Reset Password", "Choose a new password for your Tier One BioSystems account.");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [complete, setComplete] = useState(false);
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setError("");
+    if (password.length < 10) { setError("Password must be at least 10 characters."); return; }
+    if (password !== confirmPassword) { setError("The passwords do not match."); return; }
+    setSubmitting(true);
+    const { error: updateError } = await updatePassword(password);
+    setSubmitting(false);
+    if (updateError) { setError(updateError.message || "We couldn't update your password. Please request a new reset link."); return; }
+    setComplete(true);
+  }
+
+  return (
+    <div style={{ maxWidth: 460, margin: "0 auto", padding: "120px 24px 80px" }}>
+      <div style={{ textAlign: "center", marginBottom: 32 }}>
+        <div style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 11, fontWeight: 600, letterSpacing: "0.2em", color: "var(--red-primary)", marginBottom: 10 }}>ACCOUNT SECURITY</div>
+        <h2 style={{ fontFamily: "'Orbitron', sans-serif", fontWeight: 800, fontSize: 28, color: "var(--text-primary)" }}>SET NEW PASSWORD</h2>
+      </div>
+      {authLoading ? (
+        <p style={{ textAlign: "center", color: "var(--text-secondary)", fontFamily: "'Rajdhani', sans-serif" }}>Checking your reset link…</p>
+      ) : complete ? (
+        <div style={{ textAlign: "center" }}>
+          <div style={{ padding: "12px 14px", marginBottom: 20, border: "1px solid rgba(34,197,94,0.5)", background: "rgba(34,197,94,0.08)", color: "#22c55e", fontFamily: "'Rajdhani', sans-serif", fontSize: 15 }}>Your password has been updated.</div>
+          <button type="button" onClick={() => navigate("/account", { replace: true })} style={{ padding: "14px 30px", background: "var(--red-primary)", border: "1px solid var(--red-primary)", color: "#fff", fontFamily: "'Orbitron', sans-serif", fontWeight: 700, fontSize: 12, letterSpacing: "0.15em", textTransform: "uppercase", cursor: "pointer" }}>Go to My Account</button>
+        </div>
+      ) : !isLoggedIn ? (
+        <div style={{ textAlign: "center", fontFamily: "'Rajdhani', sans-serif" }}>
+          <div style={{ padding: "12px 14px", marginBottom: 20, border: "1px solid rgba(196,30,42,0.5)", background: "rgba(196,30,42,0.08)", color: "#ff6b6b", fontSize: 15 }}>This reset link is invalid or has expired. Request a new one from the sign-in page.</div>
+          <button type="button" onClick={() => navigate("/login")} style={{ background: "none", border: 0, color: "var(--red-primary)", fontSize: 15, fontWeight: 600, cursor: "pointer", textDecoration: "underline" }}>Back to sign in</button>
+        </div>
+      ) : (
+        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+          <div><label style={AUTH_LABEL_STYLE}>New Password *</label><input type="password" required value={password} onChange={e => setPassword(e.target.value)} style={AUTH_INPUT_STYLE} placeholder="At least 10 characters" autoComplete="new-password" /></div>
+          <div><label style={AUTH_LABEL_STYLE}>Confirm New Password *</label><input type="password" required value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} style={AUTH_INPUT_STYLE} placeholder="Enter it again" autoComplete="new-password" /></div>
+          {error && <div style={{ padding: "10px 14px", border: "1px solid rgba(196,30,42,0.5)", background: "rgba(196,30,42,0.08)", color: "#ff6b6b", fontFamily: "'Rajdhani', sans-serif", fontSize: 14 }}>{error}</div>}
+          <button type="submit" disabled={submitting} style={{ width: "100%", padding: "16px 0", background: submitting ? "rgba(196,30,42,0.3)" : "var(--red-primary)", border: "1px solid var(--red-primary)", color: "#fff", fontFamily: "'Orbitron', sans-serif", fontWeight: 700, fontSize: 14, letterSpacing: "0.2em", textTransform: "uppercase", cursor: submitting ? "not-allowed" : "pointer" }}>{submitting ? "Updating…" : "Update Password"}</button>
+        </form>
+      )}
+    </div>
+  );
+}
+
 // ─── Account Page (Profile + Order History) ───────────────────────────────────
 
 function AccountPage() {
   const navigate = useNavigate();
-  const { user, profile, isLoggedIn, loading: authLoading, signOut, refreshProfile } = useAuth();
+  const { user, profile, isLoggedIn, loading: authLoading, signOut, updatePassword, refreshProfile } = useAuth();
   usePageMeta("My Account", "Manage your Tier One BioSystems profile and view your order history.");
 
   const [form, setForm] = useState({ full_name: "", phone: "", address: "", city: "", state: "", zip: "" });
   const [orders, setOrders] = useState(null); // null = loading
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmNewPassword, setConfirmNewPassword] = useState("");
+  const [passwordMessage, setPasswordMessage] = useState({ type: "", text: "" });
+  const [changingPassword, setChangingPassword] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 700);
   useEffect(() => {
     const h = () => setIsMobile(window.innerWidth < 700);
@@ -6518,6 +6593,19 @@ function AccountPage() {
   async function handleSignOut() {
     await signOut();
     navigate("/");
+  }
+
+  async function changePassword(e) {
+    e.preventDefault();
+    setPasswordMessage({ type: "", text: "" });
+    if (newPassword.length < 10) { setPasswordMessage({ type: "error", text: "Password must be at least 10 characters." }); return; }
+    if (newPassword !== confirmNewPassword) { setPasswordMessage({ type: "error", text: "The passwords do not match." }); return; }
+    setChangingPassword(true);
+    const { error } = await updatePassword(newPassword);
+    setChangingPassword(false);
+    if (error) { setPasswordMessage({ type: "error", text: error.message || "We couldn't update your password." }); return; }
+    setNewPassword(""); setConfirmNewPassword("");
+    setPasswordMessage({ type: "success", text: "Password updated successfully." });
   }
 
   if (authLoading || !isLoggedIn) return null;
@@ -6600,6 +6688,19 @@ function AccountPage() {
             }}>{saving ? "Saving…" : "Save Changes"}</button>
             {saved && <span style={{ color: "#22c55e", fontFamily: "'Rajdhani', sans-serif", fontSize: 15, fontWeight: 600 }}>✓ Saved</span>}
           </div>
+        </form>
+      </div>
+
+      <div style={{ border: "1px solid var(--border)", background: "rgba(17,17,17,0.4)", padding: "28px", marginBottom: 32 }}>
+        <div style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 13, fontWeight: 700, letterSpacing: "0.12em", color: "var(--text-primary)", textTransform: "uppercase", marginBottom: 6 }}>Change Password</div>
+        <p style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 14, color: "var(--text-dim)", margin: "0 0 20px" }}>Use at least 10 characters for your new password.</p>
+        <form onSubmit={changePassword} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 16 }}>
+            <div><label style={AUTH_LABEL_STYLE}>New Password</label><input type="password" required value={newPassword} onChange={e => setNewPassword(e.target.value)} style={AUTH_INPUT_STYLE} autoComplete="new-password" /></div>
+            <div><label style={AUTH_LABEL_STYLE}>Confirm New Password</label><input type="password" required value={confirmNewPassword} onChange={e => setConfirmNewPassword(e.target.value)} style={AUTH_INPUT_STYLE} autoComplete="new-password" /></div>
+          </div>
+          {passwordMessage.text && <div style={{ color: passwordMessage.type === "success" ? "#22c55e" : "#ff6b6b", fontFamily: "'Rajdhani', sans-serif", fontSize: 15, fontWeight: 600 }}>{passwordMessage.text}</div>}
+          <div><button type="submit" disabled={changingPassword} style={{ padding: "13px 32px", background: changingPassword ? "rgba(196,30,42,0.3)" : "var(--red-primary)", border: "1px solid var(--red-primary)", color: "#fff", fontFamily: "'Orbitron', sans-serif", fontWeight: 700, fontSize: 12, letterSpacing: "0.15em", textTransform: "uppercase", cursor: changingPassword ? "not-allowed" : "pointer" }}>{changingPassword ? "Updating…" : "Update Password"}</button></div>
         </form>
       </div>
 
@@ -7892,6 +7993,7 @@ export default function App() {
         <Route path="/checkout" element={<Navigate to="/cart" replace />} />
         <Route path="/login" element={<AuthPage />} />
         <Route path="/signup" element={<AuthPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/account" element={<AccountPage />} />
         <Route path="/about" element={<AboutPage />} />
         <Route path="/faq" element={<FAQPage />} />
