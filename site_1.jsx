@@ -1297,12 +1297,12 @@ function Hero({ statsActive = true }) {
         inset: 0,
         backgroundColor: "#090a0c",
         backgroundImage: "url('/hero-lab-noir.webp')",
-        // Mobile reuses the exact selected desktop artwork at a smaller scale,
-        // keeping the complete vial and logo visible beneath the copy area.
-        backgroundSize: isMobile ? "auto 67%" : "cover",
-        backgroundPosition: isMobile ? "right bottom" : "center top",
+        // Mobile keeps the selected artwork intact but pulls it farther back,
+        // placing the vial below the primary copy instead of behind the CTAs.
+        backgroundSize: isMobile ? "auto 45%" : "cover",
+        backgroundPosition: isMobile ? "right 95%" : "center top",
         backgroundRepeat: "no-repeat",
-        opacity: isMobile ? 0.68 : 0.78,
+        opacity: isMobile ? 0.62 : 0.78,
         pointerEvents: "none",
         transformOrigin: isMobile ? "center center" : "center top",
         animation: isMobile ? "none" : "heroZoom 24s ease-in-out infinite alternate",
