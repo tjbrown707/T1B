@@ -13,14 +13,39 @@ say plainly when something needs their hands rather than mine.
 
 ## Where the code actually lives
 
-**`site_1.jsx` at the repo root is the entire app** (~7,700 lines). This is
-counterintuitive and worth re-reading:
+**`site_1.jsx` at the repo root holds all the UI** (~6,300 lines):
 
 - `src/main.jsx` mounts `src/App.jsx`
 - `src/App.jsx` is a ~10-line shim that wraps `../site_1.jsx` in a router + AuthProvider
-- Components, routes, product data, articles, cart, checkout — all in `site_1.jsx`
+- Components, routes, cart and checkout — all in `site_1.jsx`
 
 Do not go looking for components under `src/`. They are not there.
+
+**The data is no longer in `site_1.jsx`.** It lives in `src/data/`, as plain modules
+with no React and no browser APIs, so the build tooling can import the same values the
+app renders:
+
+| File | Holds |
+|---|---|
+| `src/data/catalog.js` | `PRODUCTS` — the 27 items, the source of truth for what is sold |
+| `src/data/lab-results.js` | `LAB_RESULTS` — analytical summaries per lot |
+| `src/data/lab-integrity.js` | the quantity reconciliation (see below) |
+| `src/data/articles.js` | `ARTICLE_META` — article metadata (bodies stay in JSX) |
+| `src/data/routes.js` | **the route table** — every URL, its title, description and indexability |
+| `src/data/pricing.js` | `SITEWIDE_SALE`, `applySale`, `catalogPrices` |
+| `src/data/cart.js` | `sanitizeCart` — localStorage is untrusted input |
+| `src/data/structured-data.js` | the JSON-LD builders |
+| `src/article-content.jsx` | the 13 article bodies, lazy-loaded via `src/ArticleBody.jsx` |
+
+**Adding a route means adding it to `src/data/routes.js`.** Unmatched URLs now return a
+real 404, so a `<Route>` that isn't in the table works in dev and 404s in production.
+`npm run build` fails with that exact message if you forget.
+
+**Lab summaries publish themselves.** `getLabResults()` compares the labeled quantity on
+the report against the dose being sold and returns nothing if they disagree — seven
+currently do. There is no hand-maintained list of exceptions to keep in sync: correct the
+data and it publishes, break the data and it withholds. Never bypass it by reading
+`LAB_RESULTS` directly.
 
 Other real files: `src/AuthContext.jsx` (Supabase session/profile), `supabaseClient.js`,
 `netlify/functions/` (server-side code), `email-templates/` + `email-template.html`.
@@ -46,8 +71,21 @@ called before any `if (...) return`. React counts hooks per render and a mismatc
 the page.
 
 **Never trust prices on a cart item.** The cart is persisted to `localStorage` and is
-customer-editable. Always resolve price/bulk from the `PRODUCTS` catalog via
-`catalogPrices(item)`. Reading `item.price` directly is a price-tampering hole.
+customer-editable. All order arithmetic lives in one place — `src/data/order-totals.js`
+(`lineUnitPrice`, `orderTotals`, `orderLineItems`) — and resolves price/bulk from the
+`PRODUCTS` catalog by id. Do not write a fourth copy of the bulk-tier rule; it already
+existed twice and was about to exist three times.
+
+**Orders are created and priced by the server.** `netlify/functions/create-order.js` is
+the authority: the browser sends only product ids and quantities, and the function
+recomputes every figure from the catalog, re-validates any discount code, and writes
+through a `UNIQUE (order_number)` constraint so a retry — including after a refresh or
+from another device — returns the original order instead of creating a second. The client
+reports success only on a 2xx, and clears the cart last of all. Do not reintroduce a
+direct `supabase.from("orders").insert()` from the browser.
+
+Order status is recorded as `AWAITING PAYMENT`, not `CONFIRMED`: the customer has said
+they sent payment via Cash App or Venmo, and nobody has verified it arrived.
 
 **Do not define components inside other components.** `HomePage` / `ProductsPage` /
 `ProductPage` were once nested inside `App`, which remounted the whole page on every
@@ -80,22 +118,30 @@ enabled. Anything genuinely secret belongs in Netlify environment variables.
 
 ## Verifying changes
 
-`npm run build` works (the old rolldown native-binding failure is gone — verified
-2026-08-06). It does two things:
+**`npm run verify` runs everything: lint → tests → render smoke → build.** Use it before
+pushing. Baseline is zero lint problems, 50 passing tests, 11 routes rendering.
 
-1. `vite build`
-2. `node scripts/check-bundle-secrets.js` — scans `dist/` and **exits non-zero** if a
-   server-only secret made it into the browser bundle, which fails the Netlify deploy.
+The pieces, if you need them individually:
 
-Then run ESLint:
+| Command | Does |
+|---|---|
+| `npm run lint` | ESLint. **Baseline is now zero** errors and zero warnings — anything at all is new |
+| `npm test` | 50 unit tests over pricing, cart sanitisation, lab integrity and the route table |
+| `npm run smoke` | Builds the app and renders 11 routes in jsdom. Catches the blank-page failures lint cannot |
+| `npm run build` | sitemap → `vite build` → prerender → secret scan → integrity check |
 
-```
-node node_modules/eslint/bin/eslint.js site_1.jsx
-```
+`npm run build` is now a five-stage pipeline, and each stage can fail the deploy:
 
-Baseline is 1 error (an intentional empty `catch`) and 1 warning. Anything beyond that
-is new and should be fixed before pushing. The `react-hooks` plugin here will catch the
-hook-ordering and nested-component mistakes described above.
+1. `scripts/generate-sitemap.js` — regenerates `public/sitemap.xml` from the route table
+2. `vite build`
+3. `scripts/prerender.js` — writes real HTML for all 57 routes plus `404.html`
+4. `scripts/check-bundle-secrets.js` — **exits non-zero** if a server-only secret reached
+   the browser bundle
+5. `scripts/check-site-integrity.js` — every `<Route>` is registered, no mismatched lab
+   summary is published, the sitemap matches the route table, prerender output exists
+
+The `react-hooks` plugin catches the hook-ordering and nested-component mistakes
+described above.
 
 **If the secret check ever fails, the key is compromised — rotate it.** Do not just
 delete the line and rebuild. Anything that reached `dist/` also reached the build log.
