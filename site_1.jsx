@@ -5754,8 +5754,16 @@ function ResearchPage() {
               <a key={article.slug} href={`/research/${article.slug}`} onClick={(e) => { e.preventDefault(); navigate(`/research/${article.slug}`); }} style={{ display: "block", textDecoration: "none", color: "inherit" }}>
                 <article style={{ border: "1px solid var(--border)", background: "var(--bg-card)", overflow: "hidden", transition: "all 0.2s", height: "100%", display: "flex", flexDirection: "column" }} onMouseEnter={e => e.currentTarget.style.borderColor = "rgba(196,30,42,0.4)"} onMouseLeave={e => e.currentTarget.style.borderColor = "var(--border)"}>
                   {article.heroImage && (
-                    <div style={{ height: 180, background: "#080808", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <img src={article.heroImage} alt={article.title} loading="lazy" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} />
+                    <div style={{ height: 180, background: "#000", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <img
+                        src={article.heroImage}
+                        alt={article.title}
+                        width={PRODUCT_IMAGE_WIDTH}
+                        height={PRODUCT_IMAGE_HEIGHT}
+                        loading="lazy"
+                        decoding="async"
+                        style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }}
+                      />
                     </div>
                   )}
                   <div style={{ padding: "20px 22px", flex: 1, display: "flex", flexDirection: "column" }}>
@@ -5827,8 +5835,15 @@ function ArticlePage() {
         </div>
 
         {article.heroImage && (
-          <div style={{ height: isMobile ? 240 : 320, background: "#080808", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 36, border: "1px solid var(--border)" }}>
-            <img src={article.heroImage} alt={article.title} style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", padding: 16 }} />
+          <div style={{ height: isMobile ? 240 : 320, background: "#000", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 36, border: "1px solid var(--border)" }}>
+            <img
+              src={article.heroImage}
+              alt={article.title}
+              width={PRODUCT_IMAGE_WIDTH}
+              height={PRODUCT_IMAGE_HEIGHT}
+              decoding="async"
+              style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", padding: 16 }}
+            />
           </div>
         )}
 
@@ -5863,7 +5878,7 @@ function ArticlePage() {
             <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill, minmax(220px, 1fr))", gap: 16 }}>
               {related.map(p => (
                 <a key={p.id} href={`/product/${p.id}`} onClick={(e) => { e.preventDefault(); navigate(`/product/${p.id}`); }} style={{ display: "block", textDecoration: "none", border: "1px solid var(--border)", background: "var(--bg-card)", padding: 16, transition: "all 0.2s" }} onMouseEnter={e => e.currentTarget.style.borderColor = "rgba(196,30,42,0.4)"} onMouseLeave={e => e.currentTarget.style.borderColor = "var(--border)"}>
-                  <div style={{ height: 110, display: "flex", alignItems: "center", justifyContent: "center", background: "#080808", marginBottom: 12 }}>
+                  <div style={{ height: 110, display: "flex", alignItems: "center", justifyContent: "center", background: "#000", marginBottom: 12 }}>
                     <img
                       src={p.image}
                       alt={productImageAlt(p)}

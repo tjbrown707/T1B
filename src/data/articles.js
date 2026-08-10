@@ -14,7 +14,7 @@ export const ARTICLE_META = [
     author: "Tier One Research Team",
     tags: ["BPC-157", "Recovery", "Mechanism"],
     readingTimeMinutes: 9,
-    heroImage: "/bpc157-10.jpg",
+    heroImage: "/bpc-157-10mg.jpg",
     metaTitle: "BPC-157 Mechanism of Action: Research Review (2026)",
     metaDescription: "Evidence-based research review of BPC-157 covering its discovery, molecular structure, proposed mechanisms (angiogenesis, nitric oxide, growth hormone receptor), and applications in musculoskeletal, gastrointestinal, and neurological research models.",
     references: [
@@ -35,7 +35,7 @@ export const ARTICLE_META = [
     author: "Tier One Research Team",
     tags: ["GLP-3RT", "Retatrutide", "Weight Management", "Comparison"],
     readingTimeMinutes: 11,
-    heroImage: "/glp3rt-10.jpg",
+    heroImage: "/glp-3rt-10mg.jpg",
     metaTitle: "Retatrutide vs Tirzepatide vs Semaglutide: Research Comparison (2026)",
     metaDescription: "Side-by-side research comparison of retatrutide (GLP-3RT), tirzepatide, and semaglutide — mechanism of action, reported weight loss percentages from published trials, comparative efficacy data, and safety profile across the three leading incretin receptor agonists.",
     references: [
@@ -56,7 +56,7 @@ export const ARTICLE_META = [
     author: "Tier One Research Team",
     tags: ["GHK-Cu", "Longevity", "Skin", "Mechanism"],
     readingTimeMinutes: 9,
-    heroImage: "/ghkcu-100.jpg",
+    heroImage: "/ghk-cu-100mg.jpg",
     metaTitle: "GHK-Cu Copper Peptide: Research, Mechanism & Applications (2026)",
     metaDescription: "Comprehensive research review of GHK-Cu (copper tripeptide-1) covering its mechanism of action, gene expression effects, applications in skin regeneration, hair growth, wound healing, and the peer-reviewed studies behind it.",
     references: [
@@ -76,7 +76,7 @@ export const ARTICLE_META = [
     author: "Tier One Research Team",
     tags: ["Tesamorelin", "Growth Hormone", "Mechanism"],
     readingTimeMinutes: 8,
-    heroImage: "/tesamorelin.jpg",
+    heroImage: "/tesamorelin-10mg.jpg",
     metaTitle: "Tesamorelin Research: GHRH Analog Mechanism & Findings (2026)",
     metaDescription: "Research review of tesamorelin — synthetic growth hormone-releasing hormone (GHRH) analog. Covers mechanism of action, pituitary GH/IGF-1 axis effects, published clinical trial findings, and comparison with sermorelin, CJC-1295, and ipamorelin.",
     references: [
@@ -102,7 +102,7 @@ export const ARTICLE_META = [
     author: "Tier One Research Team",
     tags: ["Education", "Reconstitution", "Storage", "Practical Guide"],
     readingTimeMinutes: 10,
-    heroImage: "/bpc157-10.jpg",
+    heroImage: "/bpc-157-10mg.jpg",
     metaTitle: "How to Reconstitute & Store Research Peptides: Complete Guide (2026)",
     metaDescription: "Practical step-by-step guide to reconstituting lyophilized research peptides with bacteriostatic water. Covers concentration calculation, storage best practices for frozen and refrigerated forms, stability windows, and compound-specific notes.",
     references: [
@@ -120,7 +120,7 @@ export const ARTICLE_META = [
     author: "Tier One Research Team",
     tags: ["Thymosin Alpha 1", "Immune", "Mechanism"],
     readingTimeMinutes: 8,
-    heroImage: "/ta1.jpg",
+    heroImage: "/thymosin-alpha-1-10mg.jpg",
     metaTitle: "Thymosin Alpha-1 Research: Immune Modulation & Mechanism (2026)",
     metaDescription: "Research review of Thymosin Alpha-1 (Tα1, thymalfasin) — a 28-amino-acid thymic peptide. Covers TLR2/TLR9 mechanism, T-cell maturation effects, clinical research in hepatitis and immunocompromised populations, and global regulatory status.",
     references: [
@@ -140,7 +140,7 @@ export const ARTICLE_META = [
     author: "Tier One Research Team",
     tags: ["NAD+", "Longevity", "Metabolism"],
     readingTimeMinutes: 9,
-    heroImage: "/nad.jpg",
+    heroImage: "/nad-plus-500mg.jpg",
     metaTitle: "NAD+ Supplementation: Mechanisms, Aging & Current Research (2026)",
     metaDescription: "Research review of NAD+ (nicotinamide adenine dinucleotide) — the essential cellular coenzyme. Covers age-related decline, sirtuin activation, PARP-mediated DNA repair, mitochondrial function, and the latest supplementation research findings.",
     references: [
@@ -160,7 +160,7 @@ export const ARTICLE_META = [
     author: "Tier One Research Team",
     tags: ["Selank", "Semax", "Cognitive", "Mechanism"],
     readingTimeMinutes: 9,
-    heroImage: "/semax.jpg",
+    heroImage: "/semax-10mg.jpg",
     metaTitle: "Selank vs Semax: Russian Nootropic Peptide Research (2026)",
     metaDescription: "Research review of Selank (anxiolytic) and Semax (nootropic) — synthetic peptides developed at the Russian Academy of Sciences. Covers BDNF upregulation, tuftsin and ACTH analog mechanisms, clinical research findings, and comparative use.",
     references: [
@@ -182,7 +182,7 @@ export const ARTICLE_META = [
     author: "Tier One Research Team",
     tags: ["MOTS-c", "Longevity", "Metabolism", "Exercise Mimetic"],
     readingTimeMinutes: 8,
-    heroImage: "/motsc.jpg",
+    heroImage: "/mots-c-10mg.jpg",
     metaTitle: "MOTS-c Research: Mitochondrial Peptide & Metabolic Health (2026)",
     metaDescription: "Research review of MOTS-c — the 16-amino-acid mitochondrial-derived peptide. Covers AMPK pathway activation, exercise mimetic effects, insulin sensitivity, glucose metabolism, and the foundational research from the Pinchas Cohen laboratory.",
     references: [
@@ -202,7 +202,7 @@ export const ARTICLE_META = [
     author: "Tier One Research Team",
     tags: ["Blends", "Recovery", "GLOW", "KLOW", "Tissue Repair"],
     readingTimeMinutes: 9,
-    heroImage: "/glow.jpg",
+    heroImage: "/glow-70mg.jpg",
     metaTitle: "Peptide Blends for Tissue Repair: BPC-157 + GHK-Cu + TB-500 (2026)",
     metaDescription: "Research rationale for combining BPC-157, GHK-Cu, TB-500, and KPV in tissue repair blends. Covers complementary mechanisms (angiogenesis, gene expression, actin binding, anti-inflammation), single-compound research, and current combination evidence.",
     references: [
@@ -222,7 +222,7 @@ export const ARTICLE_META = [
     author: "Tier One Research Team",
     tags: ["BPC-157", "TB-500", "Recovery", "Comparison"],
     readingTimeMinutes: 10,
-    heroImage: "/tb500.jpg",
+    heroImage: "/tb-500-10mg.jpg",
     metaTitle: "BPC-157 vs TB-500 for Tissue Repair: Research Comparison (2026)",
     metaDescription: "Side-by-side research comparison of BPC-157 and TB-500 for tissue repair. Covers mechanism of action (VEGF/angiogenesis vs actin regulation/cell migration), strongest research applications for each, the combination rationale, and safety.",
     references: [
@@ -242,7 +242,7 @@ export const ARTICLE_META = [
     author: "Tier One Research Team",
     tags: ["CJC-1295", "Ipamorelin", "Growth Hormone", "Comparison"],
     readingTimeMinutes: 11,
-    heroImage: "/cjc-ipa.jpg",
+    heroImage: "/cjc-1295-ipamorelin-5mg-5mg.jpg",
     metaTitle: "CJC-1295 + Ipamorelin Stack: GH Peptide Research (2026)",
     metaDescription: "Research review of the CJC-1295 and Ipamorelin growth hormone peptide stack. Covers the dual-receptor mechanism (GHRH + ghrelin), CJC-1295 with DAC vs without DAC (Mod GRF 1-29), half-life differences, Ipamorelin selectivity, and the synergy rationale.",
     references: [
@@ -262,7 +262,7 @@ export const ARTICLE_META = [
     author: "Tier One Research Team",
     tags: ["Epitalon", "Telomerase", "Longevity", "Pineal"],
     readingTimeMinutes: 10,
-    heroImage: "/epitalon.jpg",
+    heroImage: "/epitalon-10mg.jpg",
     metaTitle: "Epitalon (Epithalon): Telomerase & Pineal Peptide Research (2026)",
     metaDescription: "Research review of Epitalon (Epithalon), the synthetic pineal tetrapeptide Ala-Glu-Asp-Gly. Covers telomerase activation and telomere elongation research, the link to natural epithalamin, effects on melatonin and circadian rhythm, and the animal and human study evidence.",
     references: [

@@ -94,6 +94,13 @@ test("every article carries the metadata its page and schema need", () => {
   }
 });
 
+test("article hero images exist", () => {
+  for (const article of ARTICLE_META) {
+    assert.match(article.heroImage, /^\/[\w.-]+\.(jpg|png|webp|avif)$/, `${article.slug} hero image looks wrong`);
+    assert.ok(existsSync(join("public", article.heroImage.slice(1))), `${article.slug} hero image file is missing`);
+  }
+});
+
 test("article references point somewhere resolvable", () => {
   for (const article of ARTICLE_META) {
     for (const reference of article.references || []) {
