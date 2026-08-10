@@ -1302,8 +1302,8 @@ function Hero({ statsActive = true }) {
         position: "absolute",
         inset: 0,
         backgroundImage: isMobile
-          ? "url('/hero-lab-noir-production-mobile.webp')"
-          : "url('/hero-lab-noir-production.webp')",
+          ? "url('/hero-lab-noir-production-natural-mobile.webp')"
+          : "url('/hero-lab-noir-production-natural.webp')",
         // Keep the artwork's native proportions. The hero content makes this
         // section considerably taller than either source image; sizing the art
         // to the section height enlarged and cropped the vial until it looked
