@@ -88,7 +88,7 @@ for (const { path: route, expect } of ROUTES) {
   const hasContent = text.includes(expect);
   const heroBackground = route === "/"
     ? [...window.document.querySelectorAll("div")]
-      .find(el => el.style.backgroundImage.includes("herobackground.jpg"))
+      .find(el => el.style.backgroundImage.includes("hero-lab-noir-production.webp"))
     : null;
   const heroFillsDesktop = route !== "/" || (
     heroBackground?.style.backgroundSize === "cover" &&

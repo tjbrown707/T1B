@@ -752,15 +752,33 @@ style.textContent = `
   .product-card-inner {
     transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
   }
-  .product-card:hover .product-card-inner {
+  .product-card.is-interacting .product-card-inner {
     transform: scale(1.06);
   }
   .product-card {
     transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.4s ease, border-color 0.4s ease;
+    -webkit-tap-highlight-color: transparent;
   }
-  .product-card:hover {
+  .product-card.is-interacting {
     transform: translateY(-6px);
-    box-shadow: 0 16px 40px rgba(196, 30, 42, 0.15);
+    box-shadow: 0 16px 40px rgba(196, 30, 42, 0.18), inset 0 0 0 1px rgba(196, 30, 42, 0.12);
+  }
+  .product-card-scan {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      to bottom,
+      transparent 34%,
+      rgba(196, 30, 42, 0.025) 43%,
+      rgba(196, 30, 42, 0.2) 50%,
+      rgba(196, 30, 42, 0.025) 57%,
+      transparent 66%
+    );
+    animation: scanLine 1.8s ease-in-out infinite;
+    mix-blend-mode: screen;
+    pointer-events: none;
+    z-index: 2;
+    will-change: transform;
   }
 
   .product-card-title { overflow-wrap: anywhere; }
@@ -800,6 +818,19 @@ style.textContent = `
     .product-card button {
       font-size: 11px !important;
       letter-spacing: 0.1em !important;
+    }
+  }
+
+  @media (hover: none), (pointer: coarse) {
+    .product-card.is-interacting {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 28px rgba(196, 30, 42, 0.2), inset 0 0 0 1px rgba(196, 30, 42, 0.2);
+    }
+    .product-card.is-interacting .product-card-inner {
+      transform: scale(1.035);
+    }
+    .product-card-scan {
+      animation-duration: 1.35s;
     }
   }
 
@@ -1251,22 +1282,22 @@ function Hero({ statsActive = true }) {
       alignItems: "center",
       justifyContent: "center",
     }}>
-      {/* Background vial image with zoom + parallax */}
+      {/* Art-directed desktop/mobile production imagery with zoom + parallax */}
       <div style={{
         position: "absolute",
         inset: 0,
-        backgroundImage: `url('/herobackground.jpg')`,
-        // The prerender regression briefly narrowed the entire page to 960px,
-        // which made this height-sized image look much fuller. Now that the
-        // page is correctly full width, crop only the desktop hero instead of
-        // shrinking the whole site around it. Top anchoring keeps the vial caps
-        // visible while the image fills wide screens edge to edge.
-        backgroundSize: isMobile ? "150% auto" : "cover",
+        backgroundImage: isMobile
+          ? "url('/hero-lab-noir-production-mobile.webp')"
+          : "url('/hero-lab-noir-production.webp')",
+        // Desktop keeps the full-width production line. Mobile uses a separate
+        // portrait composition and anchors its vial to the right rather than
+        // forcing the desktop image through an unreadable narrow crop.
+        backgroundSize: isMobile ? "auto 100%" : "cover",
         backgroundPosition: isMobile
-          ? `center ${25 + scrollY * 0.012}%`
+          ? `right ${-Math.min(scrollY * 0.015, 12)}px`
           : "center top",
         backgroundRepeat: "no-repeat",
-        opacity: 0.62,
+        opacity: isMobile ? 0.68 : 0.78,
         pointerEvents: "none",
         transformOrigin: isMobile ? "center center" : "center top",
         animation: "heroZoom 24s ease-in-out infinite alternate",
@@ -1276,7 +1307,9 @@ function Hero({ statsActive = true }) {
       <div style={{
         position: "absolute",
         inset: 0,
-        background: "linear-gradient(to bottom, rgba(9,10,12,0.36) 0%, rgba(9,10,12,0.7) 52%, rgba(9,10,12,0.97) 100%)",
+        background: isMobile
+          ? "linear-gradient(to right, rgba(9,10,12,0.35) 0%, rgba(9,10,12,0.08) 100%), linear-gradient(to bottom, rgba(9,10,12,0.18) 0%, rgba(9,10,12,0.48) 52%, rgba(9,10,12,0.96) 100%)"
+          : "linear-gradient(to bottom, rgba(9,10,12,0.22) 0%, rgba(9,10,12,0.5) 55%, rgba(9,10,12,0.95) 100%)",
         pointerEvents: "none",
       }} />
 
@@ -1347,7 +1380,7 @@ function Hero({ statsActive = true }) {
           color: "var(--text-secondary)",
           marginBottom: 24,
           letterSpacing: "0.02em",
-        }}>Precision. Purity. Performance.</div>
+        }}>Precision. Purity. Progress.</div>
 
         <p style={{
           fontFamily: "'Rajdhani', sans-serif",
@@ -1476,7 +1509,7 @@ function Hero({ statsActive = true }) {
 }
 
 function ProductCard({ product, index, onClick, onAddToCart }) {
-  const [hovered, setHovered] = useState(false);
+  const [isInteracting, setIsInteracting] = useState(false);
   const href = `/product/${product.id}`;
 
   // The card opens a quick-view panel rather than navigating, which is why it
@@ -1496,14 +1529,23 @@ function ProductCard({ product, index, onClick, onAddToCart }) {
 
   return (
     <div
-      className="product-card"
+      className={`product-card${isInteracting ? " is-interacting" : ""}`}
       onClick={() => onClick(product)}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      onPointerEnter={event => {
+        if (event.pointerType !== "touch") setIsInteracting(true);
+      }}
+      onPointerLeave={() => setIsInteracting(false)}
+      onTouchStart={() => setIsInteracting(true)}
+      onTouchEnd={() => setIsInteracting(false)}
+      onTouchCancel={() => setIsInteracting(false)}
+      onFocusCapture={() => setIsInteracting(true)}
+      onBlurCapture={event => {
+        if (!event.currentTarget.contains(event.relatedTarget)) setIsInteracting(false);
+      }}
       style={{
         position: "relative",
-        background: hovered ? "var(--bg-card-hover)" : "var(--bg-card)",
-        border: `1px solid ${hovered ? "rgba(196,30,42,0.3)" : "var(--border)"}`,
+        background: isInteracting ? "var(--bg-card-hover)" : "var(--bg-card)",
+        border: `1px solid ${isInteracting ? "rgba(196,30,42,0.68)" : "var(--border)"}`,
         cursor: "pointer",
         animation: `fadeUp ${0.4 + index * 0.05}s ease-out`,
         overflow: "hidden",
@@ -1511,19 +1553,9 @@ function ProductCard({ product, index, onClick, onAddToCart }) {
         flexDirection: "column",
       }}
     >
-      {/* Scan line effect on hover */}
-      {hovered && (
-        <div style={{
-          position: "absolute",
-          top: 0,
-          left: 0,
-          right: 0,
-          height: "100%",
-          background: "linear-gradient(to bottom, transparent 40%, rgba(196,30,42,0.03) 50%, transparent 60%)",
-          animation: "scanLine 2s linear infinite",
-          pointerEvents: "none",
-          zIndex: 2,
-        }} />
+      {/* Scan line effect while hovered, focused or touched */}
+      {isInteracting && (
+        <div className="product-card-scan" />
       )}
 
       {/* Image */}
@@ -1621,7 +1653,7 @@ function ProductCard({ product, index, onClick, onAddToCart }) {
       {/* Bottom accent line */}
       <div style={{
         height: 2,
-        background: hovered
+        background: isInteracting
           ? "linear-gradient(to right, var(--red-primary), var(--red-dark), transparent)"
           : "linear-gradient(to right, rgba(196,30,42,0.15), transparent)",
         transition: "all 0.35s ease",
