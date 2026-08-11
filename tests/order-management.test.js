@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { Buffer } from "node:buffer";
 import {
   ORDER_STATUS_VALUES,
+  canDeleteOrder,
   hasOrderManagerRole,
   isOrderStatus,
 } from "../src/data/order-management.js";
@@ -24,6 +25,14 @@ test("order-manager authorization trusts app metadata, never customer metadata",
   assert.equal(hasOrderManagerRole({ app_metadata: { role: "order_manager" } }), true);
   assert.equal(hasOrderManagerRole({ user_metadata: { role: "admin" } }), false);
   assert.equal(hasOrderManagerRole({ app_metadata: { role: "customer" } }), false);
+});
+
+test("permanent deletion is limited to already-cancelled orders", () => {
+  assert.equal(canDeleteOrder("CANCELLED"), true);
+  for (const status of ORDER_STATUS_VALUES.filter(status => status !== "CANCELLED")) {
+    assert.equal(canDeleteOrder(status), false);
+  }
+  assert.equal(canDeleteOrder("cancelled"), false);
 });
 
 test("pagination cursors round-trip and reject malformed ids", () => {
