@@ -7,7 +7,8 @@ The site now has a staff-only order console at:
 It provides server-side search, status filtering, 50-order cursor pagination,
 expandable order details, and guarded status changes. If two staff members load
 the same order, the second person's stale change is stopped rather than silently
-overwriting the first person's work.
+overwriting the first person's work. Staff can also permanently delete test
+orders without typing an order number.
 
 ## Database setup
 
@@ -74,3 +75,16 @@ or ban the account.
 - **Refunded** — money was returned.
 - **Confirmed (legacy)** — an older status retained so pre-existing orders can
   be found and moved into the current workflow.
+
+## Deleting a test order
+
+1. Change the order's status to **Cancelled** and click **Update**.
+2. Expand **View fulfillment details**.
+3. Click **Delete Order**.
+4. Review the order number, customer and total in the warning, then click
+   **Permanently Delete**. Click **Keep Order** or press Escape to back out.
+
+Deletion is permanent: the order also disappears from the customer's account.
+If the order used a personal discount code, deleting the order does not restore
+that code. The server checks staff access again and refuses to delete an order
+that is not still cancelled.

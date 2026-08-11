@@ -21,6 +21,10 @@ export function isOrderStatus(value) {
   return typeof value === "string" && ORDER_STATUS_VALUES.includes(value);
 }
 
+export function canDeleteOrder(status) {
+  return status === "CANCELLED";
+}
+
 // Authorization belongs in app_metadata: customers can edit user_metadata,
 // but only a trusted server or a Supabase administrator can edit app_metadata.
 export function hasOrderManagerRole(user) {

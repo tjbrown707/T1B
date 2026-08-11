@@ -46,6 +46,7 @@ import {
 } from "./src/data/order-totals.js";
 import {
   ORDER_STATUS_OPTIONS,
+  canDeleteOrder,
   hasOrderManagerRole,
   isOrderStatus,
 } from "./src/data/order-management.js";
@@ -5148,6 +5149,8 @@ function AdminOrdersPage() {
   const [loadError, setLoadError] = useState("");
   const [draftStatuses, setDraftStatuses] = useState({});
   const [updatingId, setUpdatingId] = useState(null);
+  const [deleteCandidate, setDeleteCandidate] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
   const [notice, setNotice] = useState({ type: "", text: "" });
   const requestIdRef = useRef(0);
 
@@ -5198,6 +5201,15 @@ function AdminOrdersPage() {
     const timer = window.setTimeout(fetchOrders, 0);
     return () => window.clearTimeout(timer);
   }, [canManageOrders, fetchOrders, session?.access_token]);
+
+  useEffect(() => {
+    if (!deleteCandidate || deletingId) return undefined;
+    function closeOnEscape(event) {
+      if (event.key === "Escape") setDeleteCandidate(null);
+    }
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [deleteCandidate, deletingId]);
 
   function applySearch(event) {
     event.preventDefault();
@@ -5263,6 +5275,62 @@ function AdminOrdersPage() {
     }
   }
 
+  function removeOrderFromQueue(orderId) {
+    setOrders(previous => previous.filter(order => order.id !== orderId));
+    setDraftStatuses(previous => {
+      const next = { ...previous };
+      delete next[orderId];
+      return next;
+    });
+    setTotal(previous => Number.isFinite(previous) ? Math.max(0, previous - 1) : previous);
+  }
+
+  async function deleteCancelledOrder() {
+    const order = deleteCandidate;
+    if (!order || !canDeleteOrder(order.status) || !session?.access_token) return;
+    setDeletingId(order.id);
+    setNotice({ type: "", text: "" });
+
+    try {
+      const res = await fetch("/.netlify/functions/admin-orders", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          orderId: order.id,
+          expectedOrderNumber: order.order_number,
+        }),
+      });
+      const payload = await res.json().catch(() => ({}));
+
+      if (res.status === 409 && payload.order) {
+        setOrders(previous => previous.map(item => item.id === order.id ? payload.order : item));
+        setDraftStatuses(previous => ({ ...previous, [order.id]: payload.order.status }));
+        setDeleteCandidate(null);
+        throw new Error(payload.error || "This order changed while you were viewing it.");
+      }
+      if (res.status === 404) {
+        removeOrderFromQueue(order.id);
+        setDeleteCandidate(null);
+        setNotice({ type: "success", text: `${order.order_number} was already deleted.` });
+        return;
+      }
+      if (!res.ok || payload.deletedOrder?.id !== order.id) {
+        throw new Error(payload.error || `Order service returned HTTP ${res.status}`);
+      }
+
+      removeOrderFromQueue(order.id);
+      setDeleteCandidate(null);
+      setNotice({ type: "success", text: `${order.order_number} was permanently deleted.` });
+    } catch (error) {
+      setNotice({ type: "error", text: error.message || "The order could not be deleted." });
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
   if (authLoading || !isLoggedIn) return null;
 
   if (!canManageOrders) {
@@ -5279,6 +5347,7 @@ function AdminOrdersPage() {
   }
 
   return (
+    <>
     <main style={{ maxWidth: 1280, margin: "0 auto", padding: "120px 24px 80px" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 16, marginBottom: 28 }}>
         <div>
@@ -5391,6 +5460,24 @@ function AdminOrdersPage() {
                       <AdminDetailLine label="Total" value={`$${Number(order.total || 0).toFixed(2)}`} strong />
                     </div>
                   </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 14, margin: "0 18px 18px", paddingTop: 16, borderTop: "1px solid var(--border)" }}>
+                    <div>
+                      <AdminDetailHeading>Test-order cleanup</AdminDetailHeading>
+                      <div style={{ color: "var(--text-dim)", fontFamily: "'Rajdhani', sans-serif", fontSize: 14 }}>
+                        {canDeleteOrder(order.status)
+                          ? "This cancelled order can be permanently removed."
+                          : "Change the status to Cancelled before permanently deleting an order."}
+                      </div>
+                    </div>
+                    {canDeleteOrder(order.status) && (
+                      <button
+                        type="button"
+                        disabled={updating || deletingId === order.id}
+                        onClick={() => setDeleteCandidate(order)}
+                        style={{ padding: "10px 15px", background: "rgba(196,30,42,0.08)", border: "1px solid rgba(255,107,107,0.65)", color: "#ff6b6b", fontFamily: "'Orbitron', sans-serif", fontSize: 9, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", cursor: updating || deletingId === order.id ? "not-allowed" : "pointer", opacity: updating || deletingId === order.id ? 0.5 : 1 }}
+                      >Delete Order</button>
+                    )}
+                  </div>
                 </details>
               </article>
             );
@@ -5409,6 +5496,58 @@ function AdminOrdersPage() {
         </div>
       )}
     </main>
+    {deleteCandidate && (
+      <div
+        role="presentation"
+        onMouseDown={event => {
+          if (event.target === event.currentTarget && !deletingId) setDeleteCandidate(null);
+        }}
+        style={{ position: "fixed", inset: 0, zIndex: 10000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, background: "rgba(0,0,0,0.82)", backdropFilter: "blur(4px)" }}
+      >
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-order-title"
+          aria-describedby="delete-order-warning"
+          style={{ width: "min(100%, 520px)", padding: "26px 24px 22px", border: "1px solid rgba(255,107,107,0.7)", background: "#111", boxShadow: "0 24px 70px rgba(0,0,0,0.7)" }}
+        >
+          <div style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 10, fontWeight: 700, letterSpacing: "0.16em", color: "#ff6b6b", marginBottom: 10 }}>PERMANENT ACTION</div>
+          <h2 id="delete-order-title" style={{ margin: "0 0 12px", color: "var(--text-primary)", fontFamily: "'Orbitron', sans-serif", fontSize: 22 }}>Delete this order?</h2>
+          <p id="delete-order-warning" style={{ margin: "0 0 18px", color: "var(--text-secondary)", fontFamily: "'Rajdhani', sans-serif", fontSize: 16, lineHeight: 1.55 }}>
+            This cannot be undone. The order will disappear from the staff queue and the customer's account history.
+          </p>
+          <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "7px 18px", padding: 14, marginBottom: 16, border: "1px solid var(--border)", background: "rgba(255,255,255,0.025)", fontFamily: "'Rajdhani', sans-serif", fontSize: 15 }}>
+            <span style={{ color: "var(--text-dim)" }}>Order</span>
+            <strong style={{ color: "var(--red-primary)", textAlign: "right" }}>{deleteCandidate.order_number}</strong>
+            <span style={{ color: "var(--text-dim)" }}>Customer</span>
+            <strong style={{ color: "var(--text-primary)", textAlign: "right" }}>{deleteCandidate.customer_name || deleteCandidate.customer_email || "Guest customer"}</strong>
+            <span style={{ color: "var(--text-dim)" }}>Total</span>
+            <strong style={{ color: "var(--text-primary)", textAlign: "right" }}>$${Number(deleteCandidate.total || 0).toFixed(2)}</strong>
+          </div>
+          {deleteCandidate.discount_code && (
+            <p style={{ margin: "0 0 18px", padding: "10px 12px", border: "1px solid rgba(245,158,11,0.4)", background: "rgba(245,158,11,0.08)", color: "#fbbf24", fontFamily: "'Rajdhani', sans-serif", fontSize: 14, lineHeight: 1.45 }}>
+              Discount code <strong>{deleteCandidate.discount_code}</strong> will remain redeemed and will not be restored.
+            </p>
+          )}
+          <div style={{ display: "flex", justifyContent: "flex-end", flexWrap: "wrap", gap: 10 }}>
+            <button
+              type="button"
+              autoFocus
+              disabled={Boolean(deletingId)}
+              onClick={() => setDeleteCandidate(null)}
+              style={{ padding: "12px 18px", background: "transparent", border: "1px solid var(--border)", color: "var(--text-primary)", fontFamily: "'Orbitron', sans-serif", fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", cursor: deletingId ? "not-allowed" : "pointer" }}
+            >Keep Order</button>
+            <button
+              type="button"
+              disabled={Boolean(deletingId)}
+              onClick={deleteCancelledOrder}
+              style={{ padding: "12px 18px", background: deletingId ? "rgba(196,30,42,0.35)" : "var(--red-primary)", border: "1px solid var(--red-primary)", color: "#fff", fontFamily: "'Orbitron', sans-serif", fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", cursor: deletingId ? "not-allowed" : "pointer" }}
+            >{deletingId ? "Deleting…" : "Permanently Delete"}</button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }
 

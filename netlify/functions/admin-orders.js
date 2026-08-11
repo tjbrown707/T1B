@@ -3,12 +3,16 @@
 
 import { Buffer } from "node:buffer";
 import { createClient } from "@supabase/supabase-js";
-import { hasOrderManagerRole, isOrderStatus } from "../../src/data/order-management.js";
+import {
+  canDeleteOrder,
+  hasOrderManagerRole,
+  isOrderStatus,
+} from "../../src/data/order-management.js";
 import { getEnv, jsonResponse, readBearerToken, readJsonBody } from "./_shared/http.js";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const MAX_BODY_BYTES = 4 * 1024;
-const METHODS = "GET, PATCH, OPTIONS";
+const METHODS = "GET, PATCH, DELETE, OPTIONS";
 const ORDER_FIELDS = [
   "id", "order_number", "status", "items", "items_text", "subtotal",
   "discount_code", "discount_amount", "shipping", "total", "payment_method",
@@ -18,13 +22,14 @@ const ORDER_FIELDS = [
 
 export default async function handler(request) {
   if (request.method === "OPTIONS") return jsonResponse(204, null, METHODS);
-  if (request.method !== "GET" && request.method !== "PATCH") return fail(405, "Method not allowed");
+  if (!["GET", "PATCH", "DELETE"].includes(request.method)) return fail(405, "Method not allowed");
 
   const auth = await authenticateOrderManager(request);
   if (auth.response) return auth.response;
 
   if (request.method === "GET") return listOrders(auth.supabase, new URL(request.url).searchParams);
-  return updateOrderStatus(auth.supabase, auth.user, request);
+  if (request.method === "PATCH") return updateOrderStatus(auth.supabase, auth.user, request);
+  return deleteOrder(auth.supabase, auth.user, request);
 }
 
 async function authenticateOrderManager(request) {
@@ -142,6 +147,64 @@ async function updateOrderStatus(supabase, user, request) {
 
   console.info(`admin-orders: staff ${user.id} changed ${updated.order_number} from ${expectedStatus} to ${status}`);
   return jsonResponse(200, { order: updated }, METHODS);
+}
+
+async function deleteOrder(supabase, user, request) {
+  const parsed = await readJsonBody(request, MAX_BODY_BYTES);
+  if (parsed.error) return fail(parsed.error === "Request is too large." ? 413 : 400, parsed.error);
+
+  const orderId = typeof parsed.data?.orderId === "string" ? parsed.data.orderId.trim() : "";
+  const expectedOrderNumber = typeof parsed.data?.expectedOrderNumber === "string"
+    ? parsed.data.expectedOrderNumber.trim()
+    : "";
+  if (!UUID_PATTERN.test(orderId)) return fail(400, "Invalid order id.");
+  if (!/^[A-Z0-9_-]{1,64}$/i.test(expectedOrderNumber)) return fail(400, "Invalid order number.");
+
+  // All three filters are part of the DELETE itself. If the order changes after
+  // the confirmation dialog opens, the stale request deletes nothing.
+  const { data: deleted, error } = await supabase
+    .from("orders")
+    .delete()
+    .eq("id", orderId)
+    .eq("order_number", expectedOrderNumber)
+    .eq("status", "CANCELLED")
+    .select(ORDER_FIELDS)
+    .maybeSingle();
+  if (error) {
+    console.error("admin-orders: delete failed:", error);
+    return fail(500, "The order could not be deleted.");
+  }
+
+  if (!deleted) {
+    const { data: current, error: readError } = await supabase
+      .from("orders")
+      .select(ORDER_FIELDS)
+      .eq("id", orderId)
+      .maybeSingle();
+    if (readError) {
+      console.error("admin-orders: delete conflict read failed:", readError);
+      return fail(500, "The order could not be confirmed.");
+    }
+    if (!current) return fail(404, "This order no longer exists.");
+    if (!canDeleteOrder(current.status)) {
+      return jsonResponse(409, {
+        error: "Only cancelled orders can be deleted. The current order has been reloaded.",
+        order: current,
+      }, METHODS);
+    }
+    return jsonResponse(409, {
+      error: "This order changed while you were viewing it. Reload it before deleting.",
+      order: current,
+    }, METHODS);
+  }
+
+  console.info(`admin-orders: staff ${user.id} permanently deleted cancelled order ${deleted.order_number}`);
+  return jsonResponse(200, {
+    deletedOrder: {
+      id: deleted.id,
+      orderNumber: deleted.order_number,
+    },
+  }, METHODS);
 }
 
 export function sanitiseSearch(value) {
