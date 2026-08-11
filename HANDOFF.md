@@ -167,11 +167,13 @@ are covered. Only the `--all` sweep was ever region-scoped, and that is fixed.
   the receipt. `welcome-discount.html` needs no pasting — the function reads it.
 - **Netlify form notifications** to `sales@tierone.bio`, so orders arrive by email
   instead of requiring a dashboard login.
-- **Set Supabase email OTP expiry to 3600 seconds or less.** Dashboard →
-  Authentication → Providers → Email → OTP expiry → `3600` → Save. This is the
+- **Set Supabase email OTP expiry to 1800 seconds.** Dashboard → Authentication
+  → Providers → Email → OTP expiry → `1800` → Save. This is the
   one remaining security-advisor item that cannot be changed from the repo.
 - **Delete test data**: order `T1B-260807-986209` ($400 → $360) and its test
-  account. Deleting the auth user cascades to the order and its discount code.
+  account. Delete the order explicitly first; deleting the Auth user removes
+  its profile and discount code, but intentionally preserves order history by
+  clearing `orders.user_id` rather than deleting the order.
 
 ---
 
