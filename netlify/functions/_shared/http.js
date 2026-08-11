@@ -3,7 +3,7 @@ import { Buffer } from "node:buffer";
 export const SITE_ORIGIN = "https://www.tierone.bio";
 
 export function getEnv(name) {
-  return globalThis.Netlify?.env?.get(name) ?? process.env[name];
+  return globalThis.Netlify?.env?.get(name);
 }
 
 export function readBearerToken(request) {
