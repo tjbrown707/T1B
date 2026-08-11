@@ -63,7 +63,8 @@ goes from null to a timestamp.
 
 Flow: customer confirms → webhook fires → function mints a code into
 `public.discount_codes` → Resend sends the email → customer redeems at checkout →
-`redeem-discount.js` marks it spent so it can't be used again.
+`create-order.js` saves the order and marks the code spent in one database
+transaction, so two tabs cannot use the same personal code on two orders.
 
 ### 3a. Netlify environment variables
 

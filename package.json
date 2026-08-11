@@ -16,22 +16,22 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@emailjs/browser": "^4.4.1",
-    "@supabase/supabase-js": "^2.58.0",
-    "react": "^19.2.4",
-    "react-dom": "^19.2.4",
+    "@emailjs/browser": "4.4.1",
+    "@supabase/supabase-js": "2.112.3",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
     "react-router-dom": "7.18.2"
   },
   "devDependencies": {
-    "@eslint/js": "^9.39.4",
-    "@types/react": "^19.2.14",
-    "@types/react-dom": "^19.2.3",
-    "@vitejs/plugin-react": "^6.0.1",
-    "eslint": "^9.39.4",
-    "eslint-plugin-react-hooks": "^7.0.1",
-    "eslint-plugin-react-refresh": "^0.5.2",
-    "globals": "^17.4.0",
-    "jsdom": "^29.1.1",
-    "vite": "^8.0.1"
+    "@eslint/js": "9.39.5",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.4",
+    "@vitejs/plugin-react": "6.0.5",
+    "eslint": "9.39.5",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "eslint-plugin-react-refresh": "0.5.4",
+    "globals": "17.9.0",
+    "jsdom": "29.1.1",
+    "vite": "8.2.1"
   }
 }

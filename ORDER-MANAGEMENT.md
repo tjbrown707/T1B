@@ -9,25 +9,11 @@ expandable order details, and guarded status changes. If two staff members load
 the same order, the second person's stale change is stopped rather than silently
 overwriting the first person's work.
 
-## One-time database setup
+## Database setup
 
-Run these indexes once before the console is used at scale. They make the
-newest-order queue and per-status queues read only the rows they need instead
-of repeatedly sorting the full order table.
-
-1. Open **Supabase** and select the Tier One project.
-2. In the left sidebar, click **SQL Editor**, then **New query**.
-3. Paste this SQL and click **Run**:
-
-```sql
-create index if not exists orders_staff_queue_idx
-  on public.orders (created_at desc, id desc);
-
-create index if not exists orders_staff_status_queue_idx
-  on public.orders (status, created_at desc, id desc);
-```
-
-Supabase should report success. This does not change any order data.
+The queue indexes, status constraint and server-only order permissions were
+applied to the live database on 2026-08-11. There is no database setup left for
+the owner to run.
 
 ## One-time access setup for each staff member
 
@@ -78,10 +64,10 @@ or ban the account.
 
 ## Status meanings
 
-- **Awaiting payment** — the customer reported sending payment; staff have not
-  verified receipt.
+- **Awaiting payment (legacy)** — retained for older rows; new orders no longer
+  start here.
 - **Paid** — payment has been verified.
-- **Processing** — the order is being prepared.
+- **Processing** — the default for every new order; it is being prepared.
 - **Shipped** — the package has left fulfillment.
 - **Delivered** — delivery is complete.
 - **Cancelled** — the order will not be fulfilled.

@@ -54,6 +54,12 @@ test("the sitemap contains every indexable route and every product", () => {
   }
 });
 
+test("the sitemap generator never invents a modification date", () => {
+  const source = readFileSync("scripts/generate-sitemap.js", "utf8");
+  assert.doesNotMatch(source, /route\.lastmod\s*\|\|\s*today/);
+  assert.match(source, /if \(route\.lastmod\)/);
+});
+
 // A queued article is in the bundle but must not be advertised to Google, or
 // the crawler is invited to index a page that renders as Not Found.
 test("articles queued for a future date are excluded everywhere", () => {

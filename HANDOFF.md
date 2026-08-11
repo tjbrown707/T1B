@@ -1,6 +1,6 @@
 # Handoff — pick up here
 
-Written 2026-08-07, updated 2026-08-08. Read this before starting work; it
+Written 2026-08-07, updated 2026-08-11. Read this before starting work; it
 records state that is not obvious from the code or the git log.
 
 ---
@@ -68,7 +68,8 @@ inbox → applied at checkout → burned on use → refused on reuse. All of it 
 exercised against production on 2026-08-07.
 
 - `netlify/functions/send-welcome-email.js` — mints and sends
-- `netlify/functions/redeem-discount.js` — burns the code after checkout
+- `netlify/functions/create-order.js` — creates the order and burns a personal
+  code atomically in Postgres
 - `netlify/functions/validate-discount.js` — env codes first, then per-customer codes
 - `public.discount_codes` table — RLS on, SELECT-only policy, no write policy at all
 - Setup and troubleshooting: `email-templates/README.md` §3
@@ -82,6 +83,23 @@ revoking anything.
 `scripts/check-bundle-secrets.js` runs inside `npm run build` and exits non-zero
 if a service-role key, Resend key or Postgres URL reaches `dist/`. Netlify fails
 the deploy rather than shipping it. Verified in both directions.
+
+### Checkout and database hardening — DONE 2026-08-11
+
+- New orders default to `PROCESSING`; legacy statuses remain readable.
+- Browser roles have SELECT-only access to their own orders. The former direct
+  INSERT policy and excess table grants were removed.
+- The order insert and personal-code redemption now happen in one transaction.
+- Order payloads have size, field, email, payment, item and code validation;
+  public endpoints use Netlify's durable rate limits.
+- Replayed order numbers return data only when every immutable field matches.
+- Netlify Forms and EmailJS now use the server-confirmed totals and item text.
+- RLS policies use explicit authenticated roles and one-time `auth.uid()`
+  evaluation; the public `rls_auto_enable()` execution grant was removed.
+- Staff queue indexes, validated accounting constraints and a status constraint
+  are present in production.
+- Fingerprinted assets are immutable-cached and CSP allows only this Supabase
+  project rather than every `*.supabase.co` host.
 
 ### Canonical URL bug — FIXED
 
@@ -149,6 +167,9 @@ are covered. Only the `--all` sweep was ever region-scoped, and that is fixed.
   the receipt. `welcome-discount.html` needs no pasting — the function reads it.
 - **Netlify form notifications** to `sales@tierone.bio`, so orders arrive by email
   instead of requiring a dashboard login.
+- **Set Supabase email OTP expiry to 3600 seconds or less.** Dashboard →
+  Authentication → Providers → Email → OTP expiry → `3600` → Save. This is the
+  one remaining security-advisor item that cannot be changed from the repo.
 - **Delete test data**: order `T1B-260807-986209` ($400 → $360) and its test
   account. Deleting the auth user cascades to the order and its discount code.
 
@@ -159,10 +180,6 @@ are covered. Only the `--all` sweep was ever region-scoped, and that is fixed.
 - **Discount codes are blocked during a sitewide sale.** `isSaleActive()` disables
   all codes, welcome codes included, so someone signing up mid-sale holds a code
   they cannot use while its 30-day clock runs. Not yet exempted.
-- **Redemption is not transactional with the order.** Two tabs racing can both
-  place a discounted order; only one redemption lands. Same accepted tradeoff as
-  the order-total caveat in `supabase/schema.sql` — payment is confirmed manually
-  before anything ships.
 - **Sitemap is static.** A queued article must stay out of `public/sitemap.xml`
   until it publishes, or Google crawls a soft 404.
 - **Welcome codes require sign-in.** They are bound to a `user_id`, so guest
@@ -173,8 +190,7 @@ are covered. Only the `--all` sweep was ever region-scoped, and that is fixed.
 ## Verifying before you push
 
 ```
-npm run build          # vite build + secret scan; non-zero fails the deploy
-npx eslint .           # baseline is 1 error + 1 warning, both pre-existing
+npm run verify         # lint + 84 tests + 12-route smoke + full production build
 node scripts/check-citations.js --all
 ```
 

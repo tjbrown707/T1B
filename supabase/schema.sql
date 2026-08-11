@@ -7,19 +7,10 @@
 --   The live schema lives in the Supabase dashboard, not in this repo; without
 --   this file there would be no reference at all if that project were lost.
 --
--- WHAT IS VERIFIED vs RECONSTRUCTED
---   VERIFIED (read directly from the live database on 2026-08-04):
---     - Row-Level Security is ENABLED on both public.orders and public.profiles
---     - Every policy below matches pg_policies exactly, including which of
---       qual / with_check each one populates
---   RECONSTRUCTED (inferred from the application code, types are best-guess):
---     - The CREATE TABLE column lists. Column NAMES are accurate — they come
---       from the insert in site_1.jsx — but the exact types, defaults, and
---       nullability were not read from the live database.
---
---   Before trusting this file to rebuild anything, regenerate the authoritative
---   version by running this in the SQL editor and pasting the result over the
---   CREATE TABLE blocks below:
+-- VERIFIED
+--   The columns, defaults, constraints, grants, policies, indexes and checkout
+--   function below were checked against the live database on 2026-08-11.
+--   Recheck them after any dashboard-side schema change with:
 --
 --     select table_name, column_name, data_type, is_nullable, column_default
 --     from information_schema.columns
@@ -41,34 +32,39 @@
 
 create table if not exists public.profiles (
   id         uuid primary key references auth.users (id) on delete cascade,
+  email      text,
   full_name  text,
   phone      text,
   address    text,
   city       text,
   state      text,
   zip        text,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
 );
 
 alter table public.profiles enable row level security;
 
 -- A customer may read only their own profile row.
 create policy "Profiles are viewable by their owner"
-  on public.profiles for select
-  using (auth.uid() = id);
+  on public.profiles for select to authenticated
+  using ((select auth.uid()) = id);
 
 -- A customer may create only a profile row belonging to themselves.
 create policy "Users can insert their own profile"
-  on public.profiles for insert
-  with check (auth.uid() = id);
+  on public.profiles for insert to authenticated
+  with check ((select auth.uid()) = id);
 
 -- A customer may edit only their own row, and may not re-point it at someone
 -- else. Both clauses are required: `using` governs which rows are targetable,
 -- `with_check` governs what the row is allowed to look like afterwards.
 create policy "Users can update their own profile"
-  on public.profiles for update
-  using (auth.uid() = id)
-  with check (auth.uid() = id);
+  on public.profiles for update to authenticated
+  using ((select auth.uid()) = id)
+  with check ((select auth.uid()) = id);
+
+revoke all on table public.profiles from anon, authenticated;
+grant select, insert, update on table public.profiles to authenticated;
 
 -- NOTE: there is deliberately no DELETE policy. Profile rows are removed by
 -- the cascade from auth.users, not by the customer.
@@ -90,16 +86,16 @@ create policy "Users can update their own profile"
 
 create table if not exists public.orders (
   id              uuid primary key default gen_random_uuid(),
-  user_id         uuid references auth.users (id) on delete cascade,
-  order_number    text not null,
-  status          text not null default 'CONFIRMED',
-  items           jsonb,           -- structured line items
+  user_id         uuid references auth.users (id) on delete set null,
+  order_number    text not null unique,
+  status          text not null default 'PROCESSING',
+  items           jsonb not null default '[]'::jsonb,
   items_text      text,            -- human-readable rendering, used in emails
-  subtotal        numeric(10,2) not null,
+  subtotal        numeric(10,2) not null default 0,
   discount_code   text,
   discount_amount numeric(10,2) not null default 0,
   shipping        numeric(10,2) not null default 0,
-  total           numeric(10,2) not null,
+  total           numeric(10,2) not null default 0,
   payment_method  text,
   customer_name   text,
   customer_email  text,
@@ -115,13 +111,13 @@ alter table public.orders enable row level security;
 
 -- A customer may read only their own orders.
 create policy "Orders are viewable by their owner"
-  on public.orders for select
-  using (auth.uid() = user_id);
+  on public.orders for select to authenticated
+  using ((select auth.uid()) = user_id);
 
--- A customer may create orders only under their own user_id.
-create policy "Users can insert their own orders"
-  on public.orders for insert
-  with check (auth.uid() = user_id);
+-- Order creation is server-only. The browser cannot insert, update or delete
+-- rows even if it calls the Supabase API directly.
+revoke all on table public.orders from anon, authenticated;
+grant select on table public.orders to authenticated;
 
 -- NOTE: there are deliberately no UPDATE or DELETE policies. Under RLS, a
 -- command with no policy is denied, which makes order history append-only from
@@ -137,40 +133,21 @@ create policy "Users can insert their own orders"
 -- client-supplied. Without these checks a signed-in customer could insert a
 -- fully-formed order with total = 0.
 --
--- Added NOT VALID so pre-existing development rows are grandfathered. NOT VALID
--- still enforces on every INSERT and UPDATE from this point forward; it only
--- skips the backfill scan.
---
 -- These constraints apply to the service role and the dashboard too. CHECK
 -- constraints are not bypassed by RLS-exempt roles.
 
 alter table public.orders
   add constraint orders_amounts_nonneg
-    check (subtotal >= 0 and discount_amount >= 0 and shipping >= 0 and total >= 0)
-    not valid,
+    check (subtotal >= 0 and discount_amount >= 0 and shipping >= 0 and total >= 0),
   add constraint orders_discount_sane
-    check (discount_amount <= subtotal)
-    not valid,
+    check (discount_amount <= subtotal),
   add constraint orders_total_matches
-    check (abs(total - (subtotal - discount_amount + shipping)) < 0.01)
-    not valid;
+    check (abs(total - (subtotal - discount_amount + shipping)) < 0.01),
+  add constraint orders_status_valid
+    check (status in ('AWAITING PAYMENT','PAID','PROCESSING','SHIPPED','DELIVERED','CANCELLED','REFUNDED','CONFIRMED'));
 
--- Optional. Extend the list before running if you use other status words —
--- a status not named here will be rejected in the dashboard as well as the app.
--- alter table public.orders
---   add constraint orders_status_valid
---     check (status in ('AWAITING PAYMENT','PAID','PROCESSING','SHIPPED','DELIVERED','CANCELLED','REFUNDED','CONFIRMED'))
---     not valid;
-
--- LIMIT OF THESE CHECKS
---   They enforce internal arithmetic consistency only. Because product prices
---   live in the JavaScript bundle rather than in Postgres, the database has
---   nothing to compare a line item against — an order claiming subtotal 0 for
---   real items still satisfies every constraint above. Closing that gap needs
---   either a products table in Postgres or moving the insert into a Netlify
---   function that recomputes the price server-side. It is currently accepted
---   risk: payment is confirmed manually via Venmo / Cash App before anything
---   ships, so a forged row is a bookkeeping problem, not free product.
+-- Product-price validation lives in create-order.js, which imports the same
+-- catalog as the storefront. The browser never supplies authoritative totals.
 
 -- The staff console pages by (created_at, id), and its busiest queue is a
 -- single status ordered newest-first. These indexes keep those reads bounded
@@ -221,8 +198,11 @@ alter table public.discount_codes enable row level security;
 -- policies: under RLS a command with no policy is denied, so only the service
 -- role used by the Netlify Functions can mint a code or mark one redeemed.
 create policy "Discount codes are viewable by their owner"
-  on public.discount_codes for select
-  using (auth.uid() = user_id);
+  on public.discount_codes for select to authenticated
+  using ((select auth.uid()) = user_id);
+
+revoke all on table public.discount_codes from anon, authenticated;
+grant select on table public.discount_codes to authenticated;
 
 -- One welcome code per customer. This constraint IS the idempotency guard —
 -- Supabase retries webhook deliveries, and the function relies on catching the
@@ -235,14 +215,82 @@ create unique index if not exists discount_codes_one_welcome_per_user
 create index if not exists discount_codes_user_id_idx
   on public.discount_codes (user_id);
 
--- REDEMPTION IS NOT TRANSACTIONAL WITH THE ORDER.
---   The order row is inserted by the browser; the code is burned by a separate
---   call to redeem-discount.js afterwards. Two checkouts racing in different
---   tabs can therefore both place an order before either redemption lands.
---   The `is redeemed_at null` filter in that function means only one UPDATE
---   wins, so the ledger stays correct, but the second order still went through
---   with the discount applied. Accepted for the same reason as the order-total
---   caveat above: payment is confirmed manually before anything ships.
+-- ─── Atomic order creation and personal-code redemption ────────────────────
+-- Callable only by the server's service role. SECURITY INVOKER means the
+-- function receives no privilege beyond its caller. If a personal code cannot
+-- be redeemed, the exception rolls the order insert back as part of the same
+-- transaction.
+create or replace function public.create_order_transaction(
+  order_payload jsonb,
+  personal_discount_code text default null
+)
+returns public.orders
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+declare
+  inserted_order public.orders;
+  existing_order public.orders;
+  redeemed_rows integer;
+begin
+  if jsonb_typeof(order_payload) <> 'object'
+     or coalesce(order_payload->>'order_number', '') !~ '^T1B-[0-9]{6}-[0-9]{6}$' then
+    raise exception 'invalid_order_payload';
+  end if;
+
+  insert into public.orders (
+    user_id, order_number, status, items, items_text, subtotal, discount_code,
+    discount_amount, shipping, total, payment_method, customer_name,
+    customer_email, customer_phone, ship_address, ship_city, ship_state, ship_zip
+  ) values (
+    nullif(order_payload->>'user_id', '')::uuid,
+    order_payload->>'order_number',
+    'PROCESSING',
+    coalesce(order_payload->'items', '[]'::jsonb),
+    order_payload->>'items_text',
+    coalesce((order_payload->>'subtotal')::numeric, 0),
+    nullif(order_payload->>'discount_code', ''),
+    coalesce((order_payload->>'discount_amount')::numeric, 0),
+    coalesce((order_payload->>'shipping')::numeric, 0),
+    coalesce((order_payload->>'total')::numeric, 0),
+    order_payload->>'payment_method',
+    order_payload->>'customer_name',
+    order_payload->>'customer_email',
+    order_payload->>'customer_phone',
+    order_payload->>'ship_address',
+    order_payload->>'ship_city',
+    order_payload->>'ship_state',
+    order_payload->>'ship_zip'
+  )
+  on conflict (order_number) do nothing
+  returning * into inserted_order;
+
+  if inserted_order.id is not null then
+    if personal_discount_code is not null then
+      update public.discount_codes
+      set redeemed_at = now(), order_number = inserted_order.order_number
+      where code = personal_discount_code
+        and user_id = inserted_order.user_id
+        and redeemed_at is null
+        and (expires_at is null or expires_at > now());
+      get diagnostics redeemed_rows = row_count;
+      if redeemed_rows <> 1 then
+        raise exception 'discount_code_not_redeemable';
+      end if;
+    end if;
+    return inserted_order;
+  end if;
+
+  select * into existing_order
+  from public.orders
+  where order_number = order_payload->>'order_number';
+  return existing_order;
+end;
+$$;
+
+revoke execute on function public.create_order_transaction(jsonb, text) from public, anon, authenticated;
+grant execute on function public.create_order_transaction(jsonb, text) to service_role;
 
 
 -- ─── Verifying this file still matches production ───────────────────────────

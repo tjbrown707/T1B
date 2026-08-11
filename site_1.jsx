@@ -2691,19 +2691,6 @@ function CartPage({ cart, setCart }) {
     name: "", email: "", phone: "", address: "", city: "", state: "", zip: "",
   });
 
-  // Prefill shipping details from the signed-in customer's saved profile.
-  useEffect(() => {
-    if (!profile) return;
-    setCustomerInfo(prev => ({
-      name: prev.name || profile.full_name || "",
-      email: prev.email || profile.email || user?.email || "",
-      phone: prev.phone || profile.phone || "",
-      address: prev.address || profile.address || "",
-      city: prev.city || profile.city || "",
-      state: prev.state || profile.state || "",
-      zip: prev.zip || profile.zip || "",
-    }));
-  }, [profile, user]);
   const [orderNumber, setOrderNumber] = useState("");
   const [isMobile, setIsMobile] = useState(window.innerWidth < 700);
   const [paymentMethod, setPaymentMethod] = useState("cashapp"); // cashapp | venmo
@@ -2721,12 +2708,29 @@ function CartPage({ cart, setCart }) {
   // Which durable writes have already landed for this order number. Confirming
   // twice — a double click, or a retry after a partial failure — must not
   // create a second order row or a second notification.
-  const submissionRef = useRef({ orderNumber: null, supabase: false, netlify: false, discount: false });
+  const submissionRef = useRef({ orderNumber: null, supabase: false, netlify: false });
   // Re-entry guard. This has to be a ref, not the orderSubmitting state: React
   // batches state updates, so on a fast double-click both handlers would read
   // orderSubmitting as false and both would insert an order. A ref flips
   // synchronously, before the second click can get past it.
   const submittingRef = useRef(false);
+
+  function startCustomerInfo() {
+    // Prefill when the form opens. This preserves anything already typed if
+    // the customer returns to the cart and avoids mirroring props in an effect.
+    if (profile) {
+      setCustomerInfo(prev => ({
+        name: prev.name || profile.full_name || "",
+        email: prev.email || profile.email || user?.email || "",
+        phone: prev.phone || profile.phone || "",
+        address: prev.address || profile.address || "",
+        city: prev.city || profile.city || "",
+        state: prev.state || profile.state || "",
+        zip: prev.zip || profile.zip || "",
+      }));
+    }
+    setStep("info");
+  }
 
   useEffect(() => {
     const handler = () => setIsMobile(window.innerWidth < 700);
@@ -2944,7 +2948,7 @@ function CartPage({ cart, setCart }) {
 
     // Reset the idempotency record if this is a different order number.
     if (submissionRef.current.orderNumber !== orderNumber) {
-      submissionRef.current = { orderNumber, supabase: false, netlify: false, discount: false };
+      submissionRef.current = { orderNumber, supabase: false, netlify: false };
     }
     const submission = submissionRef.current;
 
@@ -2957,7 +2961,7 @@ function CartPage({ cart, setCart }) {
     const formData = new URLSearchParams();
     formData.append("form-name", "order");
     formData.append("bot-field", "");
-    formData.append("orderStatus", "AWAITING PAYMENT");
+    formData.append("orderStatus", "PROCESSING");
     formData.append("orderNumber", orderNumber);
     formData.append("customerName", name);
     formData.append("customerEmail", email);
@@ -3026,7 +3030,7 @@ function CartPage({ cart, setCart }) {
 
     formData.append("orderItems", itemsText);
     formData.append("orderSubtotal", `$${serverTotals.subtotal.toFixed(2)}`);
-    formData.append("discountCode", discountCodes.join(", "));
+    formData.append("discountCode", confirmed.discountCode);
     formData.append("discountAmount", serverTotals.discountAmount > 0 ? `-$${serverTotals.discountAmount.toFixed(2)}` : "");
     formData.append("shipping", serverTotals.shipping === 0 ? "FREE" : `$${serverTotals.shipping.toFixed(2)}`);
     formData.append("orderTotal", `$${serverTotals.total.toFixed(2)}`);
@@ -3047,31 +3051,6 @@ function CartPage({ cart, setCart }) {
       }
     }
 
-    // ── Past this point the order exists. Everything below can be redone by
-    //    hand, so a failure is reported but never discards a saved order. ────
-
-    // Burn a single-use code so it can't be applied to a second order.
-    // Sitewide codes aren't tracked and are a harmless no-op server-side.
-    if (user && appliedDiscount?.code && !submission.discount) {
-      try {
-        const { data } = await supabase.auth.getSession();
-        const accessToken = data?.session?.access_token;
-        if (accessToken) {
-          const res = await fetch("/.netlify/functions/redeem-discount", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${accessToken}`,
-            },
-            body: JSON.stringify({ code: appliedDiscount.code, orderNumber }),
-          });
-          submission.discount = res.ok;
-        }
-      } catch (err) {
-        console.error("Discount redemption error:", err);
-      }
-    }
-
     // Send confirmation email to customer via EmailJS. If this fails the
     // confirmation screen says so, instead of promising an email that is
     // never going to arrive.
@@ -3082,12 +3061,12 @@ function CartPage({ cart, setCart }) {
         customerPhone: phone,
         orderNumber: orderNumber,
         orderItems: itemsText,
-        orderSubtotal: `$${subtotal.toFixed(2)}`,
-        discountCode: [appliedDiscount?.code, appliedShipping?.code].filter(Boolean).join(", "),
-        discountAmount: appliedDiscount ? `-$${discountAmount.toFixed(2)}` : "",
-        shipping: shipping === 0 ? "FREE" : `$${shipping.toFixed(2)}`,
+        orderSubtotal: `$${serverTotals.subtotal.toFixed(2)}`,
+        discountCode: confirmed.discountCode,
+        discountAmount: serverTotals.discountAmount > 0 ? `-$${serverTotals.discountAmount.toFixed(2)}` : "",
+        shipping: serverTotals.shipping === 0 ? "FREE" : `$${serverTotals.shipping.toFixed(2)}`,
         paymentMethod: paymentMethod === "venmo" ? "Venmo" : "Cash App",
-        orderTotal: `$${total.toFixed(2)}`,
+        orderTotal: `$${serverTotals.total.toFixed(2)}`,
         shippingAddress: address,
         shippingCity: city,
         shippingState: state,
@@ -4371,7 +4350,7 @@ function CartPage({ cart, setCart }) {
           ) : null}
 
           {(isLoggedIn || guestMode) && (
-            <button onClick={() => setStep("info")} style={{
+            <button onClick={startCustomerInfo} style={{
               width: "100%",
               padding: "16px 0",
               background: "var(--red-primary)",
@@ -5215,7 +5194,9 @@ function AdminOrdersPage() {
   }, [searchQuery, session, statusFilter]);
 
   useEffect(() => {
-    if (canManageOrders && session?.access_token) fetchOrders();
+    if (!canManageOrders || !session?.access_token) return undefined;
+    const timer = window.setTimeout(fetchOrders, 0);
+    return () => window.clearTimeout(timer);
   }, [canManageOrders, fetchOrders, session?.access_token]);
 
   function applySearch(event) {

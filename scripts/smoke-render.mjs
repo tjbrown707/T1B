@@ -18,9 +18,9 @@ await build({
     outDir: OUT,
     emptyOutDir: true,
     minify: false,
-    rollupOptions: {
+    rolldownOptions: {
       input: "src/main.jsx",
-      output: { format: "iife", entryFileNames: "app.js", inlineDynamicImports: true },
+      output: { format: "iife", entryFileNames: "app.js", codeSplitting: false },
     },
   },
 });

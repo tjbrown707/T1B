@@ -27,8 +27,11 @@ const absoluteImage = (image) => image.startsWith("http") ? image : canonicalUrl
 const body = routes.map(route => {
   const parts = [
     `    <loc>${escapeXml(canonicalUrl(route.path))}</loc>`,
-    `    <lastmod>${escapeXml(route.lastmod || today)}</lastmod>`,
   ];
+  // Only publish a modification date when the route has a real content date.
+  // Using the build date made every unchanged product look freshly edited and
+  // dirtied the generated file once per day.
+  if (route.lastmod) parts.push(`    <lastmod>${escapeXml(route.lastmod)}</lastmod>`);
   if (route.changefreq) parts.push(`    <changefreq>${route.changefreq}</changefreq>`);
   if (route.priority) parts.push(`    <priority>${route.priority}</priority>`);
   if (route.image) {

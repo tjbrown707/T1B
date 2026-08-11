@@ -84,8 +84,12 @@ from another device — returns the original order instead of creating a second.
 reports success only on a 2xx, and clears the cart last of all. Do not reintroduce a
 direct `supabase.from("orders").insert()` from the browser.
 
-Order status is recorded as `AWAITING PAYMENT`, not `CONFIRMED`: the customer has said
-they sent payment via Cash App or Venmo, and nobody has verified it arrived.
+New orders are recorded as `PROCESSING`. `AWAITING PAYMENT` and `CONFIRMED` remain valid
+legacy statuses so older rows can still be viewed and moved through the staff workflow.
+
+Order creation and personal discount redemption are one Postgres transaction through
+`create_order_transaction`. Do not restore a separate browser call that redeems a code
+after the order has already been saved; two tabs could apply the same code twice.
 
 **Do not define components inside other components.** `HomePage` / `ProductsPage` /
 `ProductPage` were once nested inside `App`, which remounted the whole page on every
@@ -119,15 +123,15 @@ enabled. Anything genuinely secret belongs in Netlify environment variables.
 ## Verifying changes
 
 **`npm run verify` runs everything: lint → tests → render smoke → build.** Use it before
-pushing. Baseline is zero lint problems, 50 passing tests, 11 routes rendering.
+pushing. Baseline is zero lint problems, 84 passing tests, 12 routes rendering.
 
 The pieces, if you need them individually:
 
 | Command | Does |
 |---|---|
 | `npm run lint` | ESLint. **Baseline is now zero** errors and zero warnings — anything at all is new |
-| `npm test` | 50 unit tests over pricing, cart sanitisation, lab integrity and the route table |
-| `npm run smoke` | Builds the app and renders 11 routes in jsdom. Catches the blank-page failures lint cannot |
+| `npm test` | 84 unit tests, including checkout security and order-management coverage |
+| `npm run smoke` | Builds the app and renders 12 routes in jsdom. Catches the blank-page failures lint cannot |
 | `npm run build` | sitemap → `vite build` → prerender → secret scan → integrity check |
 
 `npm run build` is now a five-stage pipeline, and each stage can fail the deploy:
