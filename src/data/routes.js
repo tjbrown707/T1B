@@ -213,6 +213,13 @@ export const STATIC_ROUTES = [
     noindex: true,
   },
   {
+    path: "/admin/orders",
+    title: "Order Management",
+    description: "Staff order management for Tier One BioSystems.",
+    h1: "Order management",
+    noindex: true,
+  },
+  {
     path: "/reset-password",
     title: "Reset Password",
     description: "Choose a new password for your Tier One BioSystems account.",

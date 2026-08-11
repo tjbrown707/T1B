@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, lazy, Suspense } from "react";
+import { useState, useEffect, useRef, useCallback, lazy, Suspense } from "react";
 import { Routes, Route, Navigate, useNavigate, useLocation, useParams, useSearchParams } from "react-router-dom";
 import emailjs from "@emailjs/browser";
 import { supabase } from "./supabaseClient";
@@ -44,6 +44,11 @@ import {
   FREE_SHIPPING_THRESHOLD,
   isShippingDiscountCode,
 } from "./src/data/order-totals.js";
+import {
+  ORDER_STATUS_OPTIONS,
+  hasOrderManagerRole,
+  isOrderStatus,
+} from "./src/data/order-management.js";
 
 // ─── Molecular Profiles (per compound) ────────────────────────────────────────
 const MOLECULAR_PROFILES = {
@@ -812,9 +817,13 @@ style.textContent = `
 
   @media (max-width: 900px) {
     .featured-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+    .admin-order-filters { grid-template-columns: 1fr 1fr !important; }
+    .admin-order-row { grid-template-columns: 1fr 1fr !important; }
   }
 
   @media (max-width: 640px) {
+    .admin-order-filters { grid-template-columns: 1fr !important; }
+    .admin-order-row { grid-template-columns: 1fr !important; }
     .footer-grid {
       grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
       gap: 32px 24px !important;
@@ -5142,6 +5151,318 @@ function ResetPasswordPage() {
   );
 }
 
+// ─── Staff Order Management ───────────────────────────────────────────────────
+
+function AdminOrdersPage() {
+  const navigate = useNavigate();
+  const { user, session, isLoggedIn, loading: authLoading } = useAuth();
+  useRouteMeta("/admin/orders");
+
+  const [orders, setOrders] = useState([]);
+  const [statusFilter, setStatusFilter] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [nextCursor, setNextCursor] = useState(null);
+  const [total, setTotal] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [loadError, setLoadError] = useState("");
+  const [draftStatuses, setDraftStatuses] = useState({});
+  const [updatingId, setUpdatingId] = useState(null);
+  const [notice, setNotice] = useState({ type: "", text: "" });
+  const requestIdRef = useRef(0);
+
+  const canManageOrders = hasOrderManagerRole(user);
+
+  useEffect(() => {
+    if (!authLoading && !isLoggedIn) {
+      navigate("/login?redirect=/admin/orders", { replace: true });
+    }
+  }, [authLoading, isLoggedIn, navigate]);
+
+  const fetchOrders = useCallback(async ({ append = false, cursor = null } = {}) => {
+    if (!session?.access_token || !hasOrderManagerRole(session.user)) return;
+    const requestId = ++requestIdRef.current;
+    try {
+      const params = new URLSearchParams({ limit: "50" });
+      if (statusFilter) params.set("status", statusFilter);
+      if (searchQuery) params.set("q", searchQuery);
+      if (cursor) params.set("cursor", cursor);
+
+      const res = await fetch(`/.netlify/functions/admin-orders?${params}`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload.error || `Order service returned HTTP ${res.status}`);
+      if (requestId !== requestIdRef.current) return;
+
+      setOrders(previous => append
+        ? [...new Map([...previous, ...(payload.orders || [])].map(order => [order.id, order])).values()]
+        : (payload.orders || []));
+      setNextCursor(payload.nextCursor || null);
+      if (!append) setTotal(Number.isFinite(payload.total) ? payload.total : null);
+      setDraftStatuses({});
+      setLoadError("");
+    } catch (error) {
+      if (requestId !== requestIdRef.current) return;
+      setLoadError(error.message || "Orders could not be loaded.");
+    } finally {
+      if (requestId === requestIdRef.current) {
+        setLoading(false);
+        setLoadingMore(false);
+      }
+    }
+  }, [searchQuery, session, statusFilter]);
+
+  useEffect(() => {
+    if (canManageOrders && session?.access_token) fetchOrders();
+  }, [canManageOrders, fetchOrders, session?.access_token]);
+
+  function applySearch(event) {
+    event.preventDefault();
+    setLoadError("");
+    setNotice({ type: "", text: "" });
+    setLoading(true);
+    const nextSearch = searchInput.trim();
+    if (nextSearch === searchQuery) fetchOrders();
+    else setSearchQuery(nextSearch);
+  }
+
+  function changeStatusFilter(event) {
+    setLoadError("");
+    setNotice({ type: "", text: "" });
+    setLoading(true);
+    setStatusFilter(event.target.value);
+  }
+
+  function refreshOrders() {
+    setLoadError("");
+    setNotice({ type: "", text: "" });
+    setLoading(true);
+    fetchOrders();
+  }
+
+  async function updateOrderStatus(order) {
+    const status = draftStatuses[order.id] || order.status;
+    if (!isOrderStatus(status) || status === order.status || !session?.access_token) return;
+    setUpdatingId(order.id);
+    setNotice({ type: "", text: "" });
+
+    try {
+      const res = await fetch("/.netlify/functions/admin-orders", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          orderId: order.id,
+          status,
+          expectedStatus: order.status,
+        }),
+      });
+      const payload = await res.json().catch(() => ({}));
+
+      if (res.status === 409 && payload.order) {
+        setOrders(previous => previous.map(item => item.id === order.id ? payload.order : item));
+        setDraftStatuses(previous => ({ ...previous, [order.id]: payload.order.status }));
+        throw new Error(payload.error || "This order changed while you were viewing it.");
+      }
+      if (!res.ok || !payload.order) {
+        throw new Error(payload.error || `Order service returned HTTP ${res.status}`);
+      }
+
+      setOrders(previous => previous.map(item => item.id === order.id ? payload.order : item));
+      setDraftStatuses(previous => ({ ...previous, [order.id]: payload.order.status }));
+      setNotice({ type: "success", text: `${payload.order.order_number} is now ${formatStatusLabel(payload.order.status)}.` });
+    } catch (error) {
+      setNotice({ type: "error", text: error.message || "The status could not be updated." });
+    } finally {
+      setUpdatingId(null);
+    }
+  }
+
+  if (authLoading || !isLoggedIn) return null;
+
+  if (!canManageOrders) {
+    return (
+      <div style={{ maxWidth: 620, margin: "0 auto", padding: "150px 24px 90px", textAlign: "center" }}>
+        <div style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 11, fontWeight: 700, letterSpacing: "0.2em", color: "var(--red-primary)", marginBottom: 12 }}>STAFF ACCESS</div>
+        <h1 style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 28, color: "var(--text-primary)", marginBottom: 16 }}>ORDER MANAGEMENT</h1>
+        <p style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 17, lineHeight: 1.6, color: "var(--text-secondary)", marginBottom: 24 }}>
+          This account does not have order-management permission. If access was just granted, sign out and sign in again.
+        </p>
+        <button type="button" onClick={() => navigate("/account")} style={{ padding: "13px 28px", background: "transparent", border: "1px solid var(--red-primary)", color: "var(--red-primary)", fontFamily: "'Orbitron', sans-serif", fontWeight: 700, fontSize: 11, letterSpacing: "0.14em", textTransform: "uppercase", cursor: "pointer" }}>Back to Account</button>
+      </div>
+    );
+  }
+
+  return (
+    <main style={{ maxWidth: 1280, margin: "0 auto", padding: "120px 24px 80px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 16, marginBottom: 28 }}>
+        <div>
+          <div style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 11, fontWeight: 700, letterSpacing: "0.2em", color: "var(--red-primary)", marginBottom: 10 }}>STAFF OPERATIONS</div>
+          <h1 style={{ fontFamily: "'Orbitron', sans-serif", fontWeight: 800, fontSize: "clamp(25px, 4vw, 38px)", color: "var(--text-primary)", margin: 0 }}>ORDER MANAGEMENT</h1>
+          <p style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 15, color: "var(--text-dim)", margin: "8px 0 0" }}>
+            {total === null ? `${orders.length} orders loaded` : `${total} matching order${total === 1 ? "" : "s"}`} · newest first
+          </p>
+        </div>
+        <button type="button" onClick={() => navigate("/account")} style={{ padding: "10px 18px", background: "transparent", border: "1px solid var(--border)", color: "var(--text-secondary)", fontFamily: "'Orbitron', sans-serif", fontWeight: 700, fontSize: 10, letterSpacing: "0.12em", textTransform: "uppercase", cursor: "pointer" }}>My Account</button>
+      </div>
+
+      <div style={{ position: "sticky", top: 88, zIndex: 20, padding: 16, marginBottom: 20, border: "1px solid var(--border)", background: "rgba(10,10,10,0.97)", boxShadow: "0 10px 30px rgba(0,0,0,0.25)" }}>
+        <form onSubmit={applySearch} style={{ display: "grid", gridTemplateColumns: "minmax(220px, 1fr) minmax(170px, 230px) auto auto", gap: 10 }} className="admin-order-filters">
+          <input
+            type="search"
+            aria-label="Search orders"
+            placeholder="Order #, customer, email, or phone"
+            value={searchInput}
+            onChange={event => setSearchInput(event.target.value)}
+            style={{ ...AUTH_INPUT_STYLE, padding: "11px 14px" }}
+          />
+          <select aria-label="Filter by status" value={statusFilter} onChange={changeStatusFilter} style={{ ...AUTH_INPUT_STYLE, padding: "11px 14px", cursor: "pointer" }}>
+            <option value="">All statuses</option>
+            {ORDER_STATUS_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+          </select>
+          <button type="submit" style={{ padding: "11px 20px", background: "var(--red-primary)", border: "1px solid var(--red-primary)", color: "#fff", fontFamily: "'Orbitron', sans-serif", fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", cursor: "pointer" }}>Search</button>
+          <button type="button" onClick={refreshOrders} disabled={loading} style={{ padding: "11px 18px", background: "transparent", border: "1px solid var(--border)", color: "var(--text-secondary)", fontFamily: "'Orbitron', sans-serif", fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.5 : 1 }}>Refresh</button>
+        </form>
+      </div>
+
+      {notice.text && (
+        <div role="status" style={{ padding: "12px 15px", marginBottom: 16, border: `1px solid ${notice.type === "success" ? "rgba(34,197,94,0.45)" : "rgba(196,30,42,0.55)"}`, background: notice.type === "success" ? "rgba(34,197,94,0.08)" : "rgba(196,30,42,0.08)", color: notice.type === "success" ? "#22c55e" : "#ff6b6b", fontFamily: "'Rajdhani', sans-serif", fontSize: 15, fontWeight: 600 }}>{notice.text}</div>
+      )}
+      {loadError && (
+        <div role="alert" style={{ padding: "16px", marginBottom: 16, border: "1px solid rgba(196,30,42,0.55)", background: "rgba(196,30,42,0.08)", color: "#ff6b6b", fontFamily: "'Rajdhani', sans-serif", fontSize: 15 }}>
+          {loadError} <button type="button" onClick={refreshOrders} style={{ marginLeft: 10, background: "none", border: 0, color: "#fff", textDecoration: "underline", cursor: "pointer" }}>Try again</button>
+        </div>
+      )}
+
+      {loading ? (
+        <div style={{ padding: 50, textAlign: "center", color: "var(--text-dim)", fontFamily: "'Rajdhani', sans-serif", fontSize: 16 }}>Loading the order queue…</div>
+      ) : orders.length === 0 && !loadError ? (
+        <div style={{ padding: 50, textAlign: "center", border: "1px solid var(--border)", color: "var(--text-secondary)", fontFamily: "'Rajdhani', sans-serif", fontSize: 17 }}>No orders match these filters.</div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {orders.map(order => {
+            const selectedStatus = draftStatuses[order.id] || order.status;
+            const statusColors = orderStatusColors(order.status);
+            const updating = updatingId === order.id;
+            return (
+              <article key={order.id} style={{ border: "1px solid var(--border)", background: "rgba(17,17,17,0.55)" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "minmax(170px, 1.15fr) minmax(180px, 1.2fr) minmax(90px, 0.55fr) minmax(190px, 1fr)", gap: 16, alignItems: "center", padding: "16px 18px" }} className="admin-order-row">
+                  <div>
+                    <div style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 14, fontWeight: 800, color: "var(--red-primary)", letterSpacing: "0.04em" }}>{order.order_number}</div>
+                    <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 13, color: "var(--text-dim)", marginTop: 4 }}>{formatAdminOrderDate(order.created_at)}</div>
+                  </div>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 16, fontWeight: 700, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{order.customer_name || "Guest customer"}</div>
+                    <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 13, color: "var(--text-dim)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{order.customer_email || "No email"}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 17, fontWeight: 800, color: "var(--text-primary)" }}>${Number(order.total || 0).toFixed(2)}</div>
+                    <span style={{ display: "inline-block", marginTop: 5, padding: "3px 7px", border: `1px solid ${statusColors.border}`, background: statusColors.background, color: statusColors.color, fontFamily: "'Orbitron', sans-serif", fontSize: 8, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase" }}>{formatStatusLabel(order.status)}</span>
+                  </div>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <select
+                      aria-label={`New status for ${order.order_number}`}
+                      value={selectedStatus}
+                      disabled={updating}
+                      onChange={event => setDraftStatuses(previous => ({ ...previous, [order.id]: event.target.value }))}
+                      style={{ ...AUTH_INPUT_STYLE, minWidth: 0, padding: "9px 10px", fontSize: 13, cursor: updating ? "not-allowed" : "pointer" }}
+                    >
+                      {!isOrderStatus(order.status) && <option value={order.status}>{order.status}</option>}
+                      {ORDER_STATUS_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+                    </select>
+                    <button
+                      type="button"
+                      disabled={updating || selectedStatus === order.status}
+                      onClick={() => updateOrderStatus(order)}
+                      style={{ padding: "10px 12px", flexShrink: 0, background: selectedStatus === order.status ? "rgba(255,255,255,0.04)" : "var(--red-primary)", border: `1px solid ${selectedStatus === order.status ? "var(--border)" : "var(--red-primary)"}`, color: selectedStatus === order.status ? "var(--text-dim)" : "#fff", fontFamily: "'Orbitron', sans-serif", fontSize: 9, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", cursor: updating || selectedStatus === order.status ? "not-allowed" : "pointer" }}
+                    >{updating ? "Saving…" : "Update"}</button>
+                  </div>
+                </div>
+
+                <details style={{ borderTop: "1px solid var(--border)" }}>
+                  <summary style={{ padding: "10px 18px", cursor: "pointer", color: "var(--text-secondary)", fontFamily: "'Rajdhani', sans-serif", fontSize: 14, fontWeight: 600 }}>View fulfillment details</summary>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))", gap: 22, padding: "8px 18px 20px" }}>
+                    <div>
+                      <AdminDetailHeading>Items</AdminDetailHeading>
+                      {Array.isArray(order.items) && order.items.length > 0 ? order.items.map((item, index) => (
+                        <div key={`${item.id || item.name}-${index}`} style={{ display: "flex", justifyContent: "space-between", gap: 12, padding: "5px 0", color: "var(--text-secondary)", fontFamily: "'Rajdhani', sans-serif", fontSize: 14 }}>
+                          <span>{item.name} {item.dose} ×{item.qty}</span>
+                          <span style={{ color: "var(--text-primary)", whiteSpace: "nowrap" }}>${Number(item.lineTotal || 0).toFixed(2)}</span>
+                        </div>
+                      )) : <div style={{ whiteSpace: "pre-wrap", color: "var(--text-secondary)", fontFamily: "'Rajdhani', sans-serif", fontSize: 14 }}>{order.items_text || "No item detail"}</div>}
+                    </div>
+                    <div>
+                      <AdminDetailHeading>Customer & shipping</AdminDetailHeading>
+                      <AdminDetailLine label="Email" value={order.customer_email} />
+                      <AdminDetailLine label="Phone" value={order.customer_phone} />
+                      <AdminDetailLine label="Address" value={[order.ship_address, order.ship_city, order.ship_state, order.ship_zip].filter(Boolean).join(", ")} />
+                    </div>
+                    <div>
+                      <AdminDetailHeading>Payment & totals</AdminDetailHeading>
+                      <AdminDetailLine label="Method" value={order.payment_method} />
+                      <AdminDetailLine label="Subtotal" value={`$${Number(order.subtotal || 0).toFixed(2)}`} />
+                      {Number(order.discount_amount || 0) > 0 && <AdminDetailLine label={`Discount${order.discount_code ? ` (${order.discount_code})` : ""}`} value={`−$${Number(order.discount_amount).toFixed(2)}`} />}
+                      <AdminDetailLine label="Shipping" value={Number(order.shipping || 0) === 0 ? "Free" : `$${Number(order.shipping).toFixed(2)}`} />
+                      <AdminDetailLine label="Total" value={`$${Number(order.total || 0).toFixed(2)}`} strong />
+                    </div>
+                  </div>
+                </details>
+              </article>
+            );
+          })}
+        </div>
+      )}
+
+      {nextCursor && !loading && (
+        <div style={{ textAlign: "center", marginTop: 24 }}>
+          <button
+            type="button"
+            disabled={loadingMore}
+            onClick={() => { setLoadingMore(true); fetchOrders({ append: true, cursor: nextCursor }); }}
+            style={{ padding: "13px 30px", background: "transparent", border: "1px solid var(--red-primary)", color: "var(--red-primary)", fontFamily: "'Orbitron', sans-serif", fontSize: 11, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", cursor: loadingMore ? "not-allowed" : "pointer", opacity: loadingMore ? 0.55 : 1 }}
+          >{loadingMore ? "Loading…" : "Load 50 More"}</button>
+        </div>
+      )}
+    </main>
+  );
+}
+
+function AdminDetailHeading({ children }) {
+  return <div style={{ marginBottom: 7, color: "var(--text-primary)", fontFamily: "'Orbitron', sans-serif", fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase" }}>{children}</div>;
+}
+
+function AdminDetailLine({ label, value, strong = false }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", gap: 14, padding: "4px 0", color: "var(--text-secondary)", fontFamily: "'Rajdhani', sans-serif", fontSize: 14 }}>
+      <span style={{ color: "var(--text-dim)" }}>{label}</span>
+      <span style={{ color: strong ? "var(--text-primary)" : "var(--text-secondary)", fontWeight: strong ? 700 : 500, textAlign: "right" }}>{value || "—"}</span>
+    </div>
+  );
+}
+
+function formatAdminOrderDate(iso) {
+  try {
+    return new Date(iso).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
+  } catch {
+    return "";
+  }
+}
+
+function formatStatusLabel(status) {
+  return ORDER_STATUS_OPTIONS.find(option => option.value === status)?.label || status || "Unknown";
+}
+
+function orderStatusColors(status) {
+  if (status === "AWAITING PAYMENT") return { color: "#f59e0b", border: "rgba(245,158,11,0.45)", background: "rgba(245,158,11,0.08)" };
+  if (status === "CANCELLED" || status === "REFUNDED") return { color: "#ff6b6b", border: "rgba(196,30,42,0.5)", background: "rgba(196,30,42,0.08)" };
+  if (status === "SHIPPED" || status === "PROCESSING") return { color: "#60a5fa", border: "rgba(96,165,250,0.45)", background: "rgba(96,165,250,0.08)" };
+  return { color: "#22c55e", border: "rgba(34,197,94,0.4)", background: "rgba(34,197,94,0.08)" };
+}
+
 // ─── Account Page (Profile + Order History) ───────────────────────────────────
 
 function AccountPage() {
@@ -5158,6 +5479,7 @@ function AccountPage() {
   const [passwordMessage, setPasswordMessage] = useState({ type: "", text: "" });
   const [changingPassword, setChangingPassword] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 700);
+  const canManageOrders = hasOrderManagerRole(user);
   useEffect(() => {
     const h = () => setIsMobile(window.innerWidth < 700);
     window.addEventListener("resize", h);
@@ -5226,22 +5548,27 @@ function AccountPage() {
           <div style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 11, fontWeight: 600, letterSpacing: "0.2em", color: "var(--red-primary)", marginBottom: 10 }}>MY ACCOUNT</div>
           <h2 style={{ fontFamily: "'Orbitron', sans-serif", fontWeight: 800, fontSize: 28, color: "var(--text-primary)" }}>{profile?.full_name || user.email}</h2>
         </div>
-        <button onClick={handleSignOut} style={{
-          padding: "10px 22px",
-          background: "transparent",
-          border: "1px solid var(--border)",
-          color: "var(--text-secondary)",
-          fontFamily: "'Orbitron', sans-serif",
-          fontWeight: 700,
-          fontSize: 11,
-          letterSpacing: "0.15em",
-          textTransform: "uppercase",
-          cursor: "pointer",
-          transition: "all 0.2s",
-        }}
-          onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--red-primary)"; e.currentTarget.style.color = "var(--red-primary)"; }}
-          onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.color = "var(--text-secondary)"; }}
-        >Sign Out</button>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          {canManageOrders && (
+            <button onClick={() => navigate("/admin/orders")} style={{ padding: "10px 22px", background: "var(--red-primary)", border: "1px solid var(--red-primary)", color: "#fff", fontFamily: "'Orbitron', sans-serif", fontWeight: 700, fontSize: 11, letterSpacing: "0.15em", textTransform: "uppercase", cursor: "pointer" }}>Manage Orders</button>
+          )}
+          <button onClick={handleSignOut} style={{
+            padding: "10px 22px",
+            background: "transparent",
+            border: "1px solid var(--border)",
+            color: "var(--text-secondary)",
+            fontFamily: "'Orbitron', sans-serif",
+            fontWeight: 700,
+            fontSize: 11,
+            letterSpacing: "0.15em",
+            textTransform: "uppercase",
+            cursor: "pointer",
+            transition: "all 0.2s",
+          }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--red-primary)"; e.currentTarget.style.color = "var(--red-primary)"; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.color = "var(--text-secondary)"; }}
+          >Sign Out</button>
+        </div>
       </div>
 
       {/* Profile / default shipping details */}
@@ -5335,7 +5662,9 @@ function AccountPage() {
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          {orders.map(o => (
+          {orders.map(o => {
+            const statusColors = orderStatusColors(o.status);
+            return (
             <div key={o.id} style={{ border: "1px solid var(--border)", background: "rgba(17,17,17,0.4)", padding: "20px 24px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8, marginBottom: 14, paddingBottom: 14, borderBottom: "1px solid var(--border)" }}>
                 <div>
@@ -5346,15 +5675,15 @@ function AccountPage() {
                   <span style={{
                     display: "inline-block",
                     padding: "4px 12px",
-                    border: "1px solid rgba(34,197,94,0.4)",
-                    background: "rgba(34,197,94,0.08)",
-                    color: "#22c55e",
+                    border: `1px solid ${statusColors.border}`,
+                    background: statusColors.background,
+                    color: statusColors.color,
                     fontFamily: "'Orbitron', sans-serif",
                     fontSize: 10,
                     fontWeight: 700,
                     letterSpacing: "0.12em",
                     textTransform: "uppercase",
-                  }}>{o.status}</span>
+                  }}>{formatStatusLabel(o.status)}</span>
                   <div style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 18, fontWeight: 800, color: "var(--text-primary)", marginTop: 8 }}>${Number(o.total).toFixed(2)}</div>
                 </div>
               </div>
@@ -5367,10 +5696,11 @@ function AccountPage() {
                 ))}
               </div>
               <div style={{ marginTop: 12, fontFamily: "'Rajdhani', sans-serif", fontSize: 13, color: "var(--text-dim)" }}>
-                Paid via {o.payment_method} · Ship to {o.ship_city}, {o.ship_state}
+                Payment method: {o.payment_method} · Ship to {o.ship_city}, {o.ship_state}
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
@@ -6646,6 +6976,7 @@ export default function App() {
         <Route path="/signup" element={<AuthPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/account" element={<AccountPage />} />
+        <Route path="/admin/orders" element={<AdminOrdersPage />} />
         <Route path="/about" element={<AboutPage />} />
         <Route path="/faq" element={<FAQPage />} />
         <Route path="/testing-standards" element={<TestingStandardsPage />} />
