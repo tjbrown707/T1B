@@ -84,13 +84,13 @@ create policy "Users can update their own profile"
 
 
 -- ─── orders ─────────────────────────────────────────────────────────────────
--- Order history for signed-in customers. Guest orders are NOT stored here —
--- they flow through Netlify Forms and EmailJS only, because these policies
--- require an authenticated user.
+-- Durable order history. Signed-in orders carry the customer's user id and
+-- appear in their account; guest orders carry a null user id but are still
+-- recorded for staff fulfillment by the server-side checkout function.
 
 create table if not exists public.orders (
   id              uuid primary key default gen_random_uuid(),
-  user_id         uuid not null references auth.users (id) on delete cascade,
+  user_id         uuid references auth.users (id) on delete cascade,
   order_number    text not null,
   status          text not null default 'CONFIRMED',
   items           jsonb,           -- structured line items
@@ -126,8 +126,9 @@ create policy "Users can insert their own orders"
 -- NOTE: there are deliberately no UPDATE or DELETE policies. Under RLS, a
 -- command with no policy is denied, which makes order history append-only from
 -- the customer's side — they cannot retroactively alter or erase an order.
--- Staff edits go through the dashboard, which uses the service role and
--- bypasses RLS.
+-- Staff edits go through netlify/functions/admin-orders.js. It revalidates the
+-- staff user's protected app_metadata role before using the server-only service
+-- key. Customers never receive an UPDATE policy or the service key.
 
 
 -- ─── Order integrity constraints ────────────────────────────────────────────
@@ -158,7 +159,7 @@ alter table public.orders
 -- a status not named here will be rejected in the dashboard as well as the app.
 -- alter table public.orders
 --   add constraint orders_status_valid
---     check (status in ('CONFIRMED','PAID','SHIPPED','DELIVERED','CANCELLED','REFUNDED'))
+--     check (status in ('AWAITING PAYMENT','PAID','PROCESSING','SHIPPED','DELIVERED','CANCELLED','REFUNDED','CONFIRMED'))
 --     not valid;
 
 -- LIMIT OF THESE CHECKS
@@ -170,6 +171,15 @@ alter table public.orders
 --   function that recomputes the price server-side. It is currently accepted
 --   risk: payment is confirmed manually via Venmo / Cash App before anything
 --   ships, so a forged row is a bookkeeping problem, not free product.
+
+-- The staff console pages by (created_at, id), and its busiest queue is a
+-- single status ordered newest-first. These indexes keep those reads bounded
+-- as the order table grows instead of sorting the full table on each refresh.
+create index if not exists orders_staff_queue_idx
+  on public.orders (created_at desc, id desc);
+
+create index if not exists orders_staff_status_queue_idx
+  on public.orders (status, created_at desc, id desc);
 
 
 -- ─── discount_codes ─────────────────────────────────────────────────────────

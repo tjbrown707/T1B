@@ -40,9 +40,9 @@ const ROUTES = [
   { path: "/cart", expect: "Your cart is empty" },
   { path: "/calculator", expect: "Aliquot" },                 // relabelled calculator
   { path: "/login", expect: "Sign" },
-  // Signed out, so this asserts the staff page renders its shell and asks for a
-  // sign-in rather than throwing or leaking an order list.
-  { path: "/admin", expect: "ORDER ADMINISTRATION" },
+  // Signed out, so this asserts the protected staff route reaches the normal
+  // sign-in screen rather than throwing or leaking an order list.
+  { path: "/admin/orders", expect: "Sign" },
   { path: "/no-such-page", expect: "PAGE NOT FOUND" },
 ];
 let failures = 0;

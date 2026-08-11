@@ -213,21 +213,27 @@ export const STATIC_ROUTES = [
     noindex: true,
   },
   {
+    path: "/admin/orders",
+    title: "Order Management",
+    description: "Staff order management for Tier One BioSystems.",
+    h1: "Order management",
+    noindex: true,
+  },
+  {
+    // Compatibility route for the first admin-console deployment. React
+    // redirects it to /admin/orders; keeping it registered prevents a 404 for
+    // anyone who bookmarked the earlier address.
+    path: "/admin",
+    title: "Order Management",
+    description: "Staff order management for Tier One BioSystems.",
+    h1: "Order management",
+    noindex: true,
+  },
+  {
     path: "/reset-password",
     title: "Reset Password",
     description: "Choose a new password for your Tier One BioSystems account.",
     h1: "Set new password",
-    noindex: true,
-  },
-  // Staff only. Listed here because routeMeta() is the single source of page
-  // titles and the prerenderer walks this table — but the page shows nothing
-  // without a session, and the data behind it is gated server-side by
-  // ADMIN_EMAILS, not by this URL being hard to guess.
-  {
-    path: "/admin",
-    title: "Order Administration",
-    description: "Staff order management for Tier One BioSystems.",
-    h1: "Order administration",
     noindex: true,
   },
 ];
