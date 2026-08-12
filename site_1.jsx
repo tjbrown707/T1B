@@ -76,7 +76,7 @@ const MOLECULAR_PROFILES = {
     pubchemCID: "9941957",
   },
   "GLP-3RT": {
-    type: "Triple incretin receptor agonist (GLP-1 / GIP / Glucagon) — known generically as Retatrutide / LY-3437943",
+    type: "Triple incretin receptor agonist (GLP-1 / GIP / Glucagon)",
     aminoAcids: "39 (modified GLP-1 backbone with Aib & α-Me-Leu substitutions)",
     molecularWeight: "4,894.58 g/mol",
     casNumber: "2381089-83-2",
