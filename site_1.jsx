@@ -1550,7 +1550,31 @@ function Hero({ statsActive = true }) {
 
 function ProductCard({ product, index, onClick, onAddToCart }) {
   const [isInteracting, setIsInteracting] = useState(false);
+  const cardRef = useRef(null);
   const href = `/product/${product.id}`;
+
+  // Touchscreens do not have a durable hover state. Activate the card while it
+  // passes through the useful part of the viewport instead, so the animation
+  // plays naturally during a scroll and never requires a long press.
+  useEffect(() => {
+    const card = cardRef.current;
+    if (
+      !card
+      || typeof IntersectionObserver === "undefined"
+      || typeof window.matchMedia !== "function"
+      || !window.matchMedia("(hover: none), (pointer: coarse)").matches
+    ) return undefined;
+
+    const observer = new IntersectionObserver(([entry]) => {
+      setIsInteracting(entry.isIntersecting && entry.intersectionRatio >= 0.45);
+    }, {
+      threshold: 0.45,
+      rootMargin: "-12% 0px -12% 0px",
+    });
+
+    observer.observe(card);
+    return () => observer.disconnect();
+  }, []);
 
   // The card opens a quick-view panel rather than navigating, which is why it
   // used to be a plain clickable <div>. That made every product page invisible
@@ -1569,15 +1593,15 @@ function ProductCard({ product, index, onClick, onAddToCart }) {
 
   return (
     <div
+      ref={cardRef}
       className={`product-card${isInteracting ? " is-interacting" : ""}`}
       onClick={() => onClick(product)}
       onPointerEnter={event => {
         if (event.pointerType !== "touch") setIsInteracting(true);
       }}
-      onPointerLeave={() => setIsInteracting(false)}
-      onTouchStart={() => setIsInteracting(true)}
-      onTouchEnd={() => setIsInteracting(false)}
-      onTouchCancel={() => setIsInteracting(false)}
+      onPointerLeave={event => {
+        if (event.pointerType !== "touch") setIsInteracting(false);
+      }}
       onFocusCapture={() => setIsInteracting(true)}
       onBlurCapture={event => {
         if (!event.currentTarget.contains(event.relatedTarget)) setIsInteracting(false);
@@ -1587,6 +1611,8 @@ function ProductCard({ product, index, onClick, onAddToCart }) {
         background: isInteracting ? "var(--bg-card-hover)" : "var(--bg-card)",
         border: `1px solid ${isInteracting ? "rgba(196,30,42,0.68)" : "var(--border)"}`,
         cursor: "pointer",
+        touchAction: "pan-y",
+        WebkitTouchCallout: "none",
         animation: `fadeUp ${0.4 + index * 0.05}s ease-out`,
         overflow: "hidden",
         display: "flex",
