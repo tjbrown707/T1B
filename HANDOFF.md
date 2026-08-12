@@ -7,7 +7,7 @@ records state that is not obvious from the code or the git log.
 
 ## Inventory/fulfillment build — DATABASE AND WEBSITE LIVE
 
-### Local handoff + retail inventory value — DATABASE LIVE, DEPLOY PENDING
+### Local handoff + retail inventory value — DATABASE AND WEBSITE LIVE
 
 Added on 2026-08-11 in migration
 `20260812051446_local_handoff_and_inventory_value.sql`, which is already applied
@@ -19,6 +19,12 @@ code and a database trigger. The inventory overview also calculates current
 on-hand retail value from the active single-vial catalog prices. Existing nine
 orders were preserved as shipping orders. The final `npm run verify` is green:
 zero lint problems, 97 tests, route smoke, build, and secret scan.
+
+Commit `aca7263` was pushed to `main` and deployed successfully by Netlify on
+2026-08-11. Live signed-in verification confirmed the payment modal choices and
+the local-handoff no-print explanation without changing an order. The adjusted
+production inventory currently shows 1,440 units on hand and a $98,095 retail
+value across 27 products.
 
 Built on branch `codex/new_inventory_managent` on 2026-08-11. The owner applied
 the full inventory migration and the protected staff-role SQL successfully on
