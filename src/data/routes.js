@@ -220,6 +220,13 @@ export const STATIC_ROUTES = [
     noindex: true,
   },
   {
+    path: "/admin/inventory",
+    title: "Inventory Management",
+    description: "Staff lot-level inventory management for Tier One BioSystems.",
+    h1: "Inventory management",
+    noindex: true,
+  },
+  {
     // Compatibility route for the first admin-console deployment. React
     // redirects it to /admin/orders; keeping it registered prevents a 404 for
     // anyone who bookmarked the earlier address.

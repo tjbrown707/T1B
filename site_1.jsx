@@ -46,10 +46,19 @@ import {
 } from "./src/data/order-totals.js";
 import {
   ORDER_STATUS_OPTIONS,
-  canDeleteOrder,
+  canCancelUnpaidOrder,
+  canConfirmPayment,
   hasOrderManagerRole,
-  isOrderStatus,
+  nextFulfillmentAction,
 } from "./src/data/order-management.js";
+import {
+  DEFAULT_PARCEL,
+  canPrintFulfillment,
+  formatLotLabel,
+  inventoryDashboardTotals,
+  inventoryProductTotals,
+  orderHasProvisionalLots,
+} from "./src/data/inventory.js";
 
 // ─── Molecular Profiles (per compound) ────────────────────────────────────────
 const MOLECULAR_PROFILES = {
@@ -820,11 +829,23 @@ style.textContent = `
     .featured-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
     .admin-order-filters { grid-template-columns: 1fr 1fr !important; }
     .admin-order-row { grid-template-columns: 1fr 1fr !important; }
+    .inventory-summary-grid { grid-template-columns: repeat(3, minmax(120px, 1fr)) !important; }
+    .inventory-form-grid { grid-template-columns: repeat(2, minmax(180px, 1fr)) !important; }
+    .inventory-product-row { grid-template-columns: minmax(200px, 1.4fr) repeat(3, minmax(72px, 0.5fr)) !important; }
+    .inventory-lot-grid { grid-template-columns: repeat(2, minmax(150px, 1fr)) !important; }
+    .inventory-adjust-grid { grid-template-columns: 120px minmax(190px, 1fr) auto !important; }
+    .admin-shipping-fields { grid-template-columns: repeat(2, minmax(100px, 1fr)) !important; }
   }
 
   @media (max-width: 640px) {
     .admin-order-filters { grid-template-columns: 1fr !important; }
     .admin-order-row { grid-template-columns: 1fr !important; }
+    .inventory-summary-grid { grid-template-columns: repeat(2, minmax(120px, 1fr)) !important; }
+    .inventory-form-grid { grid-template-columns: 1fr !important; }
+    .inventory-product-row { grid-template-columns: repeat(3, minmax(70px, 1fr)) !important; }
+    .inventory-product-row > :first-child { grid-column: 1 / -1; }
+    .inventory-lot-grid, .inventory-adjust-grid { grid-template-columns: 1fr !important; }
+    .admin-shipping-fields { grid-template-columns: repeat(2, minmax(90px, 1fr)) !important; }
     .footer-grid {
       grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
       gap: 32px 24px !important;
@@ -2962,7 +2983,6 @@ function CartPage({ cart, setCart }) {
     const formData = new URLSearchParams();
     formData.append("form-name", "order");
     formData.append("bot-field", "");
-    formData.append("orderStatus", "PROCESSING");
     formData.append("orderNumber", orderNumber);
     formData.append("customerName", name);
     formData.append("customerEmail", email);
@@ -3029,6 +3049,7 @@ function CartPage({ cart, setCart }) {
     const itemsText = confirmed.itemsText;
     const serverTotals = confirmed.totals;
 
+    formData.append("orderStatus", confirmed.status);
     formData.append("orderItems", itemsText);
     formData.append("orderSubtotal", `$${serverTotals.subtotal.toFixed(2)}`);
     formData.append("discountCode", confirmed.discountCode);
@@ -5147,10 +5168,7 @@ function AdminOrdersPage() {
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [loadError, setLoadError] = useState("");
-  const [draftStatuses, setDraftStatuses] = useState({});
-  const [updatingId, setUpdatingId] = useState(null);
-  const [deleteCandidate, setDeleteCandidate] = useState(null);
-  const [deletingId, setDeletingId] = useState(null);
+  const [actionKey, setActionKey] = useState("");
   const [notice, setNotice] = useState({ type: "", text: "" });
   const requestIdRef = useRef(0);
 
@@ -5183,7 +5201,6 @@ function AdminOrdersPage() {
         : (payload.orders || []));
       setNextCursor(payload.nextCursor || null);
       if (!append) setTotal(Number.isFinite(payload.total) ? payload.total : null);
-      setDraftStatuses({});
       setLoadError("");
     } catch (error) {
       if (requestId !== requestIdRef.current) return;
@@ -5201,15 +5218,6 @@ function AdminOrdersPage() {
     const timer = window.setTimeout(fetchOrders, 0);
     return () => window.clearTimeout(timer);
   }, [canManageOrders, fetchOrders, session?.access_token]);
-
-  useEffect(() => {
-    if (!deleteCandidate || deletingId) return undefined;
-    function closeOnEscape(event) {
-      if (event.key === "Escape") setDeleteCandidate(null);
-    }
-    window.addEventListener("keydown", closeOnEscape);
-    return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [deleteCandidate, deletingId]);
 
   function applySearch(event) {
     event.preventDefault();
@@ -5235,10 +5243,10 @@ function AdminOrdersPage() {
     fetchOrders();
   }
 
-  async function updateOrderStatus(order) {
-    const status = draftStatuses[order.id] || order.status;
-    if (!isOrderStatus(status) || status === order.status || !session?.access_token) return;
-    setUpdatingId(order.id);
+  async function performOrderAction(order, action) {
+    if (!session?.access_token || !action) return;
+    const key = `${order.id}:${action}`;
+    setActionKey(key);
     setNotice({ type: "", text: "" });
 
     try {
@@ -5250,85 +5258,85 @@ function AdminOrdersPage() {
         },
         body: JSON.stringify({
           orderId: order.id,
-          status,
-          expectedStatus: order.status,
+          action,
+          expectedPaymentStatus: order.payment_status,
+          expectedFulfillmentStatus: order.fulfillment_status,
         }),
       });
       const payload = await res.json().catch(() => ({}));
-
-      if (res.status === 409 && payload.order) {
-        setOrders(previous => previous.map(item => item.id === order.id ? payload.order : item));
-        setDraftStatuses(previous => ({ ...previous, [order.id]: payload.order.status }));
-        throw new Error(payload.error || "This order changed while you were viewing it.");
-      }
       if (!res.ok || !payload.order) {
         throw new Error(payload.error || `Order service returned HTTP ${res.status}`);
       }
 
       setOrders(previous => previous.map(item => item.id === order.id ? payload.order : item));
-      setDraftStatuses(previous => ({ ...previous, [order.id]: payload.order.status }));
-      setNotice({ type: "success", text: `${payload.order.order_number} is now ${formatStatusLabel(payload.order.status)}.` });
+      const messages = {
+        confirm_payment: `${payload.order.order_number} is paid and ready to pick. Inventory was deducted once.`,
+        cancel_unpaid: `${payload.order.order_number} was cancelled and its reserved stock was released.`,
+        mark_picked: `${payload.order.order_number} is marked picked.`,
+        mark_packed: `${payload.order.order_number} is marked packed.`,
+      };
+      setNotice({ type: "success", text: messages[action] || `${payload.order.order_number} was updated.` });
     } catch (error) {
-      setNotice({ type: "error", text: error.message || "The status could not be updated." });
+      setNotice({ type: "error", text: error.message || "The order could not be updated." });
     } finally {
-      setUpdatingId(null);
+      setActionKey("");
     }
   }
 
-  function removeOrderFromQueue(orderId) {
-    setOrders(previous => previous.filter(order => order.id !== orderId));
-    setDraftStatuses(previous => {
-      const next = { ...previous };
-      delete next[orderId];
-      return next;
-    });
-    setTotal(previous => Number.isFinite(previous) ? Math.max(0, previous - 1) : previous);
+  async function openFulfillmentPdf(order) {
+    if (!canPrintFulfillment(order) || !session?.access_token) return;
+    const key = `${order.id}:pdf`;
+    setActionKey(key);
+    setNotice({ type: "", text: "" });
+    const preview = window.open("", "_blank", "noopener,noreferrer");
+    try {
+      const res = await fetch(`/.netlify/functions/admin-fulfillment-pdf?orderId=${encodeURIComponent(order.id)}`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({}));
+        throw new Error(payload.error || `Document service returned HTTP ${res.status}`);
+      }
+      const url = URL.createObjectURL(await res.blob());
+      if (preview) preview.location.href = url;
+      else window.open(url, "_blank", "noopener,noreferrer");
+      window.setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch (error) {
+      preview?.close();
+      setNotice({ type: "error", text: error.message || "The fulfillment packet could not be opened." });
+    } finally {
+      setActionKey("");
+    }
   }
 
-  async function deleteCancelledOrder() {
-    const order = deleteCandidate;
-    if (!order || !canDeleteOrder(order.status) || !session?.access_token) return;
-    setDeletingId(order.id);
+  async function printFulfillment(order) {
+    if (!canPrintFulfillment(order) || !session?.access_token) return;
+    const key = `${order.id}:print`;
+    setActionKey(key);
     setNotice({ type: "", text: "" });
-
     try {
-      const res = await fetch("/.netlify/functions/admin-orders", {
-        method: "DELETE",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({
-          orderId: order.id,
-          expectedOrderNumber: order.order_number,
-        }),
+      const res = await fetch("/.netlify/functions/admin-print", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ orderId: order.id, document: "fulfillment" }),
       });
       const payload = await res.json().catch(() => ({}));
-
-      if (res.status === 409 && payload.order) {
-        setOrders(previous => previous.map(item => item.id === order.id ? payload.order : item));
-        setDraftStatuses(previous => ({ ...previous, [order.id]: payload.order.status }));
-        setDeleteCandidate(null);
-        throw new Error(payload.error || "This order changed while you were viewing it.");
-      }
-      if (res.status === 404) {
-        removeOrderFromQueue(order.id);
-        setDeleteCandidate(null);
-        setNotice({ type: "success", text: `${order.order_number} was already deleted.` });
-        return;
-      }
-      if (!res.ok || payload.deletedOrder?.id !== order.id) {
-        throw new Error(payload.error || `Order service returned HTTP ${res.status}`);
-      }
-
-      removeOrderFromQueue(order.id);
-      setDeleteCandidate(null);
-      setNotice({ type: "success", text: `${order.order_number} was permanently deleted.` });
+      if (!res.ok) throw new Error(payload.error || `Print service returned HTTP ${res.status}`);
+      setNotice({ type: "success", text: `${order.order_number}'s pick ticket and packing slip were sent to the printer.` });
     } catch (error) {
-      setNotice({ type: "error", text: error.message || "The order could not be deleted." });
+      setNotice({ type: "error", text: error.message || "The fulfillment packet could not be printed." });
     } finally {
-      setDeletingId(null);
+      setActionKey("");
     }
+  }
+
+  function updateOrderShipment(orderId, shipment) {
+    setOrders(previous => previous.map(order => order.id === orderId ? {
+      ...order,
+      shipment,
+      status: shipment?.status === "LABEL_PURCHASED" ? "PROCESSING" : order.status,
+      fulfillment_status: shipment?.status === "LABEL_PURCHASED" ? "LABEL_CREATED" : order.fulfillment_status,
+    } : order));
   }
 
   if (authLoading || !isLoggedIn) return null;
@@ -5357,7 +5365,7 @@ function AdminOrdersPage() {
             {total === null ? `${orders.length} orders loaded` : `${total} matching order${total === 1 ? "" : "s"}`} · newest first
           </p>
         </div>
-        <button type="button" onClick={() => navigate("/account")} style={{ padding: "10px 18px", background: "transparent", border: "1px solid var(--border)", color: "var(--text-secondary)", fontFamily: "'Orbitron', sans-serif", fontWeight: 700, fontSize: 10, letterSpacing: "0.12em", textTransform: "uppercase", cursor: "pointer" }}>My Account</button>
+        <AdminOperationsNav navigate={navigate} active="orders" />
       </div>
 
       <div style={{ position: "sticky", top: 88, zIndex: 20, padding: 16, marginBottom: 20, border: "1px solid var(--border)", background: "rgba(10,10,10,0.97)", boxShadow: "0 10px 30px rgba(0,0,0,0.25)" }}>
@@ -5395,9 +5403,10 @@ function AdminOrdersPage() {
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           {orders.map(order => {
-            const selectedStatus = draftStatuses[order.id] || order.status;
             const statusColors = orderStatusColors(order.status);
-            const updating = updatingId === order.id;
+            const fulfillmentAction = nextFulfillmentAction(order);
+            const busy = actionKey.startsWith(`${order.id}:`);
+            const printReady = canPrintFulfillment(order);
             return (
               <article key={order.id} style={{ border: "1px solid var(--border)", background: "rgba(17,17,17,0.55)" }}>
                 <div style={{ display: "grid", gridTemplateColumns: "minmax(170px, 1.15fr) minmax(180px, 1.2fr) minmax(90px, 0.55fr) minmax(190px, 1fr)", gap: 16, alignItems: "center", padding: "16px 18px" }} className="admin-order-row">
@@ -5413,23 +5422,22 @@ function AdminOrdersPage() {
                     <div style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 17, fontWeight: 800, color: "var(--text-primary)" }}>${Number(order.total || 0).toFixed(2)}</div>
                     <span style={{ display: "inline-block", marginTop: 5, padding: "3px 7px", border: `1px solid ${statusColors.border}`, background: statusColors.background, color: statusColors.color, fontFamily: "'Orbitron', sans-serif", fontSize: 8, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase" }}>{formatStatusLabel(order.status)}</span>
                   </div>
-                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                    <select
-                      aria-label={`New status for ${order.order_number}`}
-                      value={selectedStatus}
-                      disabled={updating}
-                      onChange={event => setDraftStatuses(previous => ({ ...previous, [order.id]: event.target.value }))}
-                      style={{ ...AUTH_INPUT_STYLE, minWidth: 0, padding: "9px 10px", fontSize: 13, cursor: updating ? "not-allowed" : "pointer" }}
-                    >
-                      {!isOrderStatus(order.status) && <option value={order.status}>{order.status}</option>}
-                      {ORDER_STATUS_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-                    </select>
-                    <button
-                      type="button"
-                      disabled={updating || selectedStatus === order.status}
-                      onClick={() => updateOrderStatus(order)}
-                      style={{ padding: "10px 12px", flexShrink: 0, background: selectedStatus === order.status ? "rgba(255,255,255,0.04)" : "var(--red-primary)", border: `1px solid ${selectedStatus === order.status ? "var(--border)" : "var(--red-primary)"}`, color: selectedStatus === order.status ? "var(--text-dim)" : "#fff", fontFamily: "'Orbitron', sans-serif", fontSize: 9, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", cursor: updating || selectedStatus === order.status ? "not-allowed" : "pointer" }}
-                    >{updating ? "Saving…" : "Update"}</button>
+                  <div style={{ display: "flex", gap: 7, alignItems: "center", flexWrap: "wrap" }}>
+                    {canConfirmPayment(order) && (
+                      <button type="button" disabled={busy} onClick={() => performOrderAction(order, "confirm_payment")} style={adminPrimaryButton(busy)}>
+                        {actionKey === `${order.id}:confirm_payment` ? "Confirming…" : "Confirm Payment"}
+                      </button>
+                    )}
+                    {fulfillmentAction && (
+                      <button type="button" disabled={busy} onClick={() => performOrderAction(order, fulfillmentAction.action)} style={adminPrimaryButton(busy)}>
+                        {actionKey === `${order.id}:${fulfillmentAction.action}` ? "Saving…" : fulfillmentAction.label}
+                      </button>
+                    )}
+                    {!canConfirmPayment(order) && !fulfillmentAction && (
+                      <div style={{ fontFamily: "'Rajdhani', sans-serif", color: "var(--text-dim)", fontSize: 13 }}>
+                        {formatWorkflowStatus(order)}
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -5444,6 +5452,18 @@ function AdminOrdersPage() {
                           <span style={{ color: "var(--text-primary)", whiteSpace: "nowrap" }}>${Number(item.lineTotal || 0).toFixed(2)}</span>
                         </div>
                       )) : <div style={{ whiteSpace: "pre-wrap", color: "var(--text-secondary)", fontFamily: "'Rajdhani', sans-serif", fontSize: 14 }}>{order.items_text || "No item detail"}</div>}
+                      <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid var(--border)" }}>
+                        <AdminDetailHeading>Allocated lots</AdminDetailHeading>
+                        {(order.allocations || []).map((allocation, index) => (
+                          <div key={`${allocation.productId}-${allocation.lot?.id || index}`} style={{ padding: "4px 0", color: allocation.lot?.is_provisional ? "#fbbf24" : "var(--text-secondary)", fontFamily: "'Rajdhani', sans-serif", fontSize: 14 }}>
+                            {allocation.productId} ×{allocation.quantity} — <strong>{formatLotLabel(allocation.lot)}</strong>
+                            {allocation.lot?.storage_location ? ` · ${allocation.lot.storage_location}` : ""}
+                          </div>
+                        ))}
+                        {(order.allocations || []).length === 0 && (
+                          <div style={{ color: "#fbbf24", fontFamily: "'Rajdhani', sans-serif", fontSize: 14 }}>No lot allocation is recorded yet.</div>
+                        )}
+                      </div>
                     </div>
                     <div>
                       <AdminDetailHeading>Customer & shipping</AdminDetailHeading>
@@ -5460,23 +5480,40 @@ function AdminOrdersPage() {
                       <AdminDetailLine label="Total" value={`$${Number(order.total || 0).toFixed(2)}`} strong />
                     </div>
                   </div>
+                  {order.payment_status === "PAID" && (
+                    <OrderShippingControls
+                      order={order}
+                      session={session}
+                      onShipment={updateOrderShipment}
+                      setNotice={setNotice}
+                    />
+                  )}
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 14, margin: "0 18px 18px", paddingTop: 16, borderTop: "1px solid var(--border)" }}>
                     <div>
-                      <AdminDetailHeading>Test-order cleanup</AdminDetailHeading>
+                      <AdminDetailHeading>Fulfillment documents</AdminDetailHeading>
                       <div style={{ color: "var(--text-dim)", fontFamily: "'Rajdhani', sans-serif", fontSize: 14 }}>
-                        {canDeleteOrder(order.status)
-                          ? "This cancelled order can be permanently removed."
-                          : "Change the status to Cancelled before permanently deleting an order."}
+                        {printReady
+                          ? "The pick ticket and customer packing slip are ready."
+                          : orderHasProvisionalLots(order)
+                            ? "Replace provisional lot IDs in Inventory before printing."
+                            : "Confirm payment before printing."}
                       </div>
                     </div>
-                    {canDeleteOrder(order.status) && (
-                      <button
-                        type="button"
-                        disabled={updating || deletingId === order.id}
-                        onClick={() => setDeleteCandidate(order)}
-                        style={{ padding: "10px 15px", background: "rgba(196,30,42,0.08)", border: "1px solid rgba(255,107,107,0.65)", color: "#ff6b6b", fontFamily: "'Orbitron', sans-serif", fontSize: 9, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", cursor: updating || deletingId === order.id ? "not-allowed" : "pointer", opacity: updating || deletingId === order.id ? 0.5 : 1 }}
-                      >Delete Order</button>
-                    )}
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                      <button type="button" disabled={busy || !printReady} onClick={() => openFulfillmentPdf(order)} style={adminSecondaryButton(busy || !printReady)}>
+                        {actionKey === `${order.id}:pdf` ? "Opening…" : "Open PDF"}
+                      </button>
+                      <button type="button" disabled={busy || !printReady} onClick={() => printFulfillment(order)} style={adminSecondaryButton(busy || !printReady)}>
+                        {actionKey === `${order.id}:print` ? "Printing…" : "Print Packet"}
+                      </button>
+                      {canCancelUnpaidOrder(order) && (
+                        <button type="button" disabled={busy} onClick={() => {
+                          if (window.confirm(`Cancel ${order.order_number} and release its reserved inventory?`)) {
+                            performOrderAction(order, "cancel_unpaid");
+                          }
+                        }} style={adminDangerButton(busy)}>Cancel Unpaid</button>
+                      )}
+                    </div>
                   </div>
                 </details>
               </article>
@@ -5496,59 +5533,443 @@ function AdminOrdersPage() {
         </div>
       )}
     </main>
-    {deleteCandidate && (
-      <div
-        role="presentation"
-        onMouseDown={event => {
-          if (event.target === event.currentTarget && !deletingId) setDeleteCandidate(null);
-        }}
-        style={{ position: "fixed", inset: 0, zIndex: 10000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, background: "rgba(0,0,0,0.82)", backdropFilter: "blur(4px)" }}
-      >
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="delete-order-title"
-          aria-describedby="delete-order-warning"
-          style={{ width: "min(100%, 520px)", padding: "26px 24px 22px", border: "1px solid rgba(255,107,107,0.7)", background: "#111", boxShadow: "0 24px 70px rgba(0,0,0,0.7)" }}
-        >
-          <div style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 10, fontWeight: 700, letterSpacing: "0.16em", color: "#ff6b6b", marginBottom: 10 }}>PERMANENT ACTION</div>
-          <h2 id="delete-order-title" style={{ margin: "0 0 12px", color: "var(--text-primary)", fontFamily: "'Orbitron', sans-serif", fontSize: 22 }}>Delete this order?</h2>
-          <p id="delete-order-warning" style={{ margin: "0 0 18px", color: "var(--text-secondary)", fontFamily: "'Rajdhani', sans-serif", fontSize: 16, lineHeight: 1.55 }}>
-            This cannot be undone. The order will disappear from the staff queue and the customer's account history.
-          </p>
-          <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "7px 18px", padding: 14, marginBottom: 16, border: "1px solid var(--border)", background: "rgba(255,255,255,0.025)", fontFamily: "'Rajdhani', sans-serif", fontSize: 15 }}>
-            <span style={{ color: "var(--text-dim)" }}>Order</span>
-            <strong style={{ color: "var(--red-primary)", textAlign: "right" }}>{deleteCandidate.order_number}</strong>
-            <span style={{ color: "var(--text-dim)" }}>Customer</span>
-            <strong style={{ color: "var(--text-primary)", textAlign: "right" }}>{deleteCandidate.customer_name || deleteCandidate.customer_email || "Guest customer"}</strong>
-            <span style={{ color: "var(--text-dim)" }}>Total</span>
-            <strong style={{ color: "var(--text-primary)", textAlign: "right" }}>$${Number(deleteCandidate.total || 0).toFixed(2)}</strong>
-          </div>
-          {deleteCandidate.discount_code && (
-            <p style={{ margin: "0 0 18px", padding: "10px 12px", border: "1px solid rgba(245,158,11,0.4)", background: "rgba(245,158,11,0.08)", color: "#fbbf24", fontFamily: "'Rajdhani', sans-serif", fontSize: 14, lineHeight: 1.45 }}>
-              Discount code <strong>{deleteCandidate.discount_code}</strong> will remain redeemed and will not be restored.
-            </p>
-          )}
-          <div style={{ display: "flex", justifyContent: "flex-end", flexWrap: "wrap", gap: 10 }}>
-            <button
-              type="button"
-              autoFocus
-              disabled={Boolean(deletingId)}
-              onClick={() => setDeleteCandidate(null)}
-              style={{ padding: "12px 18px", background: "transparent", border: "1px solid var(--border)", color: "var(--text-primary)", fontFamily: "'Orbitron', sans-serif", fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", cursor: deletingId ? "not-allowed" : "pointer" }}
-            >Keep Order</button>
-            <button
-              type="button"
-              disabled={Boolean(deletingId)}
-              onClick={deleteCancelledOrder}
-              style={{ padding: "12px 18px", background: deletingId ? "rgba(196,30,42,0.35)" : "var(--red-primary)", border: "1px solid var(--red-primary)", color: "#fff", fontFamily: "'Orbitron', sans-serif", fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", cursor: deletingId ? "not-allowed" : "pointer" }}
-            >{deletingId ? "Deleting…" : "Permanently Delete"}</button>
-          </div>
-        </div>
-      </div>
-    )}
     </>
   );
+}
+
+function AdminInventoryPage() {
+  const navigate = useNavigate();
+  const { user, session, isLoggedIn, loading: authLoading } = useAuth();
+  useRouteMeta("/admin/inventory");
+  const [products, setProducts] = useState([]);
+  const [movements, setMovements] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState({ type: "", text: "" });
+  const canManageOrders = hasOrderManagerRole(user);
+
+  useEffect(() => {
+    if (!authLoading && !isLoggedIn) navigate("/login?redirect=/admin/inventory", { replace: true });
+  }, [authLoading, isLoggedIn, navigate]);
+
+  const loadInventory = useCallback(async () => {
+    if (!session?.access_token || !hasOrderManagerRole(session.user)) return;
+    setLoading(true);
+    setError("");
+    try {
+      const res = await fetch("/.netlify/functions/admin-inventory", {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload.error || `Inventory service returned HTTP ${res.status}`);
+      setProducts(payload.products || []);
+      setMovements(payload.movements || []);
+    } catch (loadError) {
+      setError(loadError.message || "Inventory could not be loaded.");
+    } finally {
+      setLoading(false);
+    }
+  }, [session]);
+
+  useEffect(() => {
+    if (!canManageOrders || !session?.access_token) return undefined;
+    const timer = window.setTimeout(loadInventory, 0);
+    return () => window.clearTimeout(timer);
+  }, [canManageOrders, loadInventory, session?.access_token]);
+
+  async function inventoryAction(body) {
+    if (!session?.access_token) throw new Error("Your session has expired.");
+    const res = await fetch("/.netlify/functions/admin-inventory", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify(body),
+    });
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(payload.error || `Inventory service returned HTTP ${res.status}`);
+    await loadInventory();
+    return payload;
+  }
+
+  const totals = inventoryDashboardTotals(products);
+  if (authLoading || !isLoggedIn) return null;
+  if (!canManageOrders) {
+    return (
+      <div style={{ maxWidth: 620, margin: "0 auto", padding: "150px 24px 90px", textAlign: "center" }}>
+        <div style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 11, fontWeight: 700, letterSpacing: "0.2em", color: "var(--red-primary)", marginBottom: 12 }}>STAFF ACCESS</div>
+        <h1 style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 28, color: "var(--text-primary)", marginBottom: 16 }}>INVENTORY MANAGEMENT</h1>
+        <p style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 17, color: "var(--text-secondary)" }}>This account does not have inventory-management permission.</p>
+      </div>
+    );
+  }
+
+  return (
+    <main style={{ maxWidth: 1280, margin: "0 auto", padding: "120px 24px 80px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 16, marginBottom: 28 }}>
+        <div>
+          <div style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 11, fontWeight: 700, letterSpacing: "0.2em", color: "var(--red-primary)", marginBottom: 10 }}>STAFF OPERATIONS</div>
+          <h1 style={{ fontFamily: "'Orbitron', sans-serif", fontWeight: 800, fontSize: "clamp(25px, 4vw, 38px)", color: "var(--text-primary)", margin: 0 }}>INVENTORY MANAGEMENT</h1>
+          <p style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 15, color: "var(--text-dim)", margin: "8px 0 0" }}>Lot-level stock, reservations, and permanent movement history</p>
+        </div>
+        <AdminOperationsNav navigate={navigate} active="inventory" />
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(130px, 1fr))", gap: 10, marginBottom: 18 }} className="inventory-summary-grid">
+        <InventorySummaryCard label="Products" value={totals.products} />
+        <InventorySummaryCard label="On Hand" value={totals.onHand} />
+        <InventorySummaryCard label="Reserved" value={totals.reserved} color="#f59e0b" />
+        <InventorySummaryCard label="Available" value={totals.available} color="#22c55e" />
+        <InventorySummaryCard label="Lot IDs Needed" value={totals.provisionalProducts} color={totals.provisionalProducts ? "#f59e0b" : "#22c55e"} />
+      </div>
+
+      {totals.provisionalProducts > 0 && (
+        <div style={{ padding: "13px 15px", marginBottom: 16, border: "1px solid rgba(245,158,11,0.45)", background: "rgba(245,158,11,0.08)", color: "#fbbf24", fontFamily: "'Rajdhani', sans-serif", fontSize: 15 }}>
+          All products started at 50 units as requested. Replace each provisional lot with its real lot and batch ID before its first fulfillment packet or shipping label can print.
+        </div>
+      )}
+      {notice.text && <div role="status" style={{ padding: "12px 15px", marginBottom: 16, border: `1px solid ${notice.type === "success" ? "rgba(34,197,94,0.45)" : "rgba(196,30,42,0.55)"}`, background: notice.type === "success" ? "rgba(34,197,94,0.08)" : "rgba(196,30,42,0.08)", color: notice.type === "success" ? "#22c55e" : "#ff6b6b", fontFamily: "'Rajdhani', sans-serif", fontSize: 15 }}>{notice.text}</div>}
+      {error && <div role="alert" style={{ padding: 14, marginBottom: 16, border: "1px solid rgba(196,30,42,0.5)", color: "#ff6b6b", fontFamily: "'Rajdhani', sans-serif" }}>{error}</div>}
+
+      <InventoryReceiveForm products={products} onAction={inventoryAction} setNotice={setNotice} />
+
+      {loading ? (
+        <div style={{ padding: 50, textAlign: "center", color: "var(--text-dim)", fontFamily: "'Rajdhani', sans-serif" }}>Loading inventory…</div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 18 }}>
+          {products.map(product => <InventoryProductCard key={product.product_id} product={product} onAction={inventoryAction} setNotice={setNotice} />)}
+        </div>
+      )}
+
+      <details style={{ marginTop: 20, border: "1px solid var(--border)", background: "rgba(17,17,17,0.45)" }}>
+        <summary style={{ padding: "14px 16px", cursor: "pointer", color: "var(--text-secondary)", fontFamily: "'Orbitron', sans-serif", fontSize: 10, fontWeight: 700, letterSpacing: "0.1em" }}>RECENT INVENTORY HISTORY</summary>
+        <div style={{ padding: "0 16px 16px", overflowX: "auto" }}>
+          {movements.slice(0, 50).map(movement => (
+            <div key={movement.auditKey || movement.id} style={{ display: "grid", gridTemplateColumns: "150px minmax(150px, 1fr) 110px minmax(180px, 2fr)", gap: 10, padding: "8px 0", borderBottom: "1px solid var(--border)", color: "var(--text-secondary)", fontFamily: "'Rajdhani', sans-serif", fontSize: 13, minWidth: 700 }}>
+              <span>{formatAdminOrderDate(movement.created_at)}</span>
+              <strong style={{ color: "var(--text-primary)" }}>{movement.product_id}</strong>
+              <span>{movement.movement_type.replaceAll("_", " ")}</span>
+              <span>{movement.on_hand_delta ? `On hand ${signedNumber(movement.on_hand_delta)}` : ""}{movement.reserved_delta ? ` · Reserved ${signedNumber(movement.reserved_delta)}` : ""}{movement.reason ? ` · ${movement.reason}` : ""}</span>
+            </div>
+          ))}
+        </div>
+      </details>
+    </main>
+  );
+}
+
+function InventorySummaryCard({ label, value, color = "var(--text-primary)" }) {
+  return (
+    <div style={{ padding: "14px 15px", border: "1px solid var(--border)", background: "rgba(17,17,17,0.55)" }}>
+      <div style={{ color: "var(--text-dim)", fontFamily: "'Orbitron', sans-serif", fontSize: 8, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase" }}>{label}</div>
+      <div style={{ color, fontFamily: "'Orbitron', sans-serif", fontSize: 23, fontWeight: 800, marginTop: 7 }}>{value}</div>
+    </div>
+  );
+}
+
+function InventoryReceiveForm({ products, onAction, setNotice }) {
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState({ productId: "", lotNumber: "", supplierBatchId: "", quantity: "", expiresOn: "", storageLocation: "" });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  async function submit(event) {
+    event.preventDefault();
+    setBusy(true);
+    setError("");
+    try {
+      await onAction({ action: "receive_lot", ...form, quantity: Number(form.quantity) });
+      setNotice({ type: "success", text: "The new inventory lot was received and added to the audit history." });
+      setForm({ productId: "", lotNumber: "", supplierBatchId: "", quantity: "", expiresOn: "", storageLocation: "" });
+      setOpen(false);
+    } catch (submitError) {
+      setError(submitError.message || "The lot could not be received.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div style={{ border: "1px solid var(--border)", background: "rgba(17,17,17,0.45)" }}>
+      <button type="button" onClick={() => setOpen(value => !value)} style={{ width: "100%", padding: "14px 16px", textAlign: "left", background: "transparent", border: 0, color: "var(--text-primary)", fontFamily: "'Orbitron', sans-serif", fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", cursor: "pointer" }}>{open ? "−" : "+"} RECEIVE A NEW LOT</button>
+      {open && (
+        <form onSubmit={submit} style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(180px, 1fr))", gap: 12, padding: "0 16px 16px" }} className="inventory-form-grid">
+          <InventoryField label="Product"><select required value={form.productId} onChange={event => setForm(previous => ({ ...previous, productId: event.target.value }))} style={AUTH_INPUT_STYLE}><option value="">Choose product</option>{products.map(product => <option key={product.product_id} value={product.product_id}>{product.product_name} {product.dose}</option>)}</select></InventoryField>
+          <InventoryField label="Lot number"><input required value={form.lotNumber} onChange={event => setForm(previous => ({ ...previous, lotNumber: event.target.value }))} style={AUTH_INPUT_STYLE} /></InventoryField>
+          <InventoryField label="Supplier batch ID"><input value={form.supplierBatchId} onChange={event => setForm(previous => ({ ...previous, supplierBatchId: event.target.value }))} style={AUTH_INPUT_STYLE} /></InventoryField>
+          <InventoryField label="Quantity received"><input required type="number" min="1" step="1" value={form.quantity} onChange={event => setForm(previous => ({ ...previous, quantity: event.target.value }))} style={AUTH_INPUT_STYLE} /></InventoryField>
+          <InventoryField label="Expiration date"><input type="date" value={form.expiresOn} onChange={event => setForm(previous => ({ ...previous, expiresOn: event.target.value }))} style={AUTH_INPUT_STYLE} /></InventoryField>
+          <InventoryField label="Storage location"><input value={form.storageLocation} onChange={event => setForm(previous => ({ ...previous, storageLocation: event.target.value }))} style={AUTH_INPUT_STYLE} placeholder="Freezer / bin" /></InventoryField>
+          {error && <div role="alert" style={{ gridColumn: "1 / -1", color: "#ff6b6b", fontFamily: "'Rajdhani', sans-serif" }}>{error}</div>}
+          <button type="submit" disabled={busy} style={{ ...adminPrimaryButton(busy), justifySelf: "start" }}>{busy ? "Receiving…" : "Receive Lot"}</button>
+        </form>
+      )}
+    </div>
+  );
+}
+
+function InventoryProductCard({ product, onAction, setNotice }) {
+  const totals = inventoryProductTotals(product);
+  return (
+    <article style={{ border: `1px solid ${totals.provisional ? "rgba(245,158,11,0.45)" : "var(--border)"}`, background: "rgba(17,17,17,0.55)" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "minmax(220px, 1.5fr) repeat(3, minmax(90px, 0.55fr))", gap: 14, alignItems: "center", padding: "15px 17px" }} className="inventory-product-row">
+        <div><strong style={{ color: "var(--text-primary)", fontFamily: "'Orbitron', sans-serif", fontSize: 13 }}>{product.product_name} {product.dose}</strong><div style={{ color: "var(--text-dim)", fontFamily: "'Rajdhani', sans-serif", fontSize: 13, marginTop: 4 }}>{product.product_id}{totals.provisional ? " · real lot ID needed" : ""}</div></div>
+        <InventoryMiniStat label="On hand" value={totals.onHand} />
+        <InventoryMiniStat label="Reserved" value={totals.reserved} color="#f59e0b" />
+        <InventoryMiniStat label="Available" value={totals.available} color={totals.available <= Number(product.reorder_point || 0) ? "#ff6b6b" : "#22c55e"} />
+      </div>
+      <details style={{ borderTop: "1px solid var(--border)" }} open={totals.provisional || undefined}>
+        <summary style={{ padding: "10px 17px", cursor: "pointer", color: "var(--text-secondary)", fontFamily: "'Rajdhani', sans-serif", fontSize: 14 }}>Manage {product.lots.length} lot{product.lots.length === 1 ? "" : "s"}</summary>
+        <div style={{ padding: "0 17px 17px", display: "flex", flexDirection: "column", gap: 9 }}>
+          {product.lots.map(lot => (
+            <InventoryLotEditor
+              key={`${lot.id}:${lot.updated_at || ""}:${product.reorder_point}`}
+              lot={lot}
+              product={product}
+              onAction={onAction}
+              setNotice={setNotice}
+            />
+          ))}
+        </div>
+      </details>
+    </article>
+  );
+}
+
+function InventoryMiniStat({ label, value, color = "var(--text-primary)" }) {
+  return <div><div style={{ color: "var(--text-dim)", fontFamily: "'Orbitron', sans-serif", fontSize: 8, letterSpacing: "0.08em" }}>{label.toUpperCase()}</div><div style={{ color, fontFamily: "'Orbitron', sans-serif", fontSize: 17, fontWeight: 800, marginTop: 4 }}>{value}</div></div>;
+}
+
+function InventoryLotEditor({ lot, product, onAction, setNotice }) {
+  const [editing, setEditing] = useState(lot.is_provisional);
+  const [form, setForm] = useState({ lotNumber: lot.is_provisional ? "" : lot.lot_number, supplierBatchId: lot.supplier_batch_id || "", expiresOn: lot.expires_on || "", storageLocation: lot.storage_location || "", reorderPoint: String(product.reorder_point ?? 10) });
+  const [adjustment, setAdjustment] = useState({ delta: "", reason: "" });
+  const [busy, setBusy] = useState("");
+  const [error, setError] = useState("");
+
+  async function saveMetadata(event) {
+    event.preventDefault();
+    setBusy("save"); setError("");
+    try {
+      await onAction({ action: "update_lot", lotId: lot.id, expectedUpdatedAt: lot.updated_at, ...form, reorderPoint: Number(form.reorderPoint) });
+      setNotice({ type: "success", text: `${product.product_name} ${product.dose} now uses lot ${form.lotNumber}.` });
+      setEditing(false);
+    } catch (saveError) { setError(saveError.message || "The lot could not be updated."); }
+    finally { setBusy(""); }
+  }
+
+  async function applyAdjustment(event) {
+    event.preventDefault();
+    setBusy("adjust"); setError("");
+    try {
+      await onAction({ action: "adjust_lot", lotId: lot.id, delta: Number(adjustment.delta), reason: adjustment.reason });
+      setNotice({ type: "success", text: `Inventory was adjusted by ${signedNumber(Number(adjustment.delta))}; the reason is in the audit history.` });
+      setAdjustment({ delta: "", reason: "" });
+    } catch (adjustError) { setError(adjustError.message || "Inventory could not be adjusted."); }
+    finally { setBusy(""); }
+  }
+
+  return (
+    <div style={{ padding: 12, border: `1px solid ${lot.is_provisional ? "rgba(245,158,11,0.4)" : "var(--border)"}`, background: "rgba(0,0,0,0.18)" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
+        <div style={{ color: lot.is_provisional ? "#fbbf24" : "var(--text-primary)", fontFamily: "'Rajdhani', sans-serif", fontSize: 15 }}><strong>{formatLotLabel(lot)}</strong> · {lot.on_hand} on hand · {lot.reserved} reserved · {Math.max(0, lot.on_hand - lot.reserved)} available</div>
+        <button type="button" onClick={() => setEditing(value => !value)} style={adminSecondaryButton(false)}>{editing ? "Close" : "Edit Lot"}</button>
+      </div>
+      {editing && (
+        <form onSubmit={saveMetadata} style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(140px, 1fr))", gap: 9, marginTop: 12 }} className="inventory-lot-grid">
+          <InventoryField label="Real lot number"><input required value={form.lotNumber} onChange={event => setForm(previous => ({ ...previous, lotNumber: event.target.value }))} style={AUTH_INPUT_STYLE} /></InventoryField>
+          <InventoryField label="Supplier batch ID"><input value={form.supplierBatchId} onChange={event => setForm(previous => ({ ...previous, supplierBatchId: event.target.value }))} style={AUTH_INPUT_STYLE} /></InventoryField>
+          <InventoryField label="Expiration"><input type="date" value={form.expiresOn} onChange={event => setForm(previous => ({ ...previous, expiresOn: event.target.value }))} style={AUTH_INPUT_STYLE} /></InventoryField>
+          <InventoryField label="Storage location"><input value={form.storageLocation} onChange={event => setForm(previous => ({ ...previous, storageLocation: event.target.value }))} style={AUTH_INPUT_STYLE} /></InventoryField>
+          <InventoryField label="Low-stock alert"><input type="number" min="0" step="1" value={form.reorderPoint} onChange={event => setForm(previous => ({ ...previous, reorderPoint: event.target.value }))} style={AUTH_INPUT_STYLE} /></InventoryField>
+          <button type="submit" disabled={Boolean(busy)} style={{ ...adminPrimaryButton(Boolean(busy)), justifySelf: "start" }}>{busy === "save" ? "Saving…" : "Save Lot"}</button>
+        </form>
+      )}
+      {!lot.is_provisional && (
+        <form onSubmit={applyAdjustment} style={{ display: "grid", gridTemplateColumns: "130px minmax(220px, 1fr) auto", gap: 9, alignItems: "end", marginTop: 12 }} className="inventory-adjust-grid">
+          <InventoryField label="Adjustment (+/-)"><input type="number" required step="1" value={adjustment.delta} onChange={event => setAdjustment(previous => ({ ...previous, delta: event.target.value }))} style={AUTH_INPUT_STYLE} /></InventoryField>
+          <InventoryField label="Required reason"><input required minLength="3" value={adjustment.reason} onChange={event => setAdjustment(previous => ({ ...previous, reason: event.target.value }))} style={AUTH_INPUT_STYLE} placeholder="Count correction, damaged vial, return…" /></InventoryField>
+          <button type="submit" disabled={Boolean(busy)} style={adminSecondaryButton(Boolean(busy))}>{busy === "adjust" ? "Applying…" : "Apply Adjustment"}</button>
+        </form>
+      )}
+      {error && <div role="alert" style={{ marginTop: 9, color: "#ff6b6b", fontFamily: "'Rajdhani', sans-serif", fontSize: 14 }}>{error}</div>}
+    </div>
+  );
+}
+
+function InventoryField({ label, children }) {
+  return <label style={{ color: "var(--text-dim)", fontFamily: "'Rajdhani', sans-serif", fontSize: 12 }}>{label}<div style={{ marginTop: 4 }}>{children}</div></label>;
+}
+
+function signedNumber(value) {
+  const number = Number(value || 0);
+  return number > 0 ? `+${number}` : String(number);
+}
+
+function AdminOperationsNav({ navigate, active }) {
+  const items = [
+    { id: "orders", label: "Orders", path: "/admin/orders" },
+    { id: "inventory", label: "Inventory", path: "/admin/inventory" },
+    { id: "account", label: "My Account", path: "/account" },
+  ];
+  return (
+    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+      {items.map(item => (
+        <button key={item.id} type="button" onClick={() => navigate(item.path)} style={{ padding: "10px 16px", background: active === item.id ? "rgba(196,30,42,0.12)" : "transparent", border: `1px solid ${active === item.id ? "var(--red-primary)" : "var(--border)"}`, color: active === item.id ? "var(--red-primary)" : "var(--text-secondary)", fontFamily: "'Orbitron', sans-serif", fontWeight: 700, fontSize: 9, letterSpacing: "0.1em", textTransform: "uppercase", cursor: "pointer" }}>
+          {item.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function OrderShippingControls({ order, session, onShipment, setNotice }) {
+  const [parcel, setParcel] = useState({ ...DEFAULT_PARCEL });
+  const [rates, setRates] = useState([]);
+  const [selectedRateId, setSelectedRateId] = useState("");
+  const [busy, setBusy] = useState("");
+  const [error, setError] = useState("");
+
+  const shipment = order.shipment || null;
+  const labelUrl = shipment?.label_url || shipment?.labelUrl || "";
+  const trackingNumber = shipment?.tracking_number || shipment?.trackingNumber || "";
+  const trackingUrl = shipment?.tracking_url || shipment?.trackingUrl || "";
+  const provisional = orderHasProvisionalLots(order);
+  const readyForLabel = order.fulfillment_status === "PACKED";
+
+  async function shippingRequest(action, extra = {}) {
+    const res = await fetch("/.netlify/functions/admin-shipping", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({ action, orderId: order.id, ...extra }),
+    });
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(payload.error || `Shipping service returned HTTP ${res.status}`);
+    return payload;
+  }
+
+  async function getRates() {
+    if (!session?.access_token || provisional) return;
+    setBusy("rates");
+    setError("");
+    try {
+      const payload = await shippingRequest("get_rates", { parcel });
+      setRates(payload.rates || []);
+      setSelectedRateId(payload.rates?.[0]?.id || "");
+    } catch (requestError) {
+      setError(requestError.message || "Rates could not be loaded.");
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function buyLabel() {
+    const rate = rates.find(candidate => candidate.id === selectedRateId);
+    if (!rate || !session?.access_token) return;
+    if (!window.confirm(`Buy the ${rate.provider} ${rate.serviceName} label for $${rate.amount.toFixed(2)}? This charges your Shippo account.`)) return;
+    setBusy("buy");
+    setError("");
+    try {
+      const payload = await shippingRequest("buy_label", { rateId: rate.id, autoPrint: true });
+      onShipment(order.id, payload.shipment);
+      const printText = payload.print?.printed
+        ? " The 4×6 label was sent to PrintNode."
+        : payload.print?.error ? ` ${payload.print.error}` : "";
+      setNotice({ type: "success", text: `Shipping label purchased for ${order.order_number}.${printText}` });
+    } catch (requestError) {
+      setError(requestError.message || "The label could not be purchased.");
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function printLabel() {
+    setBusy("print");
+    setError("");
+    try {
+      const res = await fetch("/.netlify/functions/admin-print", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ orderId: order.id, document: "label" }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload.error || `Print service returned HTTP ${res.status}`);
+      setNotice({ type: "success", text: `${order.order_number}'s shipping label was sent to PrintNode.` });
+    } catch (printError) {
+      setError(printError.message || "The label could not be printed.");
+    } finally {
+      setBusy("");
+    }
+  }
+
+  function parcelField(field, label, step = "0.1") {
+    return (
+      <label style={{ color: "var(--text-dim)", fontFamily: "'Rajdhani', sans-serif", fontSize: 12 }}>
+        {label}
+        <input type="number" min="0.1" max={field === "weight" ? "16" : "100"} step={step} value={parcel[field]} onChange={event => setParcel(previous => ({ ...previous, [field]: event.target.value }))} style={{ ...AUTH_INPUT_STYLE, marginTop: 4, padding: "8px 9px", fontSize: 13 }} />
+      </label>
+    );
+  }
+
+  return (
+    <div style={{ margin: "0 18px 18px", padding: 16, border: "1px solid var(--border)", background: "rgba(255,255,255,0.02)" }}>
+      <AdminDetailHeading>Shipping label</AdminDetailHeading>
+      {provisional ? (
+        <div style={{ color: "#fbbf24", fontFamily: "'Rajdhani', sans-serif", fontSize: 14 }}>Enter the real lot numbers before sending order data to Shippo.</div>
+      ) : labelUrl ? (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+          <div style={{ color: "var(--text-secondary)", fontFamily: "'Rajdhani', sans-serif", fontSize: 14 }}>
+            {trackingNumber ? <>Tracking: <strong style={{ color: "var(--text-primary)" }}>{trackingNumber}</strong></> : "Label purchased"}
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            <a href={labelUrl} target="_blank" rel="noopener noreferrer" style={{ ...adminSecondaryButton(false), display: "inline-block", textDecoration: "none" }}>Open Label</a>
+            {trackingUrl && <a href={trackingUrl} target="_blank" rel="noopener noreferrer" style={{ ...adminSecondaryButton(false), display: "inline-block", textDecoration: "none" }}>Track</a>}
+            <button type="button" disabled={Boolean(busy)} onClick={printLabel} style={adminSecondaryButton(Boolean(busy))}>{busy === "print" ? "Printing…" : "Print Label"}</button>
+          </div>
+        </div>
+      ) : !readyForLabel ? (
+        <div style={{ color: "var(--text-dim)", fontFamily: "'Rajdhani', sans-serif", fontSize: 14 }}>Mark the order picked and packed before requesting postage.</div>
+      ) : (
+        <>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(80px, 1fr)) auto", gap: 8, alignItems: "end" }} className="admin-shipping-fields">
+            {parcelField("length", "Length (in)")}
+            {parcelField("width", "Width (in)")}
+            {parcelField("height", "Thickness (in)")}
+            {parcelField("weight", "Weight (oz)")}
+            <button type="button" disabled={Boolean(busy)} onClick={getRates} style={adminSecondaryButton(Boolean(busy))}>{busy === "rates" ? "Loading…" : "Get Rates"}</button>
+          </div>
+          {rates.length > 0 && (
+            <div style={{ display: "flex", gap: 10, alignItems: "end", marginTop: 12, flexWrap: "wrap" }}>
+              <label style={{ flex: "1 1 300px", color: "var(--text-dim)", fontFamily: "'Rajdhani', sans-serif", fontSize: 12 }}>
+                Carrier and service
+                <select value={selectedRateId} onChange={event => setSelectedRateId(event.target.value)} style={{ ...AUTH_INPUT_STYLE, marginTop: 4, padding: "9px 10px" }}>
+                  {rates.map(rate => <option key={rate.id} value={rate.id}>{rate.provider} — {rate.serviceName} — ${rate.amount.toFixed(2)}{rate.estimatedDays ? ` — ${rate.estimatedDays} days` : ""}</option>)}
+                </select>
+              </label>
+              <button type="button" disabled={Boolean(busy) || !selectedRateId} onClick={buyLabel} style={adminPrimaryButton(Boolean(busy) || !selectedRateId)}>{busy === "buy" ? "Buying…" : "Buy & Print Label"}</button>
+            </div>
+          )}
+        </>
+      )}
+      {error && <div role="alert" style={{ marginTop: 10, color: "#ff6b6b", fontFamily: "'Rajdhani', sans-serif", fontSize: 14 }}>{error}</div>}
+    </div>
+  );
+}
+
+function adminPrimaryButton(disabled) {
+  return { padding: "10px 13px", background: disabled ? "rgba(196,30,42,0.3)" : "var(--red-primary)", border: "1px solid var(--red-primary)", color: "#fff", fontFamily: "'Orbitron', sans-serif", fontSize: 9, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.6 : 1 };
+}
+
+function adminSecondaryButton(disabled) {
+  return { padding: "9px 12px", background: "transparent", border: "1px solid var(--border)", color: disabled ? "var(--text-dim)" : "var(--text-secondary)", fontFamily: "'Orbitron', sans-serif", fontSize: 9, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.55 : 1 };
+}
+
+function adminDangerButton(disabled) {
+  return { ...adminSecondaryButton(disabled), border: "1px solid rgba(255,107,107,0.6)", color: disabled ? "var(--text-dim)" : "#ff6b6b" };
+}
+
+function formatWorkflowStatus(order) {
+  const payment = String(order?.payment_status || "UNKNOWN").replaceAll("_", " ").toLowerCase();
+  const fulfillment = String(order?.fulfillment_status || "UNKNOWN").replaceAll("_", " ").toLowerCase();
+  return `${payment} · ${fulfillment}`;
 }
 
 function AdminDetailHeading({ children }) {
@@ -7097,6 +7518,7 @@ export default function App() {
         <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/account" element={<AccountPage />} />
         <Route path="/admin/orders" element={<AdminOrdersPage />} />
+        <Route path="/admin/inventory" element={<AdminInventoryPage />} />
         <Route path="/admin" element={<Navigate to="/admin/orders" replace />} />
         <Route path="/about" element={<AboutPage />} />
         <Route path="/faq" element={<FAQPage />} />

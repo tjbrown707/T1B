@@ -70,11 +70,39 @@ const PATTERNS = [
     fix: "Remove it from the browser code and rotate it in the Resend dashboard.",
   },
   {
+    label: "Shippo API token",
+    regex: /shippo_(?:live|test)_[A-Za-z0-9_-]{12,}/gi,
+    fix: "Remove it from browser code and rotate it in Shippo. Keep SHIPPO_API_TOKEN server-only in Netlify.",
+  },
+  {
+    label: "Shippo server-only key name",
+    regex: /SHIPPO_API_TOKEN/g,
+    fix: "Shippo calls belong in a Netlify Function; never read this environment variable from the Vite app.",
+  },
+  {
+    label: "PrintNode server-only key name",
+    regex: /PRINTNODE_API_KEY/g,
+    fix: "PrintNode calls belong in a Netlify Function; never read this environment variable from the Vite app.",
+  },
+  {
     label: "Postgres connection string with credentials",
     regex: /postgres(?:ql)?:\/\/[^\s:'"]+:[^\s@'"]+@/g,
     fix: "Database credentials must never reach the browser. Rotate the database password.",
   },
 ];
+
+// Key formats can change, and PrintNode keys do not have a dependable public
+// prefix. When Netlify exposes a configured value to the build process, scan
+// for that exact value too. Values are never printed in full.
+const CONFIGURED_SERVER_SECRETS = [
+  "SUPABASE_SERVICE_ROLE_KEY",
+  "RESEND_API_KEY",
+  "SHIPPO_API_TOKEN",
+  "PRINTNODE_API_KEY",
+].flatMap(name => {
+  const value = process.env[name];
+  return typeof value === "string" && value.length >= 8 ? [{ name, value }] : [];
+});
 
 if (!existsSync(DIST)) {
   console.error("check-bundle-secrets: dist/ not found — run `vite build` first.");
@@ -101,6 +129,17 @@ for (const file of files) {
       sample: redact(jwt),
       fix: "Swap it back to the publishable key and rotate the service_role key in Supabase → Settings → API Keys.",
     });
+  }
+
+  for (const secret of CONFIGURED_SERVER_SECRETS) {
+    if (text.includes(secret.value)) {
+      findings.push({
+        file: relative,
+        label: `${secret.name} configured value`,
+        sample: redact(secret.value),
+        fix: `Remove it from browser code and rotate ${secret.name} before deploying.`,
+      });
+    }
   }
 }
 

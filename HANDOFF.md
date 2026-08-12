@@ -5,6 +5,48 @@ records state that is not obvious from the code or the git log.
 
 ---
 
+## Inventory/fulfillment build — DATABASE LIVE, website code not deployed
+
+Built on branch `codex/new_inventory_managent` on 2026-08-11. The owner applied
+the full inventory migration and the protected staff-role SQL successfully on
+2026-08-11. A live read-only verification found 27 products, 27 provisional
+lots, 1,350 on hand, zero reserved, 1,350 available, and one staff role. Direct
+`anon` and `authenticated` read/write privileges are false on all seven
+operational tables. Supabase's security advisor returned only the intentional
+INFO notices for RLS tables with no customer policies.
+
+No Netlify environment variable, commit, push, or website deployment has been
+performed. The database is now ahead of the live admin UI: do not use the old
+generic order-status controls until the matching website/functions are
+deployed. The owner-facing order and exact click path are in
+`INVENTORY_FULFILLMENT_SETUP.md`.
+
+- All 27 variants initialize at 50 active units in provisional lots; there is
+  no setup mode.
+- Checkout reserves stock atomically. Staff payment confirmation commits the
+  reservation and deducts on-hand units; unpaid cancellation releases it.
+- New staff UI: `/admin/inventory`; `/admin/orders` now uses explicit workflow
+  actions rather than arbitrary status edits or permanent deletion.
+- Two-page private PDF: internal lot/location pick ticket + customer packing
+  slip. Visually rendered and inspected.
+- Direct server-side Shippo rating/4×6 label purchase and PrintNode printing.
+  Shippo platform sync is not used.
+- Server-only RLS tables, protected `app_metadata` roles, row locks,
+  compare-and-set transitions, immutable audit triggers, request bounds and
+  rate limits are in place. The browser-bundle scanner now covers Shippo and
+  PrintNode secrets too.
+- `npm run verify` is green: zero lint problems, 95 tests, route smoke, build,
+  secret scan and integrity check.
+- Package defaults: 9 × 4.25 × **0.5** inches, 1.9 oz. The 0.5-inch thickness
+  is an explicit temporary assumption and remains editable per shipment.
+
+The migration file is
+`supabase/migrations/20260811120000_inventory_fulfillment_foundation.sql` and
+has already been run. Do not run it twice. Once the deployment is live, update
+the older “New orders default to PROCESSING” production note below.
+
+---
+
 ## The citations are fixed — but the count was worse than this file said
 
 Every citation in `site_1.jsx` now resolves to the paper it names. Verified:

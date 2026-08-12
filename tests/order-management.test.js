@@ -27,11 +27,8 @@ test("order-manager authorization trusts app metadata, never customer metadata",
   assert.equal(hasOrderManagerRole({ app_metadata: { role: "customer" } }), false);
 });
 
-test("permanent deletion is limited to already-cancelled orders", () => {
-  assert.equal(canDeleteOrder("CANCELLED"), true);
-  for (const status of ORDER_STATUS_VALUES.filter(status => status !== "CANCELLED")) {
-    assert.equal(canDeleteOrder(status), false);
-  }
+test("orders remain permanent audit records even after cancellation", () => {
+  for (const status of ORDER_STATUS_VALUES) assert.equal(canDeleteOrder(status), false);
   assert.equal(canDeleteOrder("cancelled"), false);
 });
 

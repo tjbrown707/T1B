@@ -15,14 +15,54 @@ export const ORDER_STATUS_OPTIONS = Object.freeze([
   { value: "CONFIRMED", label: "Confirmed (legacy)" },
 ]);
 
+export const PAYMENT_STATUS_OPTIONS = Object.freeze([
+  { value: "AWAITING_PAYMENT", label: "Awaiting payment" },
+  { value: "PAID", label: "Paid" },
+  { value: "REFUNDED", label: "Refunded" },
+  { value: "CANCELLED", label: "Cancelled" },
+]);
+
+export const FULFILLMENT_STATUS_OPTIONS = Object.freeze([
+  { value: "ON_HOLD", label: "On hold" },
+  { value: "READY_TO_PICK", label: "Ready to pick" },
+  { value: "PICKED", label: "Picked" },
+  { value: "PACKED", label: "Packed" },
+  { value: "LABEL_CREATED", label: "Label created" },
+  { value: "SHIPPED", label: "Shipped" },
+  { value: "DELIVERED", label: "Delivered" },
+  { value: "CANCELLED", label: "Cancelled" },
+]);
+
 export const ORDER_STATUS_VALUES = Object.freeze(ORDER_STATUS_OPTIONS.map(option => option.value));
 
 export function isOrderStatus(value) {
   return typeof value === "string" && ORDER_STATUS_VALUES.includes(value);
 }
 
-export function canDeleteOrder(status) {
-  return status === "CANCELLED";
+export function canDeleteOrder() {
+  // Inventory and payment history is an audit record. Operational orders are
+  // cancelled or archived, never erased from the staff console.
+  return false;
+}
+
+export function canConfirmPayment(order) {
+  return order?.payment_status === "AWAITING_PAYMENT"
+    && order?.fulfillment_status === "ON_HOLD";
+}
+
+export function canCancelUnpaidOrder(order) {
+  return order?.payment_status === "AWAITING_PAYMENT";
+}
+
+export function nextFulfillmentAction(order) {
+  if (order?.payment_status !== "PAID") return null;
+  if (order.fulfillment_status === "READY_TO_PICK") {
+    return { action: "mark_picked", label: "Mark Picked", target: "PICKED" };
+  }
+  if (order.fulfillment_status === "PICKED") {
+    return { action: "mark_packed", label: "Mark Packed", target: "PACKED" };
+  }
+  return null;
 }
 
 // Authorization belongs in app_metadata: customers can edit user_metadata,

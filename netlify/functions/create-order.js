@@ -78,7 +78,7 @@ export default async function handler(request) {
   const row = {
     user_id: userId,
     order_number: input.orderNumber,
-    status: "PROCESSING",
+    status: "AWAITING PAYMENT",
     items: lineItems,
     items_text: itemsText,
     subtotal: totals.subtotal,
@@ -103,6 +103,11 @@ export default async function handler(request) {
   if (error) {
     if (String(error.message).includes("discount_code_not_redeemable")) {
       return fail(409, "That personal discount code was just used or has expired. Please review your order.");
+    }
+    if (String(error.message).includes("insufficient_inventory:")) {
+      const productId = String(error.message).split("insufficient_inventory:")[1]?.split(/\s|\n/)[0] || "";
+      const product = PRODUCTS.find(entry => entry.id === productId);
+      return fail(409, `${product ? `${product.name} ${product.dose}` : "One item"} no longer has enough available inventory for this order.`);
     }
     console.error("create-order: transaction failed:", error);
     return fail(500, "We could not save your order. Please try again.");

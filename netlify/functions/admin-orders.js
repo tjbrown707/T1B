@@ -2,63 +2,37 @@
 // server-side and the user must have app_metadata.role admin/order_manager.
 
 import { Buffer } from "node:buffer";
-import { createClient } from "@supabase/supabase-js";
 import {
-  canDeleteOrder,
-  hasOrderManagerRole,
   isOrderStatus,
 } from "../../src/data/order-management.js";
-import { getEnv, jsonResponse, readBearerToken, readJsonBody } from "./_shared/http.js";
+import { authenticateOrderManager } from "./_shared/admin-auth.js";
+import { jsonResponse, readJsonBody } from "./_shared/http.js";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const MAX_BODY_BYTES = 4 * 1024;
-const METHODS = "GET, PATCH, DELETE, OPTIONS";
+const METHODS = "GET, PATCH, OPTIONS";
 const ORDER_FIELDS = [
   "id", "order_number", "status", "items", "items_text", "subtotal",
   "discount_code", "discount_amount", "shipping", "total", "payment_method",
   "customer_name", "customer_email", "customer_phone", "ship_address",
-  "ship_city", "ship_state", "ship_zip", "created_at",
+  "ship_city", "ship_state", "ship_zip", "created_at", "updated_at",
+  "payment_status", "fulfillment_status", "payment_confirmed_at",
 ].join(",");
 
 export default async function handler(request) {
   if (request.method === "OPTIONS") return jsonResponse(204, null, METHODS);
-  if (!["GET", "PATCH", "DELETE"].includes(request.method)) return fail(405, "Method not allowed");
+  if (!["GET", "PATCH"].includes(request.method)) return fail(405, "Method not allowed");
 
-  const auth = await authenticateOrderManager(request);
+  const auth = await authenticateOrderManager(request, fail);
   if (auth.response) return auth.response;
 
   if (request.method === "GET") return listOrders(auth.supabase, new URL(request.url).searchParams);
-  if (request.method === "PATCH") return updateOrderStatus(auth.supabase, auth.user, request);
-  return deleteOrder(auth.supabase, auth.user, request);
-}
-
-async function authenticateOrderManager(request) {
-  const supabaseUrl = getEnv("SUPABASE_URL");
-  const serviceRoleKey = getEnv("SUPABASE_SERVICE_ROLE_KEY");
-  if (!supabaseUrl || !serviceRoleKey) {
-    console.error("admin-orders: Supabase env vars missing");
-    return { response: fail(500, "Order management is not configured.") };
-  }
-
-  const token = readBearerToken(request);
-  if (!token) return { response: fail(401, "Sign in to manage orders.") };
-
-  const supabase = createClient(supabaseUrl, serviceRoleKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-  const { data, error } = await supabase.auth.getUser(token);
-  if (error || !data?.user) return { response: fail(401, "Your session has expired. Sign in again.") };
-  if (!data.user.email_confirmed_at) {
-    return { response: fail(403, "Confirm this account's email before managing orders.") };
-  }
-  if (!hasOrderManagerRole(data.user)) {
-    console.warn(`admin-orders: forbidden user ${data.user.id}`);
-    return { response: fail(403, "This account does not have order-management access.") };
-  }
-  return { supabase, user: data.user };
+  return updateOrderWorkflow(auth.supabase, auth.user, request);
 }
 
 async function listOrders(supabase, params) {
+  const orderId = (params.get("orderId") || "").trim();
+  if (orderId && !UUID_PATTERN.test(orderId)) return fail(400, "Invalid order id.");
   const status = (params.get("status") || "").trim().toUpperCase();
   if (status && !isOrderStatus(status)) return fail(400, "Unknown order status filter.");
 
@@ -75,6 +49,7 @@ async function listOrders(supabase, params) {
     .order("id", { ascending: false })
     .limit(limit + 1);
 
+  if (orderId) query = query.eq("id", orderId).limit(1);
   if (status) query = query.eq("status", status);
   if (search) {
     const pattern = `%${search}%`;
@@ -96,115 +71,171 @@ async function listOrders(supabase, params) {
   }
 
   const rows = Array.isArray(data) ? data : [];
-  const hasMore = rows.length > limit;
+  const hasMore = !orderId && rows.length > limit;
   const orders = hasMore ? rows.slice(0, limit) : rows;
+  let allocations;
+  let shipments;
+  try {
+    [allocations, shipments] = await Promise.all([
+      loadOrderAllocations(supabase, orders.map(order => order.id)),
+      loadOrderShipments(supabase, orders.map(order => order.id)),
+    ]);
+  } catch (hydrationError) {
+    console.error("admin-orders: related records failed:", hydrationError);
+    return fail(500, "Order inventory and shipping details could not be loaded.");
+  }
+  const hydrated = orders.map(order => ({
+    ...order,
+    allocations: allocations.get(order.id) || [],
+    shipment: shipments.get(order.id) || null,
+  }));
   const nextCursor = hasMore && orders.length > 0 ? encodeCursor(orders[orders.length - 1]) : null;
-  return jsonResponse(200, { orders, nextCursor, total: cursor ? null : (count ?? orders.length) }, METHODS);
-}
-
-async function updateOrderStatus(supabase, user, request) {
-  const parsed = await readJsonBody(request, MAX_BODY_BYTES);
-  if (parsed.error) return fail(parsed.error === "Request is too large." ? 413 : 400, parsed.error);
-
-  const orderId = typeof parsed.data?.orderId === "string" ? parsed.data.orderId.trim() : "";
-  const status = typeof parsed.data?.status === "string" ? parsed.data.status.trim().toUpperCase() : "";
-  const expectedStatus = typeof parsed.data?.expectedStatus === "string"
-    ? parsed.data.expectedStatus.trim().toUpperCase()
-    : "";
-  if (!UUID_PATTERN.test(orderId)) return fail(400, "Invalid order id.");
-  if (!isOrderStatus(status)) return fail(400, "Choose a valid order status.");
-  if (!isOrderStatus(expectedStatus)) return fail(400, "The order's current status is invalid.");
-  if (status === expectedStatus) return fail(400, "Choose a different status.");
-
-  const { data: updated, error } = await supabase
-    .from("orders")
-    .update({ status })
-    .eq("id", orderId)
-    .eq("status", expectedStatus)
-    .select(ORDER_FIELDS)
-    .maybeSingle();
-  if (error) {
-    console.error("admin-orders: update failed:", error);
-    return fail(500, "The order status could not be updated.");
-  }
-
-  if (!updated) {
-    const { data: current, error: readError } = await supabase
-      .from("orders")
-      .select(ORDER_FIELDS)
-      .eq("id", orderId)
-      .maybeSingle();
-    if (readError) {
-      console.error("admin-orders: conflict read failed:", readError);
-      return fail(500, "The order status could not be confirmed.");
-    }
-    if (!current) return fail(404, "Order not found.");
-    return jsonResponse(409, {
-      error: "Someone else updated this order. Its current status has been loaded; review it and try again.",
-      order: current,
-    }, METHODS);
-  }
-
-  console.info(`admin-orders: staff ${user.id} changed ${updated.order_number} from ${expectedStatus} to ${status}`);
-  return jsonResponse(200, { order: updated }, METHODS);
-}
-
-async function deleteOrder(supabase, user, request) {
-  const parsed = await readJsonBody(request, MAX_BODY_BYTES);
-  if (parsed.error) return fail(parsed.error === "Request is too large." ? 413 : 400, parsed.error);
-
-  const orderId = typeof parsed.data?.orderId === "string" ? parsed.data.orderId.trim() : "";
-  const expectedOrderNumber = typeof parsed.data?.expectedOrderNumber === "string"
-    ? parsed.data.expectedOrderNumber.trim()
-    : "";
-  if (!UUID_PATTERN.test(orderId)) return fail(400, "Invalid order id.");
-  if (!/^[A-Z0-9_-]{1,64}$/i.test(expectedOrderNumber)) return fail(400, "Invalid order number.");
-
-  // All three filters are part of the DELETE itself. If the order changes after
-  // the confirmation dialog opens, the stale request deletes nothing.
-  const { data: deleted, error } = await supabase
-    .from("orders")
-    .delete()
-    .eq("id", orderId)
-    .eq("order_number", expectedOrderNumber)
-    .eq("status", "CANCELLED")
-    .select(ORDER_FIELDS)
-    .maybeSingle();
-  if (error) {
-    console.error("admin-orders: delete failed:", error);
-    return fail(500, "The order could not be deleted.");
-  }
-
-  if (!deleted) {
-    const { data: current, error: readError } = await supabase
-      .from("orders")
-      .select(ORDER_FIELDS)
-      .eq("id", orderId)
-      .maybeSingle();
-    if (readError) {
-      console.error("admin-orders: delete conflict read failed:", readError);
-      return fail(500, "The order could not be confirmed.");
-    }
-    if (!current) return fail(404, "This order no longer exists.");
-    if (!canDeleteOrder(current.status)) {
-      return jsonResponse(409, {
-        error: "Only cancelled orders can be deleted. The current order has been reloaded.",
-        order: current,
-      }, METHODS);
-    }
-    return jsonResponse(409, {
-      error: "This order changed while you were viewing it. Reload it before deleting.",
-      order: current,
-    }, METHODS);
-  }
-
-  console.info(`admin-orders: staff ${user.id} permanently deleted cancelled order ${deleted.order_number}`);
   return jsonResponse(200, {
-    deletedOrder: {
-      id: deleted.id,
-      orderNumber: deleted.order_number,
-    },
+    orders: hydrated,
+    nextCursor,
+    total: cursor ? null : (count ?? hydrated.length),
   }, METHODS);
+}
+
+async function loadOrderAllocations(supabase, orderIds) {
+  const grouped = new Map();
+  if (orderIds.length === 0) return grouped;
+  const { data, error } = await supabase
+    .from("inventory_reservations")
+    .select("order_id,product_id,quantity,state,inventory_lots(id,lot_number,supplier_batch_id,is_provisional,expires_on,storage_location)")
+    .in("order_id", orderIds)
+    .order("created_at", { ascending: true });
+  if (error) {
+    console.error("admin-orders: allocation read failed:", error);
+    throw new Error("Order inventory allocations could not be loaded.");
+  }
+  for (const allocation of data || []) {
+    const list = grouped.get(allocation.order_id) || [];
+    list.push({
+      productId: allocation.product_id,
+      quantity: allocation.quantity,
+      state: allocation.state,
+      lot: allocation.inventory_lots || null,
+    });
+    grouped.set(allocation.order_id, list);
+  }
+  return grouped;
+}
+
+async function loadOrderShipments(supabase, orderIds) {
+  const grouped = new Map();
+  if (orderIds.length === 0) return grouped;
+  const { data, error } = await supabase
+    .from("order_shipments")
+    .select("order_id,status,carrier,service_name,postage_amount,currency,tracking_number,tracking_url,label_url,parcel,error_message")
+    .in("order_id", orderIds);
+  if (error) {
+    console.error("admin-orders: shipment read failed:", error);
+    throw new Error("Shipment details could not be loaded.");
+  }
+  for (const shipment of data || []) grouped.set(shipment.order_id, shipment);
+  return grouped;
+}
+
+async function updateOrderWorkflow(supabase, user, request) {
+  const parsed = await readJsonBody(request, MAX_BODY_BYTES);
+  if (parsed.error) return fail(parsed.error === "Request is too large." ? 413 : 400, parsed.error);
+
+  const orderId = typeof parsed.data?.orderId === "string" ? parsed.data.orderId.trim() : "";
+  const action = typeof parsed.data?.action === "string" ? parsed.data.action.trim() : "";
+  const expectedPaymentStatus = typeof parsed.data?.expectedPaymentStatus === "string"
+    ? parsed.data.expectedPaymentStatus.trim().toUpperCase()
+    : "";
+  const expectedFulfillmentStatus = typeof parsed.data?.expectedFulfillmentStatus === "string"
+    ? parsed.data.expectedFulfillmentStatus.trim().toUpperCase()
+    : "";
+  if (!UUID_PATTERN.test(orderId)) return fail(400, "Invalid order id.");
+  const rpc = workflowRpc(action, {
+    orderId,
+    expectedPaymentStatus,
+    expectedFulfillmentStatus,
+    actorUserId: user.id,
+  });
+  if (!rpc) return fail(400, "Choose a valid order action.");
+
+  const { data, error } = await supabase.rpc(rpc.name, rpc.args);
+  if (error) return workflowError(error, action);
+  const updated = Array.isArray(data) ? data[0] : data;
+  if (!updated) return fail(404, "Order not found.");
+
+  let allocations;
+  let shipments;
+  try {
+    [allocations, shipments] = await Promise.all([
+      loadOrderAllocations(supabase, [orderId]),
+      loadOrderShipments(supabase, [orderId]),
+    ]);
+  } catch (hydrationError) {
+    console.error("admin-orders: updated order hydration failed:", hydrationError);
+    return fail(500, "The order was updated, but its related details could not be reloaded. Refresh the page.");
+  }
+  const order = {
+    ...updated,
+    allocations: allocations.get(orderId) || [],
+    shipment: shipments.get(orderId) || null,
+  };
+  console.info(`admin-orders: staff ${user.id} performed ${action} on ${order.order_number}`);
+  return jsonResponse(200, { order }, METHODS);
+}
+
+export function workflowRpc(action, input) {
+  if (action === "confirm_payment" && input.expectedPaymentStatus === "AWAITING_PAYMENT") {
+    return {
+      name: "confirm_order_payment",
+      args: {
+        p_order_id: input.orderId,
+        p_expected_payment_status: input.expectedPaymentStatus,
+        p_actor_user_id: input.actorUserId,
+      },
+    };
+  }
+  if (action === "cancel_unpaid" && input.expectedPaymentStatus === "AWAITING_PAYMENT") {
+    return {
+      name: "cancel_unpaid_order",
+      args: {
+        p_order_id: input.orderId,
+        p_expected_payment_status: input.expectedPaymentStatus,
+        p_actor_user_id: input.actorUserId,
+      },
+    };
+  }
+  const targets = { mark_picked: "PICKED", mark_packed: "PACKED" };
+  if (targets[action] && /^[A-Z_]{3,30}$/.test(input.expectedFulfillmentStatus)) {
+    return {
+      name: "advance_order_fulfillment",
+      args: {
+        p_order_id: input.orderId,
+        p_expected_fulfillment_status: input.expectedFulfillmentStatus,
+        p_target_fulfillment_status: targets[action],
+        p_actor_user_id: input.actorUserId,
+      },
+    };
+  }
+  return null;
+}
+
+function workflowError(error, action) {
+  const message = String(error?.message || "");
+  if (message.includes("insufficient_inventory:")) {
+    return fail(409, "There is not enough available inventory to confirm this payment.");
+  }
+  if (message.includes("status_conflict") || message.includes("order_payment_status_conflict")) {
+    return fail(409, "Someone else updated this order. Refresh it before trying again.");
+  }
+  if (message.includes("paid_order_requires_refund")) {
+    return fail(409, "A paid order cannot be cancelled as unpaid. Use the refund workflow instead.");
+  }
+  if (message.includes("inventory_counter_mismatch") || message.includes("inventory_reservation_mismatch")) {
+    console.error(`admin-orders: inventory integrity error during ${action}:`, error);
+    return fail(409, "Inventory needs review before this order can move forward.");
+  }
+  console.error(`admin-orders: ${action} failed:`, error);
+  return fail(500, "The order could not be updated.");
 }
 
 export function sanitiseSearch(value) {
@@ -236,6 +267,15 @@ export function decodeCursor(value) {
     return null;
   }
 }
+
+export const config = {
+  path: "/.netlify/functions/admin-orders",
+  rateLimit: {
+    windowLimit: 180,
+    windowSize: 60,
+    aggregateBy: ["ip", "domain"],
+  },
+};
 
 function fail(status, error) {
   return jsonResponse(status, { error }, METHODS);

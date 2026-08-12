@@ -112,7 +112,7 @@ test("checkout notifications and receipts use the server-confirmed order", () =>
   const source = readFileSync("site_1.jsx", "utf8");
   const index = readFileSync("index.html", "utf8");
   assert.doesNotMatch(source, /redeem-discount/);
-  assert.match(source, /formData\.append\("orderStatus", "PROCESSING"\)/);
+  assert.match(source, /formData\.append\("orderStatus", confirmed\.status\)/);
   assert.match(source, /orderSubtotal: `\$\$\{serverTotals\.subtotal\.toFixed\(2\)\}`/);
   assert.match(source, /orderTotal: `\$\$\{serverTotals\.total\.toFixed\(2\)\}`/);
   assert.match(index, /name="researchUseAcknowledged"/);
@@ -120,8 +120,9 @@ test("checkout notifications and receipts use the server-confirmed order", () =>
 
 test("the schema keeps order creation server-only and redemption transactional", () => {
   const schema = readFileSync("supabase/schema.sql", "utf8");
-  assert.match(schema, /status\s+text not null default 'PROCESSING'/);
+  const migration = readFileSync("supabase/migrations/20260811120000_inventory_fulfillment_foundation.sql", "utf8");
+  assert.match(migration, /alter column status set default 'AWAITING PAYMENT'/);
   assert.doesNotMatch(schema, /create policy "Users can insert their own orders"/);
-  assert.match(schema, /create_order_transaction/);
-  assert.match(schema, /grant execute on function public\.create_order_transaction\(jsonb, text\) to service_role/);
+  assert.match(migration, /create_order_transaction/);
+  assert.match(migration, /grant execute on function public\.create_order_transaction\(jsonb, text\) to service_role/);
 });
