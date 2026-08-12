@@ -7,6 +7,19 @@ records state that is not obvious from the code or the git log.
 
 ## Inventory/fulfillment build — DATABASE AND WEBSITE LIVE
 
+### Local handoff + retail inventory value — DATABASE LIVE, DEPLOY PENDING
+
+Added on 2026-08-11 in migration
+`20260812051446_local_handoff_and_inventory_value.sql`, which is already applied
+to production. Payment confirmation now records the actual received-via channel
+(Cash App, Venmo, Cash, or Other) and either shipping or local handoff. Local
+handoff orders can move directly to **Mark Handed Off** and are blocked from
+fulfillment PDFs, PrintNode, Shippo rates, and label purchases in both server
+code and a database trigger. The inventory overview also calculates current
+on-hand retail value from the active single-vial catalog prices. Existing nine
+orders were preserved as shipping orders. The final `npm run verify` is green:
+zero lint problems, 97 tests, route smoke, build, and secret scan.
+
 Built on branch `codex/new_inventory_managent` on 2026-08-11. The owner applied
 the full inventory migration and the protected staff-role SQL successfully on
 2026-08-11. A live read-only verification found 27 products, 27 provisional
@@ -18,8 +31,9 @@ INFO notices for RLS tables with no customer policies.
 Commit `8521604` was pushed to `main` and deployed successfully by Netlify on
 2026-08-11. The live `/admin/inventory` page served the exact verified bundle
 hash, and the unauthenticated inventory endpoint returned the intended HTTP
-401 response. Shippo and PrintNode environment variables have not yet been
-confirmed; their controls fail closed as unconfigured until those are added.
+401 response. Shippo's token and sender-address variables were configured and
+redeployed on 2026-08-11. PrintNode variables have not yet been confirmed; its
+controls fail closed until those are added.
 The remaining owner setup is in `INVENTORY_FULFILLMENT_SETUP.md`.
 
 - All 27 variants initialize at 50 active units in provisional lots; there is
@@ -36,7 +50,7 @@ The remaining owner setup is in `INVENTORY_FULFILLMENT_SETUP.md`.
   compare-and-set transitions, immutable audit triggers, request bounds and
   rate limits are in place. The browser-bundle scanner now covers Shippo and
   PrintNode secrets too.
-- `npm run verify` is green: zero lint problems, 95 tests, route smoke, build,
+- `npm run verify` is green: zero lint problems, 97 tests, route smoke, build,
   secret scan and integrity check.
 - Package defaults: 9 × 4.25 × **0.5** inches, 1.9 oz. The 0.5-inch thickness
   is an explicit temporary assumption and remains editable per shipment.

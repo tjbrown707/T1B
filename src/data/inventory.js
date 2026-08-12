@@ -32,6 +32,17 @@ export function inventoryDashboardTotals(products) {
   };
 }
 
+export function inventoryRetailValue(products, catalog) {
+  const prices = new Map((Array.isArray(catalog) ? catalog : []).map(product => [
+    product?.id,
+    Number(product?.price || 0),
+  ]));
+  return (Array.isArray(products) ? products : []).reduce((total, product) => {
+    const price = prices.get(product?.product_id) || 0;
+    return total + inventoryProductTotals(product).onHand * price;
+  }, 0);
+}
+
 export function orderHasProvisionalLots(order) {
   return (Array.isArray(order?.allocations) ? order.allocations : [])
     .some(allocation => !allocation?.lot
@@ -41,6 +52,7 @@ export function orderHasProvisionalLots(order) {
 
 export function canPrintFulfillment(order) {
   return order?.payment_status === "PAID"
+    && order?.fulfillment_method !== "LOCAL_HANDOFF"
     && Array.isArray(order?.allocations)
     && order.allocations.length > 0
     && order.allocations.every(allocation => allocation?.state === "COMMITTED")

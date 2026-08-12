@@ -5,7 +5,9 @@ import {
   ORDER_STATUS_VALUES,
   canDeleteOrder,
   hasOrderManagerRole,
+  isLocalHandoff,
   isOrderStatus,
+  nextFulfillmentAction,
 } from "../src/data/order-management.js";
 import {
   decodeCursor,
@@ -30,6 +32,21 @@ test("order-manager authorization trusts app metadata, never customer metadata",
 test("orders remain permanent audit records even after cancellation", () => {
   for (const status of ORDER_STATUS_VALUES) assert.equal(canDeleteOrder(status), false);
   assert.equal(canDeleteOrder("cancelled"), false);
+});
+
+test("local handoff orders use a direct completion action", () => {
+  const order = {
+    payment_status: "PAID",
+    fulfillment_status: "READY_TO_PICK",
+    fulfillment_method: "LOCAL_HANDOFF",
+  };
+  assert.equal(isLocalHandoff(order), true);
+  assert.deepEqual(nextFulfillmentAction(order), {
+    action: "mark_handed_off",
+    label: "Mark Handed Off",
+    target: "DELIVERED",
+  });
+  assert.equal(nextFulfillmentAction({ ...order, fulfillment_method: "SHIP" }).action, "mark_picked");
 });
 
 test("pagination cursors round-trip and reject malformed ids", () => {

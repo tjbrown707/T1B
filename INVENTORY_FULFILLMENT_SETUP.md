@@ -75,6 +75,17 @@ SHIP_FROM_EMAIL
 
 The customer address, parcel measurements, and selected rate are sent only from the server. The Shippo token is never sent to the browser.
 
+### Local handoff orders
+
+When confirming payment in `/admin/orders`, choose the actual payment channel
+and select **Hand directly to customer**. Inventory is committed normally, but
+the order permanently blocks fulfillment PDFs, PrintNode jobs, Shippo rates,
+and postage. Use **Mark Handed Off** when the customer receives it.
+
+The inventory overview's **Retail Value** is the current on-hand quantity times
+the active single-vial price displayed by the website. It is a retail-value
+estimate, not inventory cost or profit.
+
 ## 4. Configure PrintNode in Netlify
 
 1. Install the PrintNode desktop client on the always-on computer connected to the printers.

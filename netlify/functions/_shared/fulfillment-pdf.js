@@ -8,6 +8,9 @@ const LIGHT = rgb(0.86, 0.86, 0.86);
 
 export function assertOrderPrintable(order) {
   if (order?.payment_status !== "PAID") return "Confirm payment before printing fulfillment documents.";
+  if (order?.fulfillment_method === "LOCAL_HANDOFF") {
+    return "Local handoff orders do not create a fulfillment packet.";
+  }
   const allocations = Array.isArray(order?.allocations) ? order.allocations : [];
   if (allocations.length === 0) return "This order has no inventory allocation.";
   if (allocations.some(allocation => !allocation?.lot

@@ -16,7 +16,8 @@ const ORDER_FIELDS = [
   "discount_code", "discount_amount", "shipping", "total", "payment_method",
   "customer_name", "customer_email", "customer_phone", "ship_address",
   "ship_city", "ship_state", "ship_zip", "created_at", "updated_at",
-  "payment_status", "fulfillment_status", "payment_confirmed_at",
+  "payment_status", "fulfillment_status", "fulfillment_method",
+  "payment_received_via", "payment_confirmed_at",
 ].join(",");
 
 export default async function handler(request) {
@@ -149,11 +150,19 @@ async function updateOrderWorkflow(supabase, user, request) {
   const expectedFulfillmentStatus = typeof parsed.data?.expectedFulfillmentStatus === "string"
     ? parsed.data.expectedFulfillmentStatus.trim().toUpperCase()
     : "";
+  const fulfillmentMethod = typeof parsed.data?.fulfillmentMethod === "string"
+    ? parsed.data.fulfillmentMethod.trim().toUpperCase()
+    : "";
+  const paymentReceivedVia = typeof parsed.data?.paymentReceivedVia === "string"
+    ? parsed.data.paymentReceivedVia.trim()
+    : "";
   if (!UUID_PATTERN.test(orderId)) return fail(400, "Invalid order id.");
   const rpc = workflowRpc(action, {
     orderId,
     expectedPaymentStatus,
     expectedFulfillmentStatus,
+    fulfillmentMethod,
+    paymentReceivedVia,
     actorUserId: user.id,
   });
   if (!rpc) return fail(400, "Choose a valid order action.");
@@ -184,12 +193,19 @@ async function updateOrderWorkflow(supabase, user, request) {
 }
 
 export function workflowRpc(action, input) {
-  if (action === "confirm_payment" && input.expectedPaymentStatus === "AWAITING_PAYMENT") {
+  const fulfillmentMethod = input.fulfillmentMethod || "SHIP";
+  const paymentReceivedVia = input.paymentReceivedVia || "Other";
+  if (action === "confirm_payment"
+      && input.expectedPaymentStatus === "AWAITING_PAYMENT"
+      && ["SHIP", "LOCAL_HANDOFF"].includes(fulfillmentMethod)
+      && ["Cash App", "Venmo", "Cash", "Other"].includes(paymentReceivedVia)) {
     return {
       name: "confirm_order_payment",
       args: {
         p_order_id: input.orderId,
         p_expected_payment_status: input.expectedPaymentStatus,
+        p_fulfillment_method: fulfillmentMethod,
+        p_payment_received_via: paymentReceivedVia,
         p_actor_user_id: input.actorUserId,
       },
     };
@@ -204,7 +220,7 @@ export function workflowRpc(action, input) {
       },
     };
   }
-  const targets = { mark_picked: "PICKED", mark_packed: "PACKED" };
+  const targets = { mark_picked: "PICKED", mark_packed: "PACKED", mark_handed_off: "DELIVERED" };
   if (targets[action] && /^[A-Z_]{3,30}$/.test(input.expectedFulfillmentStatus)) {
     return {
       name: "advance_order_fulfillment",
@@ -229,6 +245,11 @@ function workflowError(error, action) {
   }
   if (message.includes("paid_order_requires_refund")) {
     return fail(409, "A paid order cannot be cancelled as unpaid. Use the refund workflow instead.");
+  }
+  if (message.includes("invalid_fulfillment_method")
+      || message.includes("invalid_payment_received_via")
+      || message.includes("invalid_fulfillment_transition")) {
+    return fail(400, "Choose a valid payment and fulfillment option.");
   }
   if (message.includes("inventory_counter_mismatch") || message.includes("inventory_reservation_mismatch")) {
     console.error(`admin-orders: inventory integrity error during ${action}:`, error);

@@ -45,10 +45,13 @@ import {
   isShippingDiscountCode,
 } from "./src/data/order-totals.js";
 import {
+  FULFILLMENT_METHODS,
   ORDER_STATUS_OPTIONS,
+  PAYMENT_RECEIVED_OPTIONS,
   canCancelUnpaidOrder,
   canConfirmPayment,
   hasOrderManagerRole,
+  isLocalHandoff,
   nextFulfillmentAction,
 } from "./src/data/order-management.js";
 import {
@@ -57,6 +60,7 @@ import {
   formatLotLabel,
   inventoryDashboardTotals,
   inventoryProductTotals,
+  inventoryRetailValue,
   orderHasProvisionalLots,
 } from "./src/data/inventory.js";
 
@@ -5243,7 +5247,7 @@ function AdminOrdersPage() {
     fetchOrders();
   }
 
-  async function performOrderAction(order, action) {
+  async function performOrderAction(order, action, options = {}) {
     if (!session?.access_token || !action) return;
     const key = `${order.id}:${action}`;
     setActionKey(key);
@@ -5261,6 +5265,8 @@ function AdminOrdersPage() {
           action,
           expectedPaymentStatus: order.payment_status,
           expectedFulfillmentStatus: order.fulfillment_status,
+          fulfillmentMethod: options.fulfillmentMethod,
+          paymentReceivedVia: options.paymentReceivedVia,
         }),
       });
       const payload = await res.json().catch(() => ({}));
@@ -5270,10 +5276,13 @@ function AdminOrdersPage() {
 
       setOrders(previous => previous.map(item => item.id === order.id ? payload.order : item));
       const messages = {
-        confirm_payment: `${payload.order.order_number} is paid and ready to pick. Inventory was deducted once.`,
+        confirm_payment: isLocalHandoff(payload.order)
+          ? `${payload.order.order_number} is paid and reserved for local handoff. Inventory was deducted once; printing and postage are blocked.`
+          : `${payload.order.order_number} is paid and ready to pick. Inventory was deducted once.`,
         cancel_unpaid: `${payload.order.order_number} was cancelled and its reserved stock was released.`,
         mark_picked: `${payload.order.order_number} is marked picked.`,
         mark_packed: `${payload.order.order_number} is marked packed.`,
+        mark_handed_off: `${payload.order.order_number} is marked handed off to the customer.`,
       };
       setNotice({ type: "success", text: messages[action] || `${payload.order.order_number} was updated.` });
     } catch (error) {
@@ -5424,9 +5433,12 @@ function AdminOrdersPage() {
                   </div>
                   <div style={{ display: "flex", gap: 7, alignItems: "center", flexWrap: "wrap" }}>
                     {canConfirmPayment(order) && (
-                      <button type="button" disabled={busy} onClick={() => performOrderAction(order, "confirm_payment")} style={adminPrimaryButton(busy)}>
-                        {actionKey === `${order.id}:confirm_payment` ? "Confirming…" : "Confirm Payment"}
-                      </button>
+                      <OrderPaymentConfirmation
+                        order={order}
+                        busy={busy}
+                        confirming={actionKey === `${order.id}:confirm_payment`}
+                        onConfirm={performOrderAction}
+                      />
                     )}
                     {fulfillmentAction && (
                       <button type="button" disabled={busy} onClick={() => performOrderAction(order, fulfillmentAction.action)} style={adminPrimaryButton(busy)}>
@@ -5466,21 +5478,23 @@ function AdminOrdersPage() {
                       </div>
                     </div>
                     <div>
-                      <AdminDetailHeading>Customer & shipping</AdminDetailHeading>
+                      <AdminDetailHeading>Customer & delivery</AdminDetailHeading>
                       <AdminDetailLine label="Email" value={order.customer_email} />
                       <AdminDetailLine label="Phone" value={order.customer_phone} />
                       <AdminDetailLine label="Address" value={[order.ship_address, order.ship_city, order.ship_state, order.ship_zip].filter(Boolean).join(", ")} />
+                      <AdminDetailLine label="Fulfillment" value={isLocalHandoff(order) ? "Local handoff" : "Ship to customer"} />
                     </div>
                     <div>
                       <AdminDetailHeading>Payment & totals</AdminDetailHeading>
-                      <AdminDetailLine label="Method" value={order.payment_method} />
+                      <AdminDetailLine label="Requested method" value={order.payment_method} />
+                      {order.payment_received_via && <AdminDetailLine label="Received via" value={order.payment_received_via} />}
                       <AdminDetailLine label="Subtotal" value={`$${Number(order.subtotal || 0).toFixed(2)}`} />
                       {Number(order.discount_amount || 0) > 0 && <AdminDetailLine label={`Discount${order.discount_code ? ` (${order.discount_code})` : ""}`} value={`−$${Number(order.discount_amount).toFixed(2)}`} />}
                       <AdminDetailLine label="Shipping" value={Number(order.shipping || 0) === 0 ? "Free" : `$${Number(order.shipping).toFixed(2)}`} />
                       <AdminDetailLine label="Total" value={`$${Number(order.total || 0).toFixed(2)}`} strong />
                     </div>
                   </div>
-                  {order.payment_status === "PAID" && (
+                  {order.payment_status === "PAID" && !isLocalHandoff(order) && (
                     <OrderShippingControls
                       order={order}
                       session={session}
@@ -5488,18 +5502,25 @@ function AdminOrdersPage() {
                       setNotice={setNotice}
                     />
                   )}
+                  {order.payment_status === "PAID" && isLocalHandoff(order) && (
+                    <div style={{ margin: "0 18px 18px", padding: 14, border: "1px solid rgba(34,197,94,0.4)", background: "rgba(34,197,94,0.07)", color: "#22c55e", fontFamily: "'Rajdhani', sans-serif", fontSize: 15 }}>
+                      Local handoff — no packing slip, shipping label, or postage can be generated for this order.
+                    </div>
+                  )}
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 14, margin: "0 18px 18px", paddingTop: 16, borderTop: "1px solid var(--border)" }}>
                     <div>
                       <AdminDetailHeading>Fulfillment documents</AdminDetailHeading>
                       <div style={{ color: "var(--text-dim)", fontFamily: "'Rajdhani', sans-serif", fontSize: 14 }}>
-                        {printReady
+                        {isLocalHandoff(order)
+                          ? "Local handoff selected — documents and postage are intentionally disabled."
+                          : printReady
                           ? "The pick ticket and customer packing slip are ready."
                           : orderHasProvisionalLots(order)
                             ? "Replace provisional lot IDs in Inventory before printing."
                             : "Confirm payment before printing."}
                       </div>
                     </div>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                    {!isLocalHandoff(order) && <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                       <button type="button" disabled={busy || !printReady} onClick={() => openFulfillmentPdf(order)} style={adminSecondaryButton(busy || !printReady)}>
                         {actionKey === `${order.id}:pdf` ? "Opening…" : "Open PDF"}
                       </button>
@@ -5513,7 +5534,7 @@ function AdminOrdersPage() {
                           }
                         }} style={adminDangerButton(busy)}>Cancel Unpaid</button>
                       )}
-                    </div>
+                    </div>}
                   </div>
                 </details>
               </article>
@@ -5533,6 +5554,62 @@ function AdminOrdersPage() {
         </div>
       )}
     </main>
+    </>
+  );
+}
+
+function OrderPaymentConfirmation({ order, busy, confirming, onConfirm }) {
+  const defaultPaymentMethod = PAYMENT_RECEIVED_OPTIONS.includes(order?.payment_method)
+    ? order.payment_method
+    : "Other";
+  const [open, setOpen] = useState(false);
+  const [paymentReceivedVia, setPaymentReceivedVia] = useState(defaultPaymentMethod);
+  const [fulfillmentMethod, setFulfillmentMethod] = useState(FULFILLMENT_METHODS.SHIP);
+
+  function confirm() {
+    onConfirm(order, "confirm_payment", { paymentReceivedVia, fulfillmentMethod });
+  }
+
+  return (
+    <>
+      <button type="button" disabled={busy} onClick={() => setOpen(true)} style={adminPrimaryButton(busy)}>
+        {confirming ? "Confirming…" : "Confirm Payment"}
+      </button>
+      {open && (
+        <div role="dialog" aria-modal="true" aria-labelledby={`confirm-payment-${order.id}`} style={{ position: "fixed", inset: 0, zIndex: 1000, display: "grid", placeItems: "center", padding: 20, background: "rgba(0,0,0,0.78)" }}>
+          <div style={{ width: "min(520px, 100%)", padding: 24, border: "1px solid var(--border)", background: "#111", boxShadow: "0 24px 80px rgba(0,0,0,0.55)" }}>
+            <div style={{ color: "var(--red-primary)", fontFamily: "'Orbitron', sans-serif", fontSize: 9, fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 8 }}>Payment confirmation</div>
+            <h2 id={`confirm-payment-${order.id}`} style={{ color: "var(--text-primary)", fontFamily: "'Orbitron', sans-serif", fontSize: 19, margin: "0 0 18px" }}>{order.order_number}</h2>
+            <div style={{ display: "grid", gap: 15 }}>
+              <InventoryField label="Payment received via">
+                <select value={paymentReceivedVia} onChange={event => setPaymentReceivedVia(event.target.value)} style={AUTH_INPUT_STYLE}>
+                  {PAYMENT_RECEIVED_OPTIONS.map(method => <option key={method} value={method}>{method}</option>)}
+                </select>
+              </InventoryField>
+              <fieldset style={{ margin: 0, padding: 14, border: "1px solid var(--border)" }}>
+                <legend style={{ padding: "0 6px", color: "var(--text-dim)", fontFamily: "'Rajdhani', sans-serif", fontSize: 13 }}>How will the customer receive it?</legend>
+                <label style={{ display: "flex", alignItems: "flex-start", gap: 9, color: "var(--text-secondary)", fontFamily: "'Rajdhani', sans-serif", fontSize: 15, cursor: "pointer" }}>
+                  <input type="radio" name={`fulfillment-${order.id}`} value={FULFILLMENT_METHODS.SHIP} checked={fulfillmentMethod === FULFILLMENT_METHODS.SHIP} onChange={event => setFulfillmentMethod(event.target.value)} />
+                  <span><strong style={{ color: "var(--text-primary)" }}>Ship to customer</strong><br />Use the normal pick, pack, label, and printing workflow.</span>
+                </label>
+                <label style={{ display: "flex", alignItems: "flex-start", gap: 9, marginTop: 12, color: "var(--text-secondary)", fontFamily: "'Rajdhani', sans-serif", fontSize: 15, cursor: "pointer" }}>
+                  <input type="radio" name={`fulfillment-${order.id}`} value={FULFILLMENT_METHODS.LOCAL_HANDOFF} checked={fulfillmentMethod === FULFILLMENT_METHODS.LOCAL_HANDOFF} onChange={event => setFulfillmentMethod(event.target.value)} />
+                  <span><strong style={{ color: "var(--text-primary)" }}>Hand directly to customer</strong><br />No packing slip, shipping label, postage, or automatic printing.</span>
+                </label>
+              </fieldset>
+              {fulfillmentMethod === FULFILLMENT_METHODS.LOCAL_HANDOFF && (
+                <div style={{ padding: 11, border: "1px solid rgba(34,197,94,0.4)", background: "rgba(34,197,94,0.07)", color: "#22c55e", fontFamily: "'Rajdhani', sans-serif", fontSize: 14 }}>
+                  The order will be ready for a final <strong>Mark Handed Off</strong> action after payment is confirmed.
+                </div>
+              )}
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 9, marginTop: 20 }}>
+              <button type="button" disabled={busy} onClick={() => setOpen(false)} style={adminSecondaryButton(busy)}>Cancel</button>
+              <button type="button" disabled={busy} onClick={confirm} style={adminPrimaryButton(busy)}>{confirming ? "Confirming…" : "Confirm Payment"}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
@@ -5591,6 +5668,10 @@ function AdminInventoryPage() {
   }
 
   const totals = inventoryDashboardTotals(products);
+  const retailValue = inventoryRetailValue(products, PRODUCTS.map(product => ({
+    id: product.id,
+    price: applySale(product.price),
+  })));
   if (authLoading || !isLoggedIn) return null;
   if (!canManageOrders) {
     return (
@@ -5613,11 +5694,12 @@ function AdminInventoryPage() {
         <AdminOperationsNav navigate={navigate} active="inventory" />
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(130px, 1fr))", gap: 10, marginBottom: 18 }} className="inventory-summary-grid">
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(6, minmax(130px, 1fr))", gap: 10, marginBottom: 18 }} className="inventory-summary-grid">
         <InventorySummaryCard label="Products" value={totals.products} />
         <InventorySummaryCard label="On Hand" value={totals.onHand} />
         <InventorySummaryCard label="Reserved" value={totals.reserved} color="#f59e0b" />
         <InventorySummaryCard label="Available" value={totals.available} color="#22c55e" />
+        <InventorySummaryCard label="Retail Value" value={retailValue.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 })} note="On hand × current single-vial price" color="#60a5fa" />
         <InventorySummaryCard label="Lot IDs Needed" value={totals.provisionalProducts} color={totals.provisionalProducts ? "#f59e0b" : "#22c55e"} />
       </div>
 
@@ -5656,11 +5738,12 @@ function AdminInventoryPage() {
   );
 }
 
-function InventorySummaryCard({ label, value, color = "var(--text-primary)" }) {
+function InventorySummaryCard({ label, value, note = "", color = "var(--text-primary)" }) {
   return (
     <div style={{ padding: "14px 15px", border: "1px solid var(--border)", background: "rgba(17,17,17,0.55)" }}>
       <div style={{ color: "var(--text-dim)", fontFamily: "'Orbitron', sans-serif", fontSize: 8, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase" }}>{label}</div>
       <div style={{ color, fontFamily: "'Orbitron', sans-serif", fontSize: 23, fontWeight: 800, marginTop: 7 }}>{value}</div>
+      {note && <div style={{ color: "var(--text-dim)", fontFamily: "'Rajdhani', sans-serif", fontSize: 11, lineHeight: 1.25, marginTop: 5 }}>{note}</div>}
     </div>
   );
 }
@@ -5969,7 +6052,7 @@ function adminDangerButton(disabled) {
 function formatWorkflowStatus(order) {
   const payment = String(order?.payment_status || "UNKNOWN").replaceAll("_", " ").toLowerCase();
   const fulfillment = String(order?.fulfillment_status || "UNKNOWN").replaceAll("_", " ").toLowerCase();
-  return `${payment} · ${fulfillment}`;
+  return `${payment} · ${isLocalHandoff(order) ? "local handoff · " : ""}${fulfillment}`;
 }
 
 function AdminDetailHeading({ children }) {

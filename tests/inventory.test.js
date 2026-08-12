@@ -9,6 +9,7 @@ import {
   canPrintFulfillment,
   inventoryDashboardTotals,
   inventoryProductTotals,
+  inventoryRetailValue,
   lotAvailable,
 } from "../src/data/inventory.js";
 import { validateInventoryOperation } from "../netlify/functions/admin-inventory.js";
@@ -17,6 +18,10 @@ import { workflowRpc } from "../netlify/functions/admin-orders.js";
 
 const migration = readFileSync(
   "supabase/migrations/20260811120000_inventory_fulfillment_foundation.sql",
+  "utf8",
+);
+const localHandoffMigration = readFileSync(
+  "supabase/migrations/20260812051446_local_handoff_and_inventory_value.sql",
   "utf8",
 );
 
@@ -52,6 +57,13 @@ test("inventory arithmetic keeps reserved stock unavailable", () => {
     lowStock: 0,
     provisionalProducts: 1,
   });
+  assert.equal(inventoryRetailValue([
+    { product_id: "a", lots: [{ on_hand: 4 }] },
+    { product_id: "b", lots: [{ on_hand: 3 }] },
+  ], [
+    { id: "a", price: 25 },
+    { id: "b", price: 40 },
+  ]), 220);
 });
 
 test("fulfillment stays blocked until payment, commitment, and real lot ids", () => {
@@ -61,6 +73,7 @@ test("fulfillment stays blocked until payment, commitment, and real lot ids", ()
   };
   assert.equal(canPrintFulfillment(base), true);
   assert.equal(canPrintFulfillment({ ...base, payment_status: "AWAITING_PAYMENT" }), false);
+  assert.equal(canPrintFulfillment({ ...base, fulfillment_method: "LOCAL_HANDOFF" }), false);
   assert.equal(canPrintFulfillment({ ...base, allocations: [] }), false);
   assert.equal(canPrintFulfillment({ ...base, allocations: [{ ...base.allocations[0], state: "RESERVED" }] }), false);
   assert.equal(canPrintFulfillment({ ...base, allocations: [{ ...base.allocations[0], lot: { is_provisional: true } }] }), false);
@@ -97,10 +110,28 @@ test("staff workflow exposes only explicit state transitions", () => {
     orderId: "11111111-1111-4111-8111-111111111111",
     actorUserId: "22222222-2222-4222-8222-222222222222",
   };
-  assert.equal(workflowRpc("confirm_payment", { ...ids, expectedPaymentStatus: "AWAITING_PAYMENT" }).name, "confirm_order_payment");
+  const localConfirmation = workflowRpc("confirm_payment", {
+    ...ids,
+    expectedPaymentStatus: "AWAITING_PAYMENT",
+    fulfillmentMethod: "LOCAL_HANDOFF",
+    paymentReceivedVia: "Cash",
+  });
+  assert.equal(localConfirmation.name, "confirm_order_payment");
+  assert.equal(localConfirmation.args.p_fulfillment_method, "LOCAL_HANDOFF");
+  assert.equal(localConfirmation.args.p_payment_received_via, "Cash");
   assert.equal(workflowRpc("cancel_unpaid", { ...ids, expectedPaymentStatus: "PAID" }), null);
   assert.equal(workflowRpc("mark_packed", { ...ids, expectedFulfillmentStatus: "PICKED" }).args.p_target_fulfillment_status, "PACKED");
+  assert.equal(workflowRpc("mark_handed_off", { ...ids, expectedFulfillmentStatus: "READY_TO_PICK" }).args.p_target_fulfillment_status, "DELIVERED");
   assert.equal(workflowRpc("delete", ids), null);
+});
+
+test("local handoff is persisted and shipping is blocked in the database", () => {
+  assert.match(localHandoffMigration, /fulfillment_method text not null default 'SHIP'/);
+  assert.match(localHandoffMigration, /payment_received_via text/);
+  assert.match(localHandoffMigration, /LOCAL_HANDOFF_COMPLETED/);
+  assert.match(localHandoffMigration, /create trigger order_shipments_block_local_handoff/);
+  assert.match(localHandoffMigration, /local_handoff_does_not_ship/);
+  assert.match(localHandoffMigration, /revoke execute on function public\.confirm_order_payment\(uuid, text, text, text, uuid\)/);
 });
 
 test("operational tables are server-only and database changes are atomic", () => {

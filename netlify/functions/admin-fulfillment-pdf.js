@@ -5,7 +5,7 @@ import { SITE_ORIGIN, jsonResponse } from "./_shared/http.js";
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const METHODS = "GET, OPTIONS";
 const ORDER_FIELDS = [
-  "id", "order_number", "status", "payment_status", "fulfillment_status",
+  "id", "order_number", "status", "payment_status", "fulfillment_status", "fulfillment_method",
   "payment_confirmed_at", "items", "subtotal", "discount_amount", "shipping",
   "total", "payment_method", "customer_name", "customer_email", "customer_phone",
   "ship_address", "ship_city", "ship_state", "ship_zip", "created_at",

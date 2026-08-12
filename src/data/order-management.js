@@ -33,6 +33,18 @@ export const FULFILLMENT_STATUS_OPTIONS = Object.freeze([
   { value: "CANCELLED", label: "Cancelled" },
 ]);
 
+export const FULFILLMENT_METHODS = Object.freeze({
+  SHIP: "SHIP",
+  LOCAL_HANDOFF: "LOCAL_HANDOFF",
+});
+
+export const PAYMENT_RECEIVED_OPTIONS = Object.freeze([
+  "Cash App",
+  "Venmo",
+  "Cash",
+  "Other",
+]);
+
 export const ORDER_STATUS_VALUES = Object.freeze(ORDER_STATUS_OPTIONS.map(option => option.value));
 
 export function isOrderStatus(value) {
@@ -56,6 +68,11 @@ export function canCancelUnpaidOrder(order) {
 
 export function nextFulfillmentAction(order) {
   if (order?.payment_status !== "PAID") return null;
+  if (order.fulfillment_method === FULFILLMENT_METHODS.LOCAL_HANDOFF
+      && order.fulfillment_status === "READY_TO_PICK") {
+    return { action: "mark_handed_off", label: "Mark Handed Off", target: "DELIVERED" };
+  }
+  if (order.fulfillment_method === FULFILLMENT_METHODS.LOCAL_HANDOFF) return null;
   if (order.fulfillment_status === "READY_TO_PICK") {
     return { action: "mark_picked", label: "Mark Picked", target: "PICKED" };
   }
@@ -63,6 +80,10 @@ export function nextFulfillmentAction(order) {
     return { action: "mark_packed", label: "Mark Packed", target: "PACKED" };
   }
   return null;
+}
+
+export function isLocalHandoff(order) {
+  return order?.fulfillment_method === FULFILLMENT_METHODS.LOCAL_HANDOFF;
 }
 
 // Authorization belongs in app_metadata: customers can edit user_metadata,

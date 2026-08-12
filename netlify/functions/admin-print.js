@@ -8,7 +8,7 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3
 const METHODS = "GET, POST, OPTIONS";
 const MAX_BODY_BYTES = 4 * 1024;
 const ORDER_FIELDS = [
-  "id", "order_number", "status", "payment_status", "fulfillment_status",
+  "id", "order_number", "status", "payment_status", "fulfillment_status", "fulfillment_method",
   "payment_confirmed_at", "items", "subtotal", "discount_amount", "shipping",
   "total", "payment_method", "customer_name", "customer_email", "customer_phone",
   "ship_address", "ship_city", "ship_state", "ship_zip", "created_at",
@@ -86,13 +86,16 @@ async function printLabel(auth, orderId, config) {
   if (!config.labelConfigured) return fail(503, "The label printer is not configured yet.");
   const { data: shipment, error } = await auth.supabase
     .from("order_shipments")
-    .select("label_url,tracking_number,orders(order_number)")
+    .select("label_url,tracking_number,orders(order_number,fulfillment_method)")
     .eq("order_id", orderId)
     .in("status", ["LABEL_PURCHASED", "IN_TRANSIT", "DELIVERED"])
     .maybeSingle();
   if (error) {
     console.error("admin-print: label load failed:", error);
     return fail(500, "The shipping label could not be loaded.");
+  }
+  if (shipment?.orders?.fulfillment_method === "LOCAL_HANDOFF") {
+    return fail(409, "This order is marked for local handoff and cannot print a shipping label.");
   }
   if (!shipment?.label_url) return fail(409, "Buy the shipping label before printing it.");
   try {

@@ -42,6 +42,7 @@ test("the fulfillment PDF contains a pick ticket and packing slip", async () => 
 test("PDF generation fails closed for unpaid, uncommitted, or provisional orders", async () => {
   const order = printableOrder();
   assert.equal(assertOrderPrintable({ ...order, payment_status: "AWAITING_PAYMENT" }), "Confirm payment before printing fulfillment documents.");
+  assert.equal(assertOrderPrintable({ ...order, fulfillment_method: "LOCAL_HANDOFF" }), "Local handoff orders do not create a fulfillment packet.");
   assert.match(assertOrderPrintable({ ...order, allocations: [{ ...order.allocations[0], state: "RESERVED" }] }), /not been committed/);
   assert.match(assertOrderPrintable({ ...order, allocations: [{ ...order.allocations[0], lot: { is_provisional: true } }] }), /real lot number/);
   await assert.rejects(() => buildFulfillmentPdf({ ...order, allocations: [] }), /no inventory allocation/);

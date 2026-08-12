@@ -10,7 +10,7 @@ const SHIPPO_ID_PATTERN = /^[a-z0-9]{20,64}$/i;
 const MAX_BODY_BYTES = 8 * 1024;
 const METHODS = "GET, POST, OPTIONS";
 const ORDER_FIELDS = [
-  "id", "order_number", "payment_status", "fulfillment_status", "customer_name",
+  "id", "order_number", "payment_status", "fulfillment_status", "fulfillment_method", "customer_name",
   "customer_email", "customer_phone", "ship_address", "ship_city", "ship_state",
   "ship_zip",
 ].join(",");
@@ -51,6 +51,9 @@ async function loadShippableOrder(auth, orderId) {
   ]);
   if (orderResult.error || allocationsResult.error) throw orderResult.error || allocationsResult.error;
   if (!orderResult.data) return { error: "Order not found.", status: 404 };
+  if (orderResult.data.fulfillment_method === "LOCAL_HANDOFF") {
+    return { error: "This order is marked for local handoff and cannot create postage.", status: 409 };
+  }
   if (orderResult.data.payment_status !== "PAID") return { error: "Confirm payment before creating a shipping label.", status: 409 };
   if (orderResult.data.fulfillment_status !== "PACKED") {
     return { error: "Mark the order picked and packed before creating its shipping label.", status: 409 };
@@ -163,7 +166,7 @@ async function buyLabel(auth, orderId, body) {
   if (!SHIPPO_ID_PATTERN.test(rateId)) return fail(400, "Choose a valid shipping rate.");
   const { data: shipment, error } = await auth.supabase
     .from("order_shipments")
-    .select("*,orders(order_number,payment_status,fulfillment_status)")
+    .select("*,orders(order_number,payment_status,fulfillment_status,fulfillment_method)")
     .eq("order_id", orderId)
     .maybeSingle();
   if (error) return databaseError("shipment", error);
@@ -173,6 +176,9 @@ async function buyLabel(auth, orderId, body) {
   }
   if (shipment.status === "PURCHASING") {
     return fail(409, "A label purchase is already in progress. Check Shippo before trying again.");
+  }
+  if (shipment.orders?.fulfillment_method === "LOCAL_HANDOFF") {
+    return fail(409, "This order is marked for local handoff and cannot create postage.");
   }
   if (shipment.orders?.payment_status !== "PAID") return fail(409, "Confirm payment before buying a label.");
   if (shipment.orders?.fulfillment_status !== "PACKED") return fail(409, "Mark the order packed before buying its label.");
