@@ -5,7 +5,7 @@ records state that is not obvious from the code or the git log.
 
 ---
 
-## Inventory/fulfillment build — DATABASE LIVE, website code not deployed
+## Inventory/fulfillment build — DATABASE AND WEBSITE LIVE
 
 Built on branch `codex/new_inventory_managent` on 2026-08-11. The owner applied
 the full inventory migration and the protected staff-role SQL successfully on
@@ -15,11 +15,12 @@ lots, 1,350 on hand, zero reserved, 1,350 available, and one staff role. Direct
 operational tables. Supabase's security advisor returned only the intentional
 INFO notices for RLS tables with no customer policies.
 
-No Netlify environment variable, commit, push, or website deployment has been
-performed. The database is now ahead of the live admin UI: do not use the old
-generic order-status controls until the matching website/functions are
-deployed. The owner-facing order and exact click path are in
-`INVENTORY_FULFILLMENT_SETUP.md`.
+Commit `8521604` was pushed to `main` and deployed successfully by Netlify on
+2026-08-11. The live `/admin/inventory` page served the exact verified bundle
+hash, and the unauthenticated inventory endpoint returned the intended HTTP
+401 response. Shippo and PrintNode environment variables have not yet been
+confirmed; their controls fail closed as unconfigured until those are added.
+The remaining owner setup is in `INVENTORY_FULFILLMENT_SETUP.md`.
 
 - All 27 variants initialize at 50 active units in provisional lots; there is
   no setup mode.
@@ -42,8 +43,8 @@ deployed. The owner-facing order and exact click path are in
 
 The migration file is
 `supabase/migrations/20260811120000_inventory_fulfillment_foundation.sql` and
-has already been run. Do not run it twice. Once the deployment is live, update
-the older “New orders default to PROCESSING” production note below.
+has already been run. Do not run it twice. The older “New orders default to
+PROCESSING” historical production note below is superseded by this section.
 
 ---
 

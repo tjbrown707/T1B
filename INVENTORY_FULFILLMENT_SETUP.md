@@ -1,6 +1,6 @@
 # Inventory and fulfillment launch guide
 
-This feature is built locally but is **not live yet**. Launch it in the order below so the website code never gets ahead of the database.
+The secure inventory, order workflow, and fulfillment code went live on 2026-08-11. The database migration and first protected staff role are also complete. **Do not run either SQL statement again.** Shippo, PrintNode, real lot identifiers, and the end-to-end test remain to be completed below.
 
 ## What the system does
 
@@ -29,24 +29,15 @@ The default parcel is 9 × 4.25 × 0.5 inches and 1.9 ounces. The 0.5-inch thick
 - Shippo label purchase is locked before the charge is attempted. An uncertain network result is not retried automatically, preventing accidental duplicate postage charges.
 - The production build scans for Supabase, Shippo, PrintNode, and Resend secrets and fails before deployment if one reaches the browser bundle.
 
-## 1. Apply the Supabase migration
+## 1. Supabase migration — complete
 
-1. Sign in to Supabase and open the Tier One project.
-2. In the left sidebar, click **SQL Editor**.
-3. Click **New query**.
-4. Open [`supabase/migrations/20260811120000_inventory_fulfillment_foundation.sql`](./supabase/migrations/20260811120000_inventory_fulfillment_foundation.sql), copy the entire file, and paste it into the query.
-5. Click **Run** once. Do not run it a second time.
-6. Confirm that the result says success. If it reports any error, stop and send the full error to Codex before deploying.
+This was successfully applied and verified live: 27 products, 27 provisional lots, 1,350 units available, and zero units reserved at launch. There is no setup mode. Do not paste or run the migration again.
 
-This creates the operational tables, initializes all catalog products at 50, and turns on immediate order reservation. There is no setup mode.
+## 2. First staff account — complete
 
-## 2. Give the staff account permission
+The first staff role was successfully applied and verified. Sign out of the Tier One website and sign back in once so the browser session receives the protected role. The permission remains in `app_metadata`, not customer-editable `user_metadata`.
 
-The permission must be in `app_metadata`, not `user_metadata`. Customers can edit their own user metadata.
-
-1. In Supabase, open **SQL Editor** and click **New query**.
-2. Replace `OWNER_EMAIL_HERE` below with the exact email used to sign in to the Tier One website.
-3. Run this once:
+For a future fulfillment employee, open **Supabase → SQL Editor**, replace the email below, and run it once:
 
 ```sql
 update auth.users
@@ -54,8 +45,6 @@ set raw_app_meta_data = coalesce(raw_app_meta_data, '{}'::jsonb)
   || '{"role":"admin"}'::jsonb
 where lower(email) = lower('OWNER_EMAIL_HERE');
 ```
-
-4. Sign out of the Tier One website and sign in again so the session receives the new protected role.
 
 Use `order_manager` instead of `admin` for a fulfillment employee who should manage orders and inventory but should not be treated as the owner elsewhere.
 
