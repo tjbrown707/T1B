@@ -14,7 +14,7 @@ import {
 } from "../src/data/inventory.js";
 import { validateInventoryOperation } from "../netlify/functions/admin-inventory.js";
 import { sanitiseRates, validateParcel } from "../netlify/functions/admin-shipping.js";
-import { workflowRpc } from "../netlify/functions/admin-orders.js";
+import { parsePaymentAmount, workflowRpc } from "../netlify/functions/admin-orders.js";
 
 const migration = readFileSync(
   "supabase/migrations/20260811120000_inventory_fulfillment_foundation.sql",
@@ -22,6 +22,10 @@ const migration = readFileSync(
 );
 const localHandoffMigration = readFileSync(
   "supabase/migrations/20260812051446_local_handoff_and_inventory_value.sql",
+  "utf8",
+);
+const paymentAmountMigration = readFileSync(
+  "supabase/migrations/20260813051208_record_payment_amount_received.sql",
   "utf8",
 );
 
@@ -115,14 +119,41 @@ test("staff workflow exposes only explicit state transitions", () => {
     expectedPaymentStatus: "AWAITING_PAYMENT",
     fulfillmentMethod: "LOCAL_HANDOFF",
     paymentReceivedVia: "Cash",
+    paymentAmountReceived: "25.50",
   });
   assert.equal(localConfirmation.name, "confirm_order_payment");
   assert.equal(localConfirmation.args.p_fulfillment_method, "LOCAL_HANDOFF");
   assert.equal(localConfirmation.args.p_payment_received_via, "Cash");
+  assert.equal(localConfirmation.args.p_payment_amount_received, 25.5);
+  const correction = workflowRpc("update_payment_amount", {
+    ...ids,
+    expectedPaymentStatus: "PAID",
+    expectedPaymentAmount: "25.50",
+    paymentAmountReceived: "20.00",
+  });
+  assert.equal(correction.name, "update_order_payment_amount");
+  assert.equal(correction.args.p_expected_payment_amount, 25.5);
+  assert.equal(correction.args.p_payment_amount_received, 20);
   assert.equal(workflowRpc("cancel_unpaid", { ...ids, expectedPaymentStatus: "PAID" }), null);
   assert.equal(workflowRpc("mark_packed", { ...ids, expectedFulfillmentStatus: "PICKED" }).args.p_target_fulfillment_status, "PACKED");
   assert.equal(workflowRpc("mark_handed_off", { ...ids, expectedFulfillmentStatus: "READY_TO_PICK" }).args.p_target_fulfillment_status, "DELIVERED");
   assert.equal(workflowRpc("delete", ids), null);
+});
+
+test("payment amounts accept exact cents and reject malformed values", () => {
+  assert.equal(parsePaymentAmount("0"), 0);
+  assert.equal(parsePaymentAmount("19.95"), 19.95);
+  assert.equal(parsePaymentAmount("19.999"), null);
+  assert.equal(parsePaymentAmount("-1"), null);
+  assert.equal(parsePaymentAmount(""), null);
+  assert.equal(workflowRpc("confirm_payment", {
+    orderId: "11111111-1111-4111-8111-111111111111",
+    actorUserId: "22222222-2222-4222-8222-222222222222",
+    expectedPaymentStatus: "AWAITING_PAYMENT",
+    fulfillmentMethod: "SHIP",
+    paymentReceivedVia: "Cash",
+    paymentAmountReceived: "not money",
+  }), null);
 });
 
 test("local handoff is persisted and shipping is blocked in the database", () => {
@@ -132,6 +163,9 @@ test("local handoff is persisted and shipping is blocked in the database", () =>
   assert.match(localHandoffMigration, /create trigger order_shipments_block_local_handoff/);
   assert.match(localHandoffMigration, /local_handoff_does_not_ship/);
   assert.match(localHandoffMigration, /revoke execute on function public\.confirm_order_payment\(uuid, text, text, text, uuid\)/);
+  assert.match(paymentAmountMigration, /payment_amount_received numeric\(10, 2\)/);
+  assert.match(paymentAmountMigration, /PAYMENT_AMOUNT_CORRECTED/);
+  assert.match(paymentAmountMigration, /revoke execute on function public\.update_order_payment_amount\(uuid, numeric, numeric, uuid\)/);
 });
 
 test("operational tables are server-only and database changes are atomic", () => {

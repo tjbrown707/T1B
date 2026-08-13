@@ -17,7 +17,7 @@ const ORDER_FIELDS = [
   "customer_name", "customer_email", "customer_phone", "ship_address",
   "ship_city", "ship_state", "ship_zip", "created_at", "updated_at",
   "payment_status", "fulfillment_status", "fulfillment_method",
-  "payment_received_via", "payment_confirmed_at",
+  "payment_received_via", "payment_amount_received", "payment_confirmed_at",
 ].join(",");
 
 export default async function handler(request) {
@@ -163,6 +163,8 @@ async function updateOrderWorkflow(supabase, user, request) {
     expectedFulfillmentStatus,
     fulfillmentMethod,
     paymentReceivedVia,
+    paymentAmountReceived: parsed.data?.paymentAmountReceived,
+    expectedPaymentAmount: parsed.data?.expectedPaymentAmount,
     actorUserId: user.id,
   });
   if (!rpc) return fail(400, "Choose a valid order action.");
@@ -195,10 +197,12 @@ async function updateOrderWorkflow(supabase, user, request) {
 export function workflowRpc(action, input) {
   const fulfillmentMethod = input.fulfillmentMethod || "SHIP";
   const paymentReceivedVia = input.paymentReceivedVia || "Other";
+  const paymentAmountReceived = parsePaymentAmount(input.paymentAmountReceived);
   if (action === "confirm_payment"
       && input.expectedPaymentStatus === "AWAITING_PAYMENT"
       && ["SHIP", "LOCAL_HANDOFF"].includes(fulfillmentMethod)
-      && ["Cash App", "Venmo", "Cash", "Other"].includes(paymentReceivedVia)) {
+      && ["Cash App", "Venmo", "Cash", "Other"].includes(paymentReceivedVia)
+      && paymentAmountReceived !== null) {
     return {
       name: "confirm_order_payment",
       args: {
@@ -206,6 +210,22 @@ export function workflowRpc(action, input) {
         p_expected_payment_status: input.expectedPaymentStatus,
         p_fulfillment_method: fulfillmentMethod,
         p_payment_received_via: paymentReceivedVia,
+        p_payment_amount_received: paymentAmountReceived,
+        p_actor_user_id: input.actorUserId,
+      },
+    };
+  }
+  const expectedPaymentAmount = parsePaymentAmount(input.expectedPaymentAmount);
+  if (action === "update_payment_amount"
+      && input.expectedPaymentStatus === "PAID"
+      && paymentAmountReceived !== null
+      && expectedPaymentAmount !== null) {
+    return {
+      name: "update_order_payment_amount",
+      args: {
+        p_order_id: input.orderId,
+        p_expected_payment_amount: expectedPaymentAmount,
+        p_payment_amount_received: paymentAmountReceived,
         p_actor_user_id: input.actorUserId,
       },
     };
@@ -243,13 +263,17 @@ function workflowError(error, action) {
   if (message.includes("status_conflict") || message.includes("order_payment_status_conflict")) {
     return fail(409, "Someone else updated this order. Refresh it before trying again.");
   }
+  if (message.includes("payment_amount_conflict")) {
+    return fail(409, "The recorded payment amount changed. Refresh the order before correcting it.");
+  }
   if (message.includes("paid_order_requires_refund")) {
     return fail(409, "A paid order cannot be cancelled as unpaid. Use the refund workflow instead.");
   }
   if (message.includes("invalid_fulfillment_method")
       || message.includes("invalid_payment_received_via")
+      || message.includes("invalid_payment_amount")
       || message.includes("invalid_fulfillment_transition")) {
-    return fail(400, "Choose a valid payment and fulfillment option.");
+    return fail(400, "Choose a valid payment amount, payment method, and fulfillment option.");
   }
   if (message.includes("inventory_counter_mismatch") || message.includes("inventory_reservation_mismatch")) {
     console.error(`admin-orders: inventory integrity error during ${action}:`, error);
@@ -257,6 +281,16 @@ function workflowError(error, action) {
   }
   console.error(`admin-orders: ${action} failed:`, error);
   return fail(500, "The order could not be updated.");
+}
+
+export function parsePaymentAmount(value) {
+  const raw = typeof value === "string" ? value.trim() : value;
+  if (raw === "" || raw === null || raw === undefined) return null;
+  const amount = Number(raw);
+  if (!Number.isFinite(amount) || amount < 0 || amount >= 100000000) return null;
+  const cents = Math.round(amount * 100);
+  if (Math.abs((amount * 100) - cents) > 0.000001) return null;
+  return cents / 100;
 }
 
 export function sanitiseSearch(value) {

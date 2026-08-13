@@ -5293,6 +5293,8 @@ function AdminOrdersPage() {
           expectedFulfillmentStatus: order.fulfillment_status,
           fulfillmentMethod: options.fulfillmentMethod,
           paymentReceivedVia: options.paymentReceivedVia,
+          paymentAmountReceived: options.paymentAmountReceived,
+          expectedPaymentAmount: options.expectedPaymentAmount,
         }),
       });
       const payload = await res.json().catch(() => ({}));
@@ -5309,10 +5311,13 @@ function AdminOrdersPage() {
         mark_picked: `${payload.order.order_number} is marked picked.`,
         mark_packed: `${payload.order.order_number} is marked packed.`,
         mark_handed_off: `${payload.order.order_number} is marked handed off to the customer.`,
+        update_payment_amount: `${payload.order.order_number}'s amount received was corrected. The original order total and inventory were not changed.`,
       };
       setNotice({ type: "success", text: messages[action] || `${payload.order.order_number} was updated.` });
+      return true;
     } catch (error) {
       setNotice({ type: "error", text: error.message || "The order could not be updated." });
+      return false;
     } finally {
       setActionKey("");
     }
@@ -5514,10 +5519,26 @@ function AdminOrdersPage() {
                       <AdminDetailHeading>Payment & totals</AdminDetailHeading>
                       <AdminDetailLine label="Requested method" value={order.payment_method} />
                       {order.payment_received_via && <AdminDetailLine label="Received via" value={order.payment_received_via} />}
+                      {order.payment_amount_received !== null && order.payment_amount_received !== undefined && (
+                        <>
+                          <AdminDetailLine label="Amount received" value={`$${Number(order.payment_amount_received).toFixed(2)}`} strong />
+                          <AdminDetailLine label="Payment difference" value={formatPaymentDifference(order)} />
+                        </>
+                      )}
                       <AdminDetailLine label="Subtotal" value={`$${Number(order.subtotal || 0).toFixed(2)}`} />
                       {Number(order.discount_amount || 0) > 0 && <AdminDetailLine label={`Discount${order.discount_code ? ` (${order.discount_code})` : ""}`} value={`−$${Number(order.discount_amount).toFixed(2)}`} />}
                       <AdminDetailLine label="Shipping" value={Number(order.shipping || 0) === 0 ? "Free" : `$${Number(order.shipping).toFixed(2)}`} />
                       <AdminDetailLine label="Total" value={`$${Number(order.total || 0).toFixed(2)}`} strong />
+                      {order.payment_status === "PAID" && (
+                        <div style={{ marginTop: 12 }}>
+                          <OrderPaymentAmountEditor
+                            order={order}
+                            busy={busy}
+                            correcting={actionKey === `${order.id}:update_payment_amount`}
+                            onSave={performOrderAction}
+                          />
+                        </div>
+                      )}
                     </div>
                   </div>
                   {order.payment_status === "PAID" && !isLocalHandoff(order) && (
@@ -5591,9 +5612,12 @@ function OrderPaymentConfirmation({ order, busy, confirming, onConfirm }) {
   const [open, setOpen] = useState(false);
   const [paymentReceivedVia, setPaymentReceivedVia] = useState(defaultPaymentMethod);
   const [fulfillmentMethod, setFulfillmentMethod] = useState(FULFILLMENT_METHODS.SHIP);
+  const [paymentAmountReceived, setPaymentAmountReceived] = useState(Number(order.total || 0).toFixed(2));
+  const paymentAmountValid = validPaymentAmountInput(paymentAmountReceived);
 
   function confirm() {
-    onConfirm(order, "confirm_payment", { paymentReceivedVia, fulfillmentMethod });
+    if (!paymentAmountValid) return;
+    onConfirm(order, "confirm_payment", { paymentReceivedVia, fulfillmentMethod, paymentAmountReceived });
   }
 
   return (
@@ -5607,6 +5631,10 @@ function OrderPaymentConfirmation({ order, busy, confirming, onConfirm }) {
             <div style={{ color: "var(--red-primary)", fontFamily: "'Orbitron', sans-serif", fontSize: 9, fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 8 }}>Payment confirmation</div>
             <h2 id={`confirm-payment-${order.id}`} style={{ color: "var(--text-primary)", fontFamily: "'Orbitron', sans-serif", fontSize: 19, margin: "0 0 18px" }}>{order.order_number}</h2>
             <div style={{ display: "grid", gap: 15 }}>
+              <InventoryField label="Amount received">
+                <input aria-label="Amount received" type="number" min="0" max="99999999.99" step="0.01" required value={paymentAmountReceived} onChange={event => setPaymentAmountReceived(event.target.value)} style={AUTH_INPUT_STYLE} />
+                <div style={{ marginTop: 5, color: "var(--text-dim)", fontFamily: "'Rajdhani', sans-serif", fontSize: 12 }}>Original order total: ${Number(order.total || 0).toFixed(2)}</div>
+              </InventoryField>
               <InventoryField label="Payment received via">
                 <select value={paymentReceivedVia} onChange={event => setPaymentReceivedVia(event.target.value)} style={AUTH_INPUT_STYLE}>
                   {PAYMENT_RECEIVED_OPTIONS.map(method => <option key={method} value={method}>{method}</option>)}
@@ -5631,13 +5659,74 @@ function OrderPaymentConfirmation({ order, busy, confirming, onConfirm }) {
             </div>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 9, marginTop: 20 }}>
               <button type="button" disabled={busy} onClick={() => setOpen(false)} style={adminSecondaryButton(busy)}>Cancel</button>
-              <button type="button" disabled={busy} onClick={confirm} style={adminPrimaryButton(busy)}>{confirming ? "Confirming…" : "Confirm Payment"}</button>
+              <button type="button" disabled={busy || !paymentAmountValid} onClick={confirm} style={adminPrimaryButton(busy || !paymentAmountValid)}>{confirming ? "Confirming…" : "Confirm Payment"}</button>
             </div>
           </div>
         </div>
       )}
     </>
   );
+}
+
+function OrderPaymentAmountEditor({ order, busy, correcting, onSave }) {
+  const [open, setOpen] = useState(false);
+  const [amount, setAmount] = useState("");
+  const amountValid = validPaymentAmountInput(amount);
+
+  function openEditor() {
+    setAmount(Number(order.payment_amount_received ?? order.total ?? 0).toFixed(2));
+    setOpen(true);
+  }
+
+  async function save() {
+    if (!amountValid) return;
+    const saved = await onSave(order, "update_payment_amount", {
+      paymentAmountReceived: amount,
+      expectedPaymentAmount: order.payment_amount_received,
+    });
+    if (saved) setOpen(false);
+  }
+
+  return (
+    <>
+      <button type="button" disabled={busy} onClick={openEditor} style={adminSecondaryButton(busy)}>
+        {correcting ? "Saving…" : "Edit Amount Received"}
+      </button>
+      {open && (
+        <div role="dialog" aria-modal="true" aria-labelledby={`edit-payment-amount-${order.id}`} style={{ position: "fixed", inset: 0, zIndex: 1000, display: "grid", placeItems: "center", padding: 20, background: "rgba(0,0,0,0.78)" }}>
+          <div style={{ width: "min(500px, 100%)", padding: 24, border: "1px solid var(--border)", background: "#111", boxShadow: "0 24px 80px rgba(0,0,0,0.55)" }}>
+            <div style={{ color: "var(--red-primary)", fontFamily: "'Orbitron', sans-serif", fontSize: 9, fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 8 }}>Payment correction</div>
+            <h2 id={`edit-payment-amount-${order.id}`} style={{ color: "var(--text-primary)", fontFamily: "'Orbitron', sans-serif", fontSize: 19, margin: "0 0 18px" }}>{order.order_number}</h2>
+            <InventoryField label="Actual amount received">
+              <input autoFocus aria-label="Actual amount received" type="number" min="0" max="99999999.99" step="0.01" required value={amount} onChange={event => setAmount(event.target.value)} style={AUTH_INPUT_STYLE} />
+            </InventoryField>
+            <div style={{ marginTop: 12, padding: 11, border: "1px solid var(--border)", color: "var(--text-secondary)", fontFamily: "'Rajdhani', sans-serif", fontSize: 14 }}>
+              Original order total: <strong style={{ color: "var(--text-primary)" }}>${Number(order.total || 0).toFixed(2)}</strong>. Saving this correction will not change the order total, products, or inventory.
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 9, marginTop: 20 }}>
+              <button type="button" disabled={busy} onClick={() => setOpen(false)} style={adminSecondaryButton(busy)}>Cancel</button>
+              <button type="button" disabled={busy || !amountValid} onClick={save} style={adminPrimaryButton(busy || !amountValid)}>{correcting ? "Saving…" : "Save Amount"}</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+function validPaymentAmountInput(value) {
+  const text = String(value ?? "").trim();
+  if (!/^\d{1,8}(?:\.\d{1,2})?$/.test(text)) return false;
+  const amount = Number(text);
+  return Number.isFinite(amount) && amount >= 0 && amount < 100000000;
+}
+
+function formatPaymentDifference(order) {
+  const difference = Number(order?.payment_amount_received || 0) - Number(order?.total || 0);
+  if (Math.abs(difference) < 0.005) return "Matches order total";
+  return difference < 0
+    ? `$${Math.abs(difference).toFixed(2)} below order total`
+    : `$${difference.toFixed(2)} above order total`;
 }
 
 function AdminInventoryPage() {

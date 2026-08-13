@@ -82,6 +82,12 @@ and select **Hand directly to customer**. Inventory is committed normally, but
 the order permanently blocks fulfillment PDFs, PrintNode jobs, Shippo rates,
 and postage. Use **Mark Handed Off** when the customer receives it.
 
+The confirmation window also records **Amount received**, defaulting to the
+original order total. For a confirmed order, expand **View fulfillment
+details** and use **Edit Amount Received** to correct that figure later. The
+original order total stays unchanged, inventory is never deducted again, and
+each correction is appended to the protected order audit history.
+
 The inventory overview's **Retail Value** is the current on-hand quantity times
 the active single-vial price displayed by the website. It is a retail-value
 estimate, not inventory cost or profit.
