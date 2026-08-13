@@ -18,6 +18,7 @@ const ORDER_FIELDS = [
   "ship_city", "ship_state", "ship_zip", "created_at", "updated_at",
   "payment_status", "fulfillment_status", "fulfillment_method",
   "payment_received_via", "payment_amount_received", "payment_confirmed_at",
+  "inventory_accounting_mode",
 ].join(",");
 
 export default async function handler(request) {

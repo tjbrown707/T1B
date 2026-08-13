@@ -28,6 +28,10 @@ const paymentAmountMigration = readFileSync(
   "supabase/migrations/20260813051208_record_payment_amount_received.sql",
   "utf8",
 );
+const precountedOrdersMigration = readFileSync(
+  "supabase/migrations/20260813052015_protect_precounted_legacy_orders.sql",
+  "utf8",
+);
 
 test("opening inventory is active at 50 for every catalog product", () => {
   assert.equal(OPENING_INVENTORY_QUANTITY, 50);
@@ -166,6 +170,11 @@ test("local handoff is persisted and shipping is blocked in the database", () =>
   assert.match(paymentAmountMigration, /payment_amount_received numeric\(10, 2\)/);
   assert.match(paymentAmountMigration, /PAYMENT_AMOUNT_CORRECTED/);
   assert.match(paymentAmountMigration, /revoke execute on function public\.update_order_payment_amount\(uuid, numeric, numeric, uuid\)/);
+  assert.match(precountedOrdersMigration, /inventory_accounting_mode text not null default 'TRACKED'/);
+  assert.match(precountedOrdersMigration, /2026-08-11 00:00:00 America\/Phoenix/);
+  assert.match(precountedOrdersMigration, /selected_order\.inventory_accounting_mode = 'TRACKED'/);
+  assert.match(precountedOrdersMigration, /'inventory_changed', selected_order\.inventory_accounting_mode = 'TRACKED'/);
+  assert.doesNotMatch(precountedOrdersMigration, /legacy-precounted-restore:/);
 });
 
 test("operational tables are server-only and database changes are atomic", () => {

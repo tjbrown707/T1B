@@ -38,6 +38,11 @@ export const FULFILLMENT_METHODS = Object.freeze({
   LOCAL_HANDOFF: "LOCAL_HANDOFF",
 });
 
+export const INVENTORY_ACCOUNTING_MODES = Object.freeze({
+  TRACKED: "TRACKED",
+  PRECOUNTED_LEGACY: "PRECOUNTED_LEGACY",
+});
+
 export const PAYMENT_RECEIVED_OPTIONS = Object.freeze([
   "Cash App",
   "Venmo",
@@ -84,6 +89,10 @@ export function nextFulfillmentAction(order) {
 
 export function isLocalHandoff(order) {
   return order?.fulfillment_method === FULFILLMENT_METHODS.LOCAL_HANDOFF;
+}
+
+export function isPrecountedOrder(order) {
+  return order?.inventory_accounting_mode === INVENTORY_ACCOUNTING_MODES.PRECOUNTED_LEGACY;
 }
 
 // Authorization belongs in app_metadata: customers can edit user_metadata,

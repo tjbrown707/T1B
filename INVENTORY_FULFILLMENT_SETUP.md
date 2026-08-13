@@ -88,6 +88,15 @@ details** and use **Edit Amount Received** to correct that figure later. The
 original order total stays unchanged, inventory is never deducted again, and
 each correction is appended to the protected order audit history.
 
+### Orders placed through August 10, 2026
+
+Orders placed on or before August 10 (Arizona time) are marked **Already
+accounted — no deduction**. Their products were included when the live opening
+inventory was reconciled, so confirming one of those outstanding payments
+records the payment but does not reserve or reduce inventory. The rule is
+stored on each order and enforced inside the payment transaction. Orders
+placed August 11 or later continue using normal automatic inventory tracking.
+
 The inventory overview's **Retail Value** is the current on-hand quantity times
 the active single-vial price displayed by the website. It is a retail-value
 estimate, not inventory cost or profit.

@@ -52,6 +52,7 @@ import {
   canConfirmPayment,
   hasOrderManagerRole,
   isLocalHandoff,
+  isPrecountedOrder,
   nextFulfillmentAction,
 } from "./src/data/order-management.js";
 import {
@@ -5304,7 +5305,9 @@ function AdminOrdersPage() {
 
       setOrders(previous => previous.map(item => item.id === order.id ? payload.order : item));
       const messages = {
-        confirm_payment: isLocalHandoff(payload.order)
+        confirm_payment: isPrecountedOrder(payload.order)
+          ? `${payload.order.order_number} is paid. Its inventory was already accounted before the August 10 cutoff, so stock was not changed.`
+          : isLocalHandoff(payload.order)
           ? `${payload.order.order_number} is paid and reserved for local handoff. Inventory was deducted once; printing and postage are blocked.`
           : `${payload.order.order_number} is paid and ready to pick. Inventory was deducted once.`,
         cancel_unpaid: `${payload.order.order_number} was cancelled and its reserved stock was released.`,
@@ -5514,6 +5517,7 @@ function AdminOrdersPage() {
                       <AdminDetailLine label="Phone" value={order.customer_phone} />
                       <AdminDetailLine label="Address" value={[order.ship_address, order.ship_city, order.ship_state, order.ship_zip].filter(Boolean).join(", ")} />
                       <AdminDetailLine label="Fulfillment" value={isLocalHandoff(order) ? "Local handoff" : "Ship to customer"} />
+                      <AdminDetailLine label="Inventory accounting" value={isPrecountedOrder(order) ? "Already accounted — no deduction" : "Tracked automatically"} />
                     </div>
                     <div>
                       <AdminDetailHeading>Payment & totals</AdminDetailHeading>
@@ -5558,7 +5562,9 @@ function AdminOrdersPage() {
                     <div>
                       <AdminDetailHeading>Fulfillment documents</AdminDetailHeading>
                       <div style={{ color: "var(--text-dim)", fontFamily: "'Rajdhani', sans-serif", fontSize: 14 }}>
-                        {isLocalHandoff(order)
+                        {isPrecountedOrder(order) && (order.allocations || []).length === 0
+                          ? "Pre-counted cutoff order — no new inventory allocation or deduction was created."
+                          : isLocalHandoff(order)
                           ? "Local handoff selected — documents and postage are intentionally disabled."
                           : printReady
                           ? "The pick ticket and customer packing slip are ready."
@@ -5631,6 +5637,11 @@ function OrderPaymentConfirmation({ order, busy, confirming, onConfirm }) {
             <div style={{ color: "var(--red-primary)", fontFamily: "'Orbitron', sans-serif", fontSize: 9, fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 8 }}>Payment confirmation</div>
             <h2 id={`confirm-payment-${order.id}`} style={{ color: "var(--text-primary)", fontFamily: "'Orbitron', sans-serif", fontSize: 19, margin: "0 0 18px" }}>{order.order_number}</h2>
             <div style={{ display: "grid", gap: 15 }}>
+              {isPrecountedOrder(order) && (
+                <div style={{ padding: 12, border: "1px solid rgba(96,165,250,0.45)", background: "rgba(96,165,250,0.08)", color: "#93c5fd", fontFamily: "'Rajdhani', sans-serif", fontSize: 14 }}>
+                  This order was placed on or before August 10, 2026. Its products were already counted as gone, so confirming payment will <strong>not change inventory</strong>.
+                </div>
+              )}
               <InventoryField label="Amount received">
                 <input aria-label="Amount received" type="number" min="0" max="99999999.99" step="0.01" required value={paymentAmountReceived} onChange={event => setPaymentAmountReceived(event.target.value)} style={AUTH_INPUT_STYLE} />
                 <div style={{ marginTop: 5, color: "var(--text-dim)", fontFamily: "'Rajdhani', sans-serif", fontSize: 12 }}>Original order total: ${Number(order.total || 0).toFixed(2)}</div>

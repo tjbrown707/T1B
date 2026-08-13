@@ -6,6 +6,7 @@ import {
   canDeleteOrder,
   hasOrderManagerRole,
   isLocalHandoff,
+  isPrecountedOrder,
   isOrderStatus,
   nextFulfillmentAction,
 } from "../src/data/order-management.js";
@@ -47,6 +48,12 @@ test("local handoff orders use a direct completion action", () => {
     target: "DELIVERED",
   });
   assert.equal(nextFulfillmentAction({ ...order, fulfillment_method: "SHIP" }).action, "mark_picked");
+});
+
+test("pre-counted cutoff orders are identified independently of fulfillment", () => {
+  assert.equal(isPrecountedOrder({ inventory_accounting_mode: "PRECOUNTED_LEGACY" }), true);
+  assert.equal(isPrecountedOrder({ inventory_accounting_mode: "TRACKED" }), false);
+  assert.equal(isPrecountedOrder({}), false);
 });
 
 test("pagination cursors round-trip and reject malformed ids", () => {
