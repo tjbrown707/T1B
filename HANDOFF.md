@@ -7,6 +7,25 @@ records state that is not obvious from the code or the git log.
 
 ## Inventory/fulfillment build — DATABASE AND WEBSITE LIVE
 
+### August 10 inventory cutoff — DATABASE AND WEBSITE LIVE
+
+Migration `20260813052015_protect_precounted_legacy_orders.sql` and commit
+`a842a2e` went live on 2026-08-12. The nine orders placed through the end of
+August 10 in Arizona are persisted as `PRECOUNTED_LEGACY`; confirming their
+outstanding payments records the amount/method/fulfillment choice but skips all
+inventory reservation, commitment, counter, and movement writes. The two newer
+orders remain `TRACKED` and use normal automatic inventory accounting.
+
+The owner had already corrected the one earlier duplicate deduction manually,
+so the migration deliberately performed no restoration or inventory adjustment.
+Production inventory was 1,438 on hand, 1 reserved, and 1,437 available both
+immediately before and after the migration. No unpaid pre-counted order had a
+live reservation. The server-only RPC remains unavailable to `anon` and
+`authenticated`; the security advisor has only the intentional INFO notices.
+Live UI verification confirmed both the cutoff warning and the newer-order
+tracking label without confirming or modifying either order. `npm run verify`
+is green with 99 tests and a clean secret scan.
+
 ### Actual amount received — DATABASE AND WEBSITE LIVE
 
 Migration `20260813051208_record_payment_amount_received.sql` and commit
