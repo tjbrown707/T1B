@@ -1,11 +1,29 @@
 # Handoff — pick up here
 
-Written 2026-08-07, updated 2026-08-11. Read this before starting work; it
+Written 2026-08-07, updated 2026-08-12. Read this before starting work; it
 records state that is not obvious from the code or the git log.
 
 ---
 
 ## Inventory/fulfillment build — DATABASE AND WEBSITE LIVE
+
+### Actual amount received — DATABASE AND WEBSITE LIVE
+
+Migration `20260813051208_record_payment_amount_received.sql` and commit
+`138304d` went live on 2026-08-12. Payment confirmation now asks for **Amount
+received**, defaulting to the immutable order total. Every paid order exposes
+**Edit Amount Received** under its fulfillment details, including orders that
+were already confirmed. Corrections change neither the original total nor
+inventory, use optimistic locking, and append an immutable
+`PAYMENT_AMOUNT_CORRECTED` event with old/new values and the staff actor.
+
+All three production paid orders were safely backfilled to their original
+totals. Live read-only UI verification found the new value and edit control on
+all three without changing an order. The RPC is unavailable to `anon` and
+`authenticated` and executable only by `service_role`. Supabase's post-change
+security advisor reports only the intentional INFO notices for the seven
+server-only RLS tables. `npm run verify` is green: zero lint problems, 98 tests,
+route smoke, build, integrity, and secret scan.
 
 ### Local handoff + retail inventory value — DATABASE AND WEBSITE LIVE
 
