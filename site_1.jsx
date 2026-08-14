@@ -5346,7 +5346,7 @@ function AdminOrdersPage() {
       window.setTimeout(() => URL.revokeObjectURL(url), 60000);
     } catch (error) {
       preview?.close();
-      setNotice({ type: "error", text: error.message || "The fulfillment packet could not be opened." });
+      setNotice({ type: "error", text: error.message || "The packing slip could not be opened." });
     } finally {
       setActionKey("");
     }
@@ -5365,9 +5365,12 @@ function AdminOrdersPage() {
       });
       const payload = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(payload.error || `Print service returned HTTP ${res.status}`);
-      setNotice({ type: "success", text: `${order.order_number}'s pick ticket and packing slip were sent to the printer.` });
+      setNotice({
+        type: orderEmailNoticeType(payload.notification),
+        text: `${order.order_number}'s packing slip was sent to the printer.${orderEmailNotice(payload.notification)}`,
+      });
     } catch (error) {
-      setNotice({ type: "error", text: error.message || "The fulfillment packet could not be printed." });
+      setNotice({ type: "error", text: error.message || "The packing slip could not be printed." });
     } finally {
       setActionKey("");
     }
@@ -5567,7 +5570,7 @@ function AdminOrdersPage() {
                           : isLocalHandoff(order)
                           ? "Local handoff selected — documents and postage are intentionally disabled."
                           : printReady
-                          ? "The pick ticket and customer packing slip are ready."
+                          ? "The branded packing slip is ready."
                           : orderHasProvisionalLots(order)
                             ? "Replace provisional lot IDs in Inventory before printing."
                             : "Confirm payment before printing."}
@@ -5578,7 +5581,7 @@ function AdminOrdersPage() {
                         {actionKey === `${order.id}:pdf` ? "Opening…" : "Open PDF"}
                       </button>
                       <button type="button" disabled={busy || !printReady} onClick={() => printFulfillment(order)} style={adminSecondaryButton(busy || !printReady)}>
-                        {actionKey === `${order.id}:print` ? "Printing…" : "Print Packet"}
+                        {actionKey === `${order.id}:print` ? "Printing…" : "Print Packing Slip"}
                       </button>
                       {canCancelUnpaidOrder(order) && (
                         <button type="button" disabled={busy} onClick={() => {
@@ -5831,7 +5834,7 @@ function AdminInventoryPage() {
 
       {totals.provisionalProducts > 0 && (
         <div style={{ padding: "13px 15px", marginBottom: 16, border: "1px solid rgba(245,158,11,0.45)", background: "rgba(245,158,11,0.08)", color: "#fbbf24", fontFamily: "'Rajdhani', sans-serif", fontSize: 15 }}>
-          All products started at 50 units as requested. Replace each provisional lot with its real lot and batch ID before its first fulfillment packet or shipping label can print.
+          All products started at 50 units as requested. Replace each provisional lot with its real lot and batch ID before its first packing slip or shipping label can print.
         </div>
       )}
       {notice.text && <div role="status" style={{ padding: "12px 15px", marginBottom: 16, border: `1px solid ${notice.type === "success" ? "rgba(34,197,94,0.45)" : "rgba(196,30,42,0.55)"}`, background: notice.type === "success" ? "rgba(34,197,94,0.08)" : "rgba(196,30,42,0.08)", color: notice.type === "success" ? "#22c55e" : "#ff6b6b", fontFamily: "'Rajdhani', sans-serif", fontSize: 15 }}>{notice.text}</div>}
@@ -6030,6 +6033,44 @@ function AdminOperationsNav({ navigate, active }) {
   );
 }
 
+function orderEmailNotice(notification) {
+  const messages = {
+    SENT: " The customer tracking email was sent.",
+    QUEUED: " The customer tracking email is queued for automatic delivery.",
+    PENDING: " The customer tracking email is queued for automatic delivery.",
+    SENDING: " The customer tracking email is being sent.",
+    ERROR: " The customer tracking email is queued for an automatic retry.",
+    RETRYING: " The customer tracking email is queued for an automatic retry.",
+    NEEDS_REVIEW: " The customer tracking email needs staff attention.",
+    TEST_LABEL: " This is a Shippo test label, so no customer email was sent.",
+    WAITING_FOR_PACKING_SLIP: " The customer email will send after the packing slip is printed.",
+    WAITING_FOR_LABEL: " The customer email will send after a shipping label is printed.",
+  };
+  return messages[notification?.state] || "";
+}
+
+function orderEmailNoticeType(notification) {
+  return notification?.state === "NEEDS_REVIEW" ? "error" : "success";
+}
+
+function trackingEmailStatusMessage(notification) {
+  const status = String(notification?.status || "").toUpperCase();
+  if (status === "SENT") {
+    const sentAt = notification?.sent_at ? ` ${formatAdminOrderDate(notification.sent_at)}` : "";
+    return `Customer tracking email sent${sentAt}.`;
+  }
+  if (status === "NEEDS_REVIEW") {
+    return `Customer tracking email needs staff attention. ${notification?.last_error || "Check the Netlify function logs before taking further action."}`;
+  }
+  if (status === "ERROR") {
+    const retryAt = notification?.next_attempt_at ? ` after ${formatAdminOrderDate(notification.next_attempt_at)}` : "";
+    return `Customer tracking email is queued for an automatic retry${retryAt}.`;
+  }
+  if (status === "SENDING") return "Customer tracking email is being sent.";
+  if (status === "PENDING") return "Customer tracking email is queued for automatic delivery.";
+  return "";
+}
+
 function OrderShippingControls({ order, session, onShipment, setNotice }) {
   const [parcel, setParcel] = useState({ ...DEFAULT_PARCEL });
   const [rates, setRates] = useState([]);
@@ -6041,6 +6082,9 @@ function OrderShippingControls({ order, session, onShipment, setNotice }) {
   const labelUrl = shipment?.label_url || shipment?.labelUrl || "";
   const trackingNumber = shipment?.tracking_number || shipment?.trackingNumber || "";
   const trackingUrl = shipment?.tracking_url || shipment?.trackingUrl || "";
+  const trackingEmail = order.trackingEmail || null;
+  const trackingEmailMessage = trackingEmailStatusMessage(trackingEmail);
+  const trackingEmailNeedsReview = trackingEmail?.status === "NEEDS_REVIEW";
   const provisional = orderHasProvisionalLots(order);
   const readyForLabel = order.fulfillment_status === "PACKED";
 
@@ -6082,7 +6126,10 @@ function OrderShippingControls({ order, session, onShipment, setNotice }) {
       const printText = payload.print?.printed
         ? " The 4×6 label was sent to PrintNode."
         : payload.print?.error ? ` ${payload.print.error}` : "";
-      setNotice({ type: "success", text: `Shipping label purchased for ${order.order_number}.${printText}` });
+      setNotice({
+        type: orderEmailNoticeType(payload.notification),
+        text: `Shipping label purchased for ${order.order_number}.${printText}${orderEmailNotice(payload.notification)}`,
+      });
     } catch (requestError) {
       setError(requestError.message || "The label could not be purchased.");
     } finally {
@@ -6101,7 +6148,10 @@ function OrderShippingControls({ order, session, onShipment, setNotice }) {
       });
       const payload = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(payload.error || `Print service returned HTTP ${res.status}`);
-      setNotice({ type: "success", text: `${order.order_number}'s shipping label was sent to PrintNode.` });
+      setNotice({
+        type: orderEmailNoticeType(payload.notification),
+        text: `${order.order_number}'s shipping label was sent to PrintNode.${orderEmailNotice(payload.notification)}`,
+      });
     } catch (printError) {
       setError(printError.message || "The label could not be printed.");
     } finally {
@@ -6121,6 +6171,22 @@ function OrderShippingControls({ order, session, onShipment, setNotice }) {
   return (
     <div style={{ margin: "0 18px 18px", padding: 16, border: "1px solid var(--border)", background: "rgba(255,255,255,0.02)" }}>
       <AdminDetailHeading>Shipping label</AdminDetailHeading>
+      {trackingEmailMessage && (
+        <div
+          role={trackingEmailNeedsReview ? "alert" : "status"}
+          style={{
+            marginBottom: 12,
+            padding: "10px 12px",
+            border: `1px solid ${trackingEmailNeedsReview ? "rgba(255,107,107,0.55)" : "rgba(34,197,94,0.35)"}`,
+            background: trackingEmailNeedsReview ? "rgba(196,30,42,0.08)" : "rgba(34,197,94,0.06)",
+            color: trackingEmailNeedsReview ? "#ff6b6b" : "var(--text-secondary)",
+            fontFamily: "'Rajdhani', sans-serif",
+            fontSize: 14,
+          }}
+        >
+          {trackingEmailMessage}
+        </div>
+      )}
       {provisional ? (
         <div style={{ color: "#fbbf24", fontFamily: "'Rajdhani', sans-serif", fontSize: 14 }}>Enter the real lot numbers before sending order data to Shippo.</div>
       ) : labelUrl ? (

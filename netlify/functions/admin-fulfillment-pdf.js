@@ -30,7 +30,7 @@ export default async function handler(request) {
   ]);
   if (orderResult.error || allocationResult.error) {
     console.error("admin-fulfillment-pdf: load failed:", orderResult.error || allocationResult.error);
-    return fail(500, "The fulfillment document could not be loaded.");
+    return fail(500, "The packing slip could not be loaded.");
   }
   if (!orderResult.data) return fail(404, "Order not found.");
 
@@ -53,7 +53,7 @@ export default async function handler(request) {
       status: 200,
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `inline; filename="${order.order_number}-fulfillment.pdf"`,
+        "Content-Disposition": `inline; filename="${order.order_number}-packing-slip.pdf"`,
         "Cache-Control": "private, no-store, max-age=0",
         "X-Content-Type-Options": "nosniff",
         "Access-Control-Allow-Origin": SITE_ORIGIN,
@@ -64,7 +64,7 @@ export default async function handler(request) {
     });
   } catch (error) {
     console.error("admin-fulfillment-pdf: generation failed:", error);
-    return fail(500, "The fulfillment document could not be generated.");
+    return fail(500, "The packing slip could not be generated.");
   }
 }
 

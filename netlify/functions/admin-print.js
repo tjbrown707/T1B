@@ -2,6 +2,7 @@ import { Buffer } from "node:buffer";
 import { authenticateOrderManager } from "./_shared/admin-auth.js";
 import { assertOrderPrintable, buildFulfillmentPdf } from "./_shared/fulfillment-pdf.js";
 import { jsonResponse, readJsonBody } from "./_shared/http.js";
+import { recordOrderPrintSubmission } from "./_shared/order-processed-email.js";
 import { printNodeConfig, submitPrintNodeJob } from "./_shared/printnode.js";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -69,16 +70,22 @@ async function printFulfillment(auth, orderId, config) {
     const bytes = await buildFulfillmentPdf(order);
     const jobId = await submitPrintNodeJob({
       printerId: config.fulfillmentPrinterId,
-      title: `${order.order_number} - pick ticket and packing slip`,
+      title: `${order.order_number} - packing slip`,
       contentType: "pdf_base64",
       content: Buffer.from(bytes).toString("base64"),
     });
-    await recordPrintEvent(auth, orderId, auth.user.id, "FULFILLMENT_PACKET_PRINTED", jobId);
+    const notification = await recordOrderPrintSubmission({
+      supabase: auth.supabase,
+      orderId,
+      eventType: "FULFILLMENT_PACKET_PRINTED",
+      actorUserId: auth.user.id,
+      jobId,
+    });
     console.info(`admin-print: staff ${auth.user.id} printed fulfillment ${order.order_number} as job ${jobId}`);
-    return jsonResponse(200, { printed: true, jobId }, METHODS);
+    return jsonResponse(200, { printed: true, jobId, notification }, METHODS);
   } catch (error) {
     console.error("admin-print: fulfillment print failed:", error);
-    return fail(502, "PrintNode could not print the fulfillment packet.");
+    return fail(502, "PrintNode could not print the packing slip.");
   }
 }
 
@@ -105,23 +112,19 @@ async function printLabel(auth, orderId, config) {
       contentType: "pdf_uri",
       content: shipment.label_url,
     });
-    await recordPrintEvent(auth, orderId, auth.user.id, "SHIPPING_LABEL_PRINTED", jobId);
+    const notification = await recordOrderPrintSubmission({
+      supabase: auth.supabase,
+      orderId,
+      eventType: "SHIPPING_LABEL_PRINTED",
+      actorUserId: auth.user.id,
+      jobId,
+    });
     console.info(`admin-print: staff ${auth.user.id} printed label for ${orderId} as job ${jobId}`);
-    return jsonResponse(200, { printed: true, jobId }, METHODS);
+    return jsonResponse(200, { printed: true, jobId, notification }, METHODS);
   } catch (printError) {
     console.error("admin-print: label print failed:", printError);
     return fail(502, "PrintNode could not print the shipping label.");
   }
-}
-
-async function recordPrintEvent(auth, orderId, actorUserId, eventType, jobId) {
-  const { error } = await auth.supabase.from("order_events").insert({
-    order_id: orderId,
-    event_type: eventType,
-    actor_user_id: actorUserId,
-    details: { printnode_job_id: jobId },
-  });
-  if (error) console.error(`admin-print: ${eventType} audit insert failed:`, error);
 }
 
 export const config = {

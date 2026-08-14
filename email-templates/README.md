@@ -49,8 +49,9 @@ per hour, and often lands in spam. Custom SMTP makes it send from `noreply@tiero
 Once custom SMTP is on, you can also raise the rate limits under
 **Authentication → Rate Limits**.
 
-> Note: this same Resend domain + API key could later replace EmailJS for the order
-> emails too, consolidating everything onto one branded sender — optional, separate task.
+> Note: this same verified Resend domain is also used by the server-side
+> processed-order/tracking email described below. EmailJS still handles the
+> original checkout confirmation email.
 
 ---
 
@@ -84,7 +85,7 @@ transaction, so two tabs cannot use the same personal code on two orders.
 > | Key | Where it lives | What breaks if you revoke it |
 > |---|---|---|
 > | **Auth key** | Supabase → Authentication → SMTP Settings → Password | Signup confirmations, password resets, magic links — customers cannot create accounts or get back into them |
-> | **Welcome key** | Netlify → `RESEND_API_KEY` | The welcome + discount email only |
+> | **Netlify mail key** | Netlify → `RESEND_API_KEY` | Welcome + discount emails and processed-order tracking emails |
 >
 > They are deliberately separate so either can be rotated without taking down
 > the other half of your email. Resend shows a key's value only once at
@@ -166,8 +167,33 @@ Re-sending is safe. A code whose `email_sent_at` is null gets re-sent as the *sa
 code; it never mints a second one. Codes cascade-delete with the user, so deleting a
 test account and signing up again is a clean way to re-test.
 
-**A live send failure is not self-healing.** Supabase does not retry the webhook, so
+**A live welcome-email failure is not self-healing.** Supabase does not retry the webhook, so
 once the underlying cause is fixed, the pending email needs one manual re-fire.
+
+---
+
+## 4. Processed-order tracking email
+
+`order-processed-v1.html` is read directly by the Netlify fulfillment functions;
+do not paste it into Supabase, EmailJS, or Resend. It uses the existing Netlify
+`RESEND_API_KEY`, so there is no additional dashboard secret to create.
+
+For a paid shipping order, whichever required PrintNode job finishes second
+(the branded packing slip or the 4×6 shipping label) atomically queues the
+email. The message says the order is prepared for carrier pickup and includes
+the carrier, service, tracking number, and an HTTPS tracking link when Shippo
+provides one. A reprint does not send a second email.
+
+Shippo's `transaction.test` value is saved with the label. Test labels and
+older labels whose mode is unknown fail closed and never email a customer,
+even if the Netlify Shippo token is changed to live later. Failed Resend sends
+remain in a protected outbox and the scheduled Netlify function retries them
+every five minutes. Ambiguous or repeated failures stop automatically for
+staff review rather than risk sending a late duplicate. The staff order screen
+shows whether the tracking email is queued, sent, retrying, or needs attention.
+The `v1` template and message renderer are intentionally immutable: do not
+edit an old version's HTML, text, subject, sender, or reply-to after it has sent
+live mail; create a new message version and idempotency-key version together.
 
 ### Known limits
 

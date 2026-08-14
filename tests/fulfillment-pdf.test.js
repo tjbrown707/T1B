@@ -1,16 +1,21 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { Buffer } from "node:buffer";
+import { readFileSync } from "node:fs";
+import { PDFDict, PDFDocument, PDFName, StandardFonts } from "pdf-lib";
 
 import {
   assertOrderPrintable,
   buildFulfillmentPdf,
+  buildPackingRows,
+  packingRowLayout,
 } from "../netlify/functions/_shared/fulfillment-pdf.js";
 
 function printableOrder() {
   return {
     order_number: "T1B-260811-123456",
     payment_status: "PAID",
+    fulfillment_method: "SHIP",
     payment_confirmed_at: "2026-08-11T17:00:00.000Z",
     created_at: "2026-08-11T16:45:00.000Z",
     payment_method: "Venmo",
@@ -33,16 +38,79 @@ function printableOrder() {
   };
 }
 
-test("the fulfillment PDF contains a pick ticket and packing slip", async () => {
+test("a normal order produces one branded packing slip page", async () => {
   const bytes = await buildFulfillmentPdf(printableOrder());
   assert.equal(Buffer.from(bytes).subarray(0, 5).toString("ascii"), "%PDF-");
   assert.ok(bytes.length > 2_000);
+  const document = await PDFDocument.load(bytes);
+  assert.equal(document.getPageCount(), 1);
+  assert.equal(document.getTitle(), "Tier One packing slip - T1B-260811-123456");
+  assert.equal(document.getAuthor(), "Tier One BioSystems");
+  assert.deepEqual(document.getPage(0).getSize(), { width: 612, height: 792 });
+  const resources = document.getPage(0).node.Resources();
+  const images = resources.lookup(PDFName.of("XObject"), PDFDict);
+  assert.ok(images.keys().length > 0, "the horizontal logo should be embedded");
+  assert.match(readFileSync("netlify.toml", "utf8"), /public\/logo-wide\.png/);
+});
+
+test("the packing rows preserve split lots, locations, and allocated quantities", () => {
+  const order = printableOrder();
+  const rows = buildPackingRows({
+    ...order,
+    allocations: [
+      {
+        ...order.allocations[0],
+        quantity: 1,
+        lot: { lot_number: "LOT-26-A", is_provisional: false, storage_location: "Freezer A / Bin 2" },
+      },
+      {
+        ...order.allocations[0],
+        quantity: 1,
+        lot: { lot_number: "LOT-26-B", is_provisional: false, storage_location: "Freezer B / Bin 4" },
+      },
+    ],
+  });
+  assert.deepEqual(rows.map(row => ({
+    lotNumber: row.lotNumber,
+    storageLocation: row.storageLocation,
+    quantity: row.quantity,
+  })), [
+    { lotNumber: "LOT-26-A", storageLocation: "Freezer A / Bin 2", quantity: 1 },
+    { lotNumber: "LOT-26-B", storageLocation: "Freezer B / Bin 4", quantity: 1 },
+  ]);
+});
+
+test("long picking fields wrap without clipping or crossing into adjacent rows", async () => {
+  const document = await PDFDocument.create();
+  const font = await document.embedFont(StandardFonts.Helvetica);
+  const lotNumber = `LOT-${"X".repeat(76)}`;
+  const storageLocation = `Ultra Cold Freezer Storage Location ${"B".repeat(90)}`.slice(0, 120);
+  const layout = packingRowLayout(font, {
+    item: "BPC-157 laboratory reference material 5 mg",
+    lotNumber,
+    storageLocation,
+  });
+  const withoutSpaces = value => value.replace(/\s/g, "");
+  assert.equal(withoutSpaces(layout.lotLines.join("")), withoutSpaces(lotNumber));
+  assert.equal(withoutSpaces(layout.locationLines.join("")), withoutSpaces(storageLocation));
+  assert.ok(layout.lotLines.length > 2);
+  assert.ok(layout.locationLines.length > 2);
+  for (const line of layout.lotLines) {
+    assert.ok(font.widthOfTextAtSize(line, 8) <= 78);
+  }
+  for (const line of layout.locationLines) {
+    assert.ok(font.widthOfTextAtSize(line, 8) <= 150);
+  }
+  assert.equal(
+    layout.height,
+    Math.max(layout.itemLines.length, layout.lotLines.length, layout.locationLines.length) * 11 + 12,
+  );
 });
 
 test("PDF generation fails closed for unpaid, uncommitted, or provisional orders", async () => {
   const order = printableOrder();
-  assert.equal(assertOrderPrintable({ ...order, payment_status: "AWAITING_PAYMENT" }), "Confirm payment before printing fulfillment documents.");
-  assert.equal(assertOrderPrintable({ ...order, fulfillment_method: "LOCAL_HANDOFF" }), "Local handoff orders do not create a fulfillment packet.");
+  assert.equal(assertOrderPrintable({ ...order, payment_status: "AWAITING_PAYMENT" }), "Confirm payment before printing the packing slip.");
+  assert.equal(assertOrderPrintable({ ...order, fulfillment_method: "LOCAL_HANDOFF" }), "Local handoff orders do not create a packing slip.");
   assert.match(assertOrderPrintable({ ...order, allocations: [{ ...order.allocations[0], state: "RESERVED" }] }), /not been committed/);
   assert.match(assertOrderPrintable({ ...order, allocations: [{ ...order.allocations[0], lot: { is_provisional: true } }] }), /real lot number/);
   await assert.rejects(() => buildFulfillmentPdf({ ...order, allocations: [] }), /no inventory allocation/);

@@ -7,6 +7,29 @@ records state that is not obvious from the code or the git log.
 
 ## Inventory/fulfillment build — DATABASE AND WEBSITE LIVE
 
+### Processed-order email + branded packing slip — DATABASE AND WEBSITE LIVE
+
+Added on 2026-08-14. Normal orders now produce one branded packing slip with
+the horizontal Tier One logo plus the internal lot, storage-location,
+quantity, and verification fields. Continuation pages remain available only
+for unusually large orders, so no fulfillment data is clipped to force a
+single sheet.
+
+For shipping orders, the customer tracking email is queued only after both the
+packing slip and shipping label return positive PrintNode job IDs. It uses the
+existing Netlify `RESEND_API_KEY`, includes the saved carrier/tracking details,
+and is idempotent across reprints and retries. Shippo's returned `test` flag is
+persisted with the label; test and unknown-mode labels never email customers,
+even after the environment token changes. A protected Supabase outbox and a
+five-minute Netlify scheduled function recover temporary mail failures without
+making a successful print look failed. PrintNode acceptance confirms spooler
+submission, not that paper physically exited the printer.
+
+Migrations: `20260814170438_order_processed_email_outbox.sql`,
+`20260814174429_order_notification_outbox_actor_index.sql`, and
+`20260814175636_harden_order_processed_email_queue.sql`. No historical orders
+are backfilled.
+
 ### August 10 inventory cutoff — DATABASE AND WEBSITE LIVE
 
 Migration `20260813052015_protect_precounted_legacy_orders.sql` and commit
@@ -85,8 +108,9 @@ The remaining owner setup is in `INVENTORY_FULFILLMENT_SETUP.md`.
   reservation and deducts on-hand units; unpaid cancellation releases it.
 - New staff UI: `/admin/inventory`; `/admin/orders` now uses explicit workflow
   actions rather than arbitrary status edits or permanent deletion.
-- Two-page private PDF: internal lot/location pick ticket + customer packing
-  slip. Visually rendered and inspected.
+- One branded packing slip combines customer/order details with internal
+  lot/location verification fields. The superseding 2026-08-14 release above
+  removes the redundant mandatory second page.
 - Direct server-side Shippo rating/4×6 label purchase and PrintNode printing.
   Shippo platform sync is not used.
 - Server-only RLS tables, protected `app_metadata` roles, row locks,

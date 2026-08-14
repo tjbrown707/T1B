@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { authenticateOrderManager } from "./_shared/admin-auth.js";
 import { jsonResponse, readJsonBody } from "./_shared/http.js";
+import { recordOrderPrintSubmission } from "./_shared/order-processed-email.js";
 import { printNodeConfig, submitPrintNodeJob } from "./_shared/printnode.js";
 import { ShippoError, shippoConfig, shippoRequest } from "./_shared/shippo.js";
 import { DEFAULT_PARCEL } from "../../src/data/inventory.js";
@@ -270,6 +271,7 @@ async function buyLabel(auth, orderId, body) {
       p_tracking_url: trackingUrl,
       p_label_url: labelUrl,
       p_actor_user_id: auth.user.id,
+      p_is_test: transaction?.test !== false,
     },
   );
   const completed = Array.isArray(completedData) ? completedData[0] : completedData;
@@ -279,6 +281,7 @@ async function buyLabel(auth, orderId, body) {
   }
 
   let print = { configured: false, printed: false };
+  let notification = null;
   const printers = printNodeConfig();
   if (body.autoPrint !== false && printers.labelConfigured) {
     print = { configured: true, printed: false };
@@ -290,13 +293,15 @@ async function buyLabel(auth, orderId, body) {
         content: labelUrl,
       });
       print = { configured: true, printed: true, jobId };
-      const { error: printEventError } = await auth.supabase.from("order_events").insert({
-        order_id: orderId,
-        event_type: "SHIPPING_LABEL_PRINTED",
-        actor_user_id: auth.user.id,
-        details: { printnode_job_id: jobId, automatic: true },
+      notification = await recordOrderPrintSubmission({
+        supabase: auth.supabase,
+        orderId,
+        eventType: "SHIPPING_LABEL_PRINTED",
+        actorUserId: auth.user.id,
+        jobId,
+        automatic: true,
+        deferDelivery: true,
       });
-      if (printEventError) console.error("admin-shipping: automatic print audit insert failed:", printEventError);
     } catch (printError) {
       console.error("admin-shipping: label saved but automatic print failed:", printError);
       print = { configured: true, printed: false, error: "The label was purchased but did not print automatically." };
@@ -304,7 +309,7 @@ async function buyLabel(auth, orderId, body) {
   }
 
   console.info(`admin-shipping: staff ${auth.user.id} bought label for ${shipment.orders?.order_number || orderId}`);
-  return jsonResponse(200, { shipment: publicShipment(completed), print }, METHODS);
+  return jsonResponse(200, { shipment: publicShipment(completed), print, notification }, METHODS);
 }
 
 export function validateParcel(input) {

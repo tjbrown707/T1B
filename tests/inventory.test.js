@@ -32,6 +32,20 @@ const precountedOrdersMigration = readFileSync(
   "supabase/migrations/20260813052015_protect_precounted_legacy_orders.sql",
   "utf8",
 );
+const orderProcessedEmailMigration = readFileSync(
+  "supabase/migrations/20260814170438_order_processed_email_outbox.sql",
+  "utf8",
+);
+const orderProcessedEmailActorIndexMigration = readFileSync(
+  "supabase/migrations/20260814174429_order_notification_outbox_actor_index.sql",
+  "utf8",
+);
+const orderProcessedEmailHardeningMigration = readFileSync(
+  "supabase/migrations/20260814175636_harden_order_processed_email_queue.sql",
+  "utf8",
+);
+const adminOrdersSource = readFileSync("netlify/functions/admin-orders.js", "utf8");
+const siteSource = readFileSync("site_1.jsx", "utf8");
 
 test("opening inventory is active at 50 for every catalog product", () => {
   assert.equal(OPENING_INVENTORY_QUANTITY, 50);
@@ -194,6 +208,32 @@ test("operational tables are server-only and database changes are atomic", () =>
   assert.match(migration, /for update/g);
   assert.match(migration, /complete_shippo_label_purchase/);
   assert.doesNotMatch(migration, /grant (select|insert|update|delete|all) on table public\.inventory_lots to authenticated/i);
+});
+
+test("processed-order emails use a server-only idempotent outbox after both prints", () => {
+  assert.match(orderProcessedEmailMigration, /add column if not exists is_test boolean not null default true/);
+  assert.match(orderProcessedEmailMigration, /is_test = p_is_test/);
+  assert.match(orderProcessedEmailMigration, /create table public\.order_notification_outbox/);
+  assert.match(orderProcessedEmailMigration, /unique \(order_id, notification_type\)/);
+  assert.match(orderProcessedEmailMigration, /alter table public\.order_notification_outbox enable row level security/);
+  assert.match(orderProcessedEmailMigration, /revoke all on table public\.order_notification_outbox from public, anon, authenticated/);
+  assert.match(orderProcessedEmailMigration, /grant all on table public\.order_notification_outbox to service_role/);
+  assert.match(orderProcessedEmailMigration, /security invoker/g);
+  assert.match(orderProcessedEmailMigration, /set search_path = ''/g);
+  assert.match(orderProcessedEmailMigration, /FULFILLMENT_PACKET_PRINTED/);
+  assert.match(orderProcessedEmailMigration, /SHIPPING_LABEL_PRINTED/);
+  assert.match(orderProcessedEmailMigration, /selected_shipment\.is_test is not false/);
+  assert.match(orderProcessedEmailMigration, /order-processed\/v1\//);
+  assert.match(orderProcessedEmailMigration, /for update skip locked/);
+  assert.match(orderProcessedEmailMigration, /NEEDS_REVIEW/);
+  assert.doesNotMatch(orderProcessedEmailMigration, /insert into public\.order_notification_outbox[\s\S]{0,500}select[\s\S]{0,200}from public\.orders/i);
+  assert.match(orderProcessedEmailActorIndexMigration, /order_notification_outbox_actor_idx/);
+  assert.match(orderProcessedEmailActorIndexMigration, /where triggered_by_user_id is not null/);
+  assert.match(orderProcessedEmailHardeningMigration, /return next selected_delivery/);
+  assert.match(orderProcessedEmailHardeningMigration, /if has_shipping_label[\s\S]+selected_shipment\.is_test is not false/);
+  assert.match(adminOrdersSource, /from\("order_notification_outbox"\)/);
+  assert.match(adminOrdersSource, /trackingEmail: notifications\.get/);
+  assert.match(siteSource, /Customer tracking email needs staff attention/);
 });
 
 test("parcel defaults match the owner's package and shipping inputs are bounded", () => {

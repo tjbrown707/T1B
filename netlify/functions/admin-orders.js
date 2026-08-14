@@ -77,19 +77,22 @@ async function listOrders(supabase, params) {
   const orders = hasMore ? rows.slice(0, limit) : rows;
   let allocations;
   let shipments;
+  let notifications;
   try {
-    [allocations, shipments] = await Promise.all([
+    [allocations, shipments, notifications] = await Promise.all([
       loadOrderAllocations(supabase, orders.map(order => order.id)),
       loadOrderShipments(supabase, orders.map(order => order.id)),
+      loadOrderNotifications(supabase, orders.map(order => order.id)),
     ]);
   } catch (hydrationError) {
     console.error("admin-orders: related records failed:", hydrationError);
-    return fail(500, "Order inventory and shipping details could not be loaded.");
+    return fail(500, "Order inventory, shipping, and email details could not be loaded.");
   }
   const hydrated = orders.map(order => ({
     ...order,
     allocations: allocations.get(order.id) || [],
     shipment: shipments.get(order.id) || null,
+    trackingEmail: notifications.get(order.id) || null,
   }));
   const nextCursor = hasMore && orders.length > 0 ? encodeCursor(orders[orders.length - 1]) : null;
   return jsonResponse(200, {
@@ -139,6 +142,22 @@ async function loadOrderShipments(supabase, orderIds) {
   return grouped;
 }
 
+async function loadOrderNotifications(supabase, orderIds) {
+  const grouped = new Map();
+  if (orderIds.length === 0) return grouped;
+  const { data, error } = await supabase
+    .from("order_notification_outbox")
+    .select("order_id,status,attempt_count,next_attempt_at,sent_at,last_error,updated_at")
+    .eq("notification_type", "ORDER_PROCESSED")
+    .in("order_id", orderIds);
+  if (error) {
+    console.error("admin-orders: tracking-email read failed:", error);
+    throw new Error("Order tracking-email details could not be loaded.");
+  }
+  for (const notification of data || []) grouped.set(notification.order_id, notification);
+  return grouped;
+}
+
 async function updateOrderWorkflow(supabase, user, request) {
   const parsed = await readJsonBody(request, MAX_BODY_BYTES);
   if (parsed.error) return fail(parsed.error === "Request is too large." ? 413 : 400, parsed.error);
@@ -177,10 +196,12 @@ async function updateOrderWorkflow(supabase, user, request) {
 
   let allocations;
   let shipments;
+  let notifications;
   try {
-    [allocations, shipments] = await Promise.all([
+    [allocations, shipments, notifications] = await Promise.all([
       loadOrderAllocations(supabase, [orderId]),
       loadOrderShipments(supabase, [orderId]),
+      loadOrderNotifications(supabase, [orderId]),
     ]);
   } catch (hydrationError) {
     console.error("admin-orders: updated order hydration failed:", hydrationError);
@@ -190,6 +211,7 @@ async function updateOrderWorkflow(supabase, user, request) {
     ...updated,
     allocations: allocations.get(orderId) || [],
     shipment: shipments.get(orderId) || null,
+    trackingEmail: notifications.get(orderId) || null,
   };
   console.info(`admin-orders: staff ${user.id} performed ${action} on ${order.order_number}`);
   return jsonResponse(200, { order }, METHODS);

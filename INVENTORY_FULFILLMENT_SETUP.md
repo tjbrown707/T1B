@@ -9,10 +9,11 @@ The secure inventory, order workflow, and fulfillment code went live on 2026-08-
 - Placing an order immediately reserves the required units so two customers cannot buy the same last vial.
 - Clicking **Confirm Payment** in the staff order screen commits the reserved units and reduces on-hand inventory.
 - Cancelling an unpaid order releases its reservation.
-- Pick tickets and customer packing slips are generated together as a private two-page PDF.
+- One private branded packing slip combines the order details with the internal lot, storage-location, quantity, and verification fields. Ordinary orders print on one sheet; unusually large orders can continue onto another page without losing rows.
 - Fulfillment documents and shipping labels stay blocked until payment is confirmed and every allocated vial has a real lot number.
 - Shippo is called directly by the secure server function. Supabase does not need to appear in Shippo's platform-sync list.
 - A purchased Shippo 4×6 label can print automatically through PrintNode.
+- For shipping orders, the customer receives a branded processed-order email with the tracking number after both the packing slip and a live Shippo label have been accepted by PrintNode. It normally sends immediately or within five minutes. Shippo test labels never email customers, and temporary email failures retry automatically.
 
 The default parcel is 9 × 4.25 × 0.5 inches and 1.9 ounces. The 0.5-inch thickness is a temporary assumption because Shippo requires all three dimensions. Staff can change dimensions and weight before requesting each rate.
 
@@ -116,7 +117,7 @@ PRINTNODE_LABEL_PRINTER_ID
 
 5. Save the variables. Never put the API key in the website code or in a variable beginning with `VITE_`.
 
-The fulfillment printer receives the two-page pick-ticket/packing-slip PDF. The label printer receives Shippo's 4×6 PDF label.
+The fulfillment printer receives one branded packing slip for a normal order. The label printer receives Shippo's 4×6 PDF label. A positive PrintNode job ID means the document was accepted by PrintNode; it cannot prove that paper physically exited the printer, so still watch the printer for paper, media, or lid errors.
 
 ## 5. Replace provisional lots
 
@@ -137,8 +138,9 @@ Orders can reserve the starting inventory immediately, even while lot IDs are pr
 5. Open the fulfillment PDF and verify item, quantity, lot, location, and address.
 6. Click **Mark Picked**, then **Mark Packed** after completing those steps.
 7. With a Shippo test token, request rates and create a test label.
-8. Confirm the pick packet goes to the letter printer and the label goes to the 4×6 printer.
-9. Cancel a separate unpaid test order and confirm its reserved units return to available stock.
+8. Confirm one branded packing slip goes to the letter printer and the label goes to the 4×6 printer.
+9. Confirm the admin message says the Shippo test label was suppressed and that no customer tracking email was sent.
+10. Cancel a separate unpaid test order and confirm its reserved units return to available stock.
 
 ## Before the first live label
 
@@ -146,3 +148,4 @@ Orders can reserve the starting inventory immediately, even while lot IDs are pr
 - Confirm 1.9 ounces still reflects the packed shipment. Enter the real packed weight whenever it changes; the UI refuses anything above 16 ounces under this package profile.
 - Switch from the Shippo test token to the live token only after the test label works.
 - Keep the PrintNode computer awake, online, and signed in.
+- On the first real order, verify that both print jobs succeed and that the customer receives one processed-order email with the correct carrier, tracking number, and secure tracking link.
