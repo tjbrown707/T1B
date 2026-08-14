@@ -107,6 +107,13 @@ test("long picking fields wrap without clipping or crossing into adjacent rows",
   );
 });
 
+test("packing slip keeps item checkboxes and only the packed-by footer line", () => {
+  const source = readFileSync("netlify/functions/_shared/fulfillment-pdf.js", "utf8");
+  assert.match(source, /x: 51,[\s\S]*?width: 12,[\s\S]*?height: 12/);
+  assert.match(source, /Packed by: ______________________________/);
+  assert.doesNotMatch(source, /FINAL CHECKS|Package sealed|Packing slip included|Verified by:/);
+});
+
 test("PDF generation fails closed for unpaid, uncommitted, or provisional orders", async () => {
   const order = printableOrder();
   assert.equal(assertOrderPrintable({ ...order, payment_status: "AWAITING_PAYMENT" }), "Confirm payment before printing the packing slip.");

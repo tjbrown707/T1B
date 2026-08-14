@@ -94,7 +94,7 @@ function drawPackingSlip(pdf, fonts, logo, order, rows) {
     pageNumber += 1;
     ({ page, y } = newPage(pdf, fonts, logo, order, pageNumber, "PACKING SLIP - TOTALS"));
   }
-  drawVerificationAndTotals(page, fonts, order, y - 9);
+  drawPackedByAndTotals(page, fonts, order, y - 9);
   drawFooter(page, fonts);
 }
 
@@ -188,24 +188,10 @@ function drawPackingRow(page, fonts, row, layout, y) {
   });
 }
 
-function drawVerificationAndTotals(page, fonts, order, y) {
-  page.drawText("FINAL CHECKS", { x: 42, y, size: 9, font: fonts.bold, color: BLACK });
-  let checkY = y - 22;
-  for (const check of ["Products, doses, lots and quantities match", "Package sealed", "Packing slip included"]) {
-    page.drawRectangle({ x: 42, y: checkY - 2, width: 12, height: 12, borderWidth: 1, borderColor: GREY });
-    page.drawText(check, { x: 63, y: checkY, size: 8.5, font: fonts.regular, color: BLACK });
-    checkY -= 21;
-  }
-  page.drawText("Packed by: ____________________", {
+function drawPackedByAndTotals(page, fonts, order, y) {
+  page.drawText("Packed by: ______________________________", {
     x: 42,
-    y: checkY - 4,
-    size: 8.5,
-    font: fonts.regular,
-    color: BLACK,
-  });
-  page.drawText("Verified by: ____________________", {
-    x: 210,
-    y: checkY - 4,
+    y: y - 4,
     size: 8.5,
     font: fonts.regular,
     color: BLACK,
