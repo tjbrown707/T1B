@@ -12,7 +12,7 @@ import { getEnv, jsonResponse, readBearerToken, readJsonBody } from "./_shared/h
 
 const MAX_BODY_BYTES = 32 * 1024;
 const ORDER_NUMBER_PATTERN = /^T1B-\d{6}-\d{6}$/;
-const CODE_PATTERN = /^[A-Z0-9_-]{1,64}$/;
+const CODE_PATTERN = /^[A-Z0-9_@-]{1,64}$/;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const CUSTOMER_LIMITS = {
   name: 120,

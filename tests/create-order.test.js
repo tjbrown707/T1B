@@ -8,6 +8,7 @@ import createOrder, {
   ordersMatch,
   validateOrderRequest,
 } from "../netlify/functions/create-order.js";
+import validateDiscount from "../netlify/functions/validate-discount.js";
 import { PRODUCTS } from "../src/data/catalog.js";
 
 function validRequest(overrides = {}) {
@@ -37,6 +38,48 @@ test("order requests are trimmed and reduced to catalog ids and quantities", () 
   assert.deepEqual(result.data.items, [{ id: PRODUCTS[0].id, qty: 2 }]);
   assert.equal(result.data.paymentMethod, "Cash App");
   assert.deepEqual(result.data.discountCodes, ["WELCOME10"]);
+});
+
+test("legacy discount codes containing @ pass validation and order submission", async () => {
+  const requestResult = validateOrderRequest(validRequest({ discountCodes: [" m1comb@t "] }));
+  assert.equal(requestResult.error, undefined);
+  assert.deepEqual(requestResult.data.discountCodes, ["M1COMB@T"]);
+
+  const previousNetlify = globalThis.Netlify;
+  globalThis.Netlify = {
+    env: {
+      get(name) {
+        return name === "DISCOUNT_CODES"
+          ? JSON.stringify({
+            "M1COMB@T": { type: "percent", value: 25, label: "25% off" },
+          })
+          : undefined;
+      },
+    },
+  };
+
+  try {
+    const response = await validateDiscount(new Request(
+      "https://www.tierone.bio/.netlify/functions/validate-discount",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: "m1comb@t" }),
+      },
+    ));
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), {
+      valid: true,
+      code: "M1COMB@T",
+      type: "percent",
+      value: 25,
+      label: "25% off",
+    });
+  } finally {
+    if (previousNetlify === undefined) delete globalThis.Netlify;
+    else globalThis.Netlify = previousNetlify;
+  }
 });
 
 test("order request bounds reject malformed or oversized customer input", () => {

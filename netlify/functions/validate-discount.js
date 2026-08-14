@@ -5,7 +5,7 @@ import { createClient } from "@supabase/supabase-js";
 import { isSaleActive } from "../../src/data/pricing.js";
 import { getEnv, jsonResponse, readBearerToken, readJsonBody } from "./_shared/http.js";
 
-const CODE_PATTERN = /^[A-Z0-9_-]{1,64}$/;
+const CODE_PATTERN = /^[A-Z0-9_@-]{1,64}$/;
 const MAX_BODY_BYTES = 8 * 1024;
 
 export default async function handler(request) {
