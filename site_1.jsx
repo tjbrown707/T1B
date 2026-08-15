@@ -49,6 +49,7 @@ import {
   ORDER_STATUS_OPTIONS,
   PAYMENT_RECEIVED_OPTIONS,
   canCancelUnpaidOrder,
+  canCompleteLocalHandoff,
   canConfirmPayment,
   hasOrderManagerRole,
   isLocalHandoff,
@@ -5305,11 +5306,13 @@ function AdminOrdersPage() {
 
       setOrders(previous => previous.map(item => item.id === order.id ? payload.order : item));
       const messages = {
-        confirm_payment: isPrecountedOrder(payload.order)
-          ? `${payload.order.order_number} is paid. Its inventory was already accounted before the August 10 cutoff, so stock was not changed.`
-          : isLocalHandoff(payload.order)
-          ? `${payload.order.order_number} is paid and reserved for local handoff. Inventory was deducted once; printing and postage are blocked.`
-          : `${payload.order.order_number} is paid and ready to pick. Inventory was deducted once.`,
+        confirm_payment: isPrecountedOrder(payload.order) && isLocalHandoff(payload.order)
+          ? `${payload.order.order_number} is paid for local handoff. Its inventory was already accounted before the August 10 cutoff, so stock was not changed. Print the packing slip through PrintNode to queue the customer email.`
+          : isPrecountedOrder(payload.order)
+            ? `${payload.order.order_number} is paid. Its inventory was already accounted before the August 10 cutoff, so stock was not changed.`
+            : isLocalHandoff(payload.order)
+              ? `${payload.order.order_number} is paid and reserved for local handoff. Inventory was deducted once; print the packing slip through PrintNode before handoff. Shipping labels and postage stay disabled.`
+              : `${payload.order.order_number} is paid and ready to pick. Inventory was deducted once.`,
         cancel_unpaid: `${payload.order.order_number} was cancelled and its reserved stock was released.`,
         mark_picked: `${payload.order.order_number} is marked picked.`,
         mark_packed: `${payload.order.order_number} is marked packed.`,
@@ -5327,7 +5330,7 @@ function AdminOrdersPage() {
   }
 
   async function openFulfillmentPdf(order) {
-    if (!canPrintFulfillment(order) || !session?.access_token) return;
+    if (!canPrintFulfillment(order) || !session?.access_token || (isLocalHandoff(order) && !canCompleteLocalHandoff(order))) return;
     const key = `${order.id}:pdf`;
     setActionKey(key);
     setNotice({ type: "", text: "" });
@@ -5365,6 +5368,7 @@ function AdminOrdersPage() {
       });
       const payload = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(payload.error || `Print service returned HTTP ${res.status}`);
+      await fetchOrders();
       setNotice({
         type: orderEmailNoticeType(payload.notification),
         text: `${order.order_number}'s packing slip was sent to the printer.${orderEmailNotice(payload.notification)}`,
@@ -5453,6 +5457,12 @@ function AdminOrdersPage() {
             const fulfillmentAction = nextFulfillmentAction(order);
             const busy = actionKey.startsWith(`${order.id}:`);
             const printReady = canPrintFulfillment(order);
+            const localHandoffReady = canCompleteLocalHandoff(order);
+            const pdfReady = printReady && (!isLocalHandoff(order) || localHandoffReady);
+            const localEmailMessage = isLocalHandoff(order)
+              ? orderEmailStatusMessage(order.trackingEmail)
+              : "";
+            const localEmailNeedsReview = order.trackingEmail?.status === "NEEDS_REVIEW";
             return (
               <article key={order.id} style={{ border: "1px solid var(--border)", background: "rgba(17,17,17,0.55)" }}>
                 <div style={{ display: "grid", gridTemplateColumns: "minmax(170px, 1.15fr) minmax(180px, 1.2fr) minmax(90px, 0.55fr) minmax(190px, 1fr)", gap: 16, alignItems: "center", padding: "16px 18px" }} className="admin-order-row">
@@ -5558,7 +5568,12 @@ function AdminOrdersPage() {
                   )}
                   {order.payment_status === "PAID" && isLocalHandoff(order) && (
                     <div style={{ margin: "0 18px 18px", padding: 14, border: "1px solid rgba(34,197,94,0.4)", background: "rgba(34,197,94,0.07)", color: "#22c55e", fontFamily: "'Rajdhani', sans-serif", fontSize: 15 }}>
-                      Local handoff — no packing slip, shipping label, or postage can be generated for this order.
+                      <div>{localHandoffReady ? "Local handoff — the PrintNode packing-slip job and customer email are recorded. You can now mark the order handed off." : "Local handoff — use Print Packing Slip below first. That PrintNode job queues the customer email and unlocks Mark Handed Off; Preview PDF is unavailable until then."} Shipping labels and postage stay disabled.</div>
+                      {localEmailMessage && (
+                        <div role={localEmailNeedsReview ? "alert" : "status"} style={{ marginTop: 9, color: localEmailNeedsReview ? "#ff6b6b" : "var(--text-secondary)", fontSize: 14 }}>
+                          {localEmailMessage}
+                        </div>
+                      )}
                     </div>
                   )}
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 14, margin: "0 18px 18px", paddingTop: 16, borderTop: "1px solid var(--border)" }}>
@@ -5566,19 +5581,23 @@ function AdminOrdersPage() {
                       <AdminDetailHeading>Fulfillment documents</AdminDetailHeading>
                       <div style={{ color: "var(--text-dim)", fontFamily: "'Rajdhani', sans-serif", fontSize: 14 }}>
                         {isPrecountedOrder(order) && (order.allocations || []).length === 0
-                          ? "Pre-counted cutoff order — no new inventory allocation or deduction was created."
-                          : isLocalHandoff(order)
-                          ? "Local handoff selected — documents and postage are intentionally disabled."
+                          ? isLocalHandoff(order) && printReady
+                            ? localHandoffReady
+                              ? "Pre-counted cutoff order — the PrintNode packing-slip job is recorded. Preview PDF is now available for reference."
+                              : "Pre-counted cutoff order — Print Packing Slip uses the original order items without a new lot allocation or stock deduction, then queues the customer email."
+                            : "Pre-counted cutoff order — no new inventory allocation or deduction was created."
                           : printReady
-                          ? "The branded packing slip is ready."
-                          : orderHasProvisionalLots(order)
-                            ? "Replace provisional lot IDs in Inventory before printing."
-                            : "Confirm payment before printing."}
+                            ? isLocalHandoff(order)
+                              ? localHandoffReady ? "The PrintNode packing-slip job is recorded. Preview PDF is now available for reference." : "Use Print Packing Slip first; Preview PDF and Mark Handed Off unlock after PrintNode records the job and queues the email."
+                              : "The branded packing slip is ready."
+                            : orderHasProvisionalLots(order)
+                              ? "Replace provisional lot IDs in Inventory before printing."
+                              : "Confirm payment before printing."}
                       </div>
                     </div>
-                    {!isLocalHandoff(order) && <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                      <button type="button" disabled={busy || !printReady} onClick={() => openFulfillmentPdf(order)} style={adminSecondaryButton(busy || !printReady)}>
-                        {actionKey === `${order.id}:pdf` ? "Opening…" : "Open PDF"}
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                      <button type="button" disabled={busy || !pdfReady} onClick={() => openFulfillmentPdf(order)} style={adminSecondaryButton(busy || !pdfReady)}>
+                        {actionKey === `${order.id}:pdf` ? "Opening…" : isLocalHandoff(order) ? "Preview PDF" : "Open PDF"}
                       </button>
                       <button type="button" disabled={busy || !printReady} onClick={() => printFulfillment(order)} style={adminSecondaryButton(busy || !printReady)}>
                         {actionKey === `${order.id}:print` ? "Printing…" : "Print Packing Slip"}
@@ -5590,7 +5609,7 @@ function AdminOrdersPage() {
                           }
                         }} style={adminDangerButton(busy)}>Cancel Unpaid</button>
                       )}
-                    </div>}
+                    </div>
                   </div>
                 </details>
               </article>
@@ -5662,12 +5681,12 @@ function OrderPaymentConfirmation({ order, busy, confirming, onConfirm }) {
                 </label>
                 <label style={{ display: "flex", alignItems: "flex-start", gap: 9, marginTop: 12, color: "var(--text-secondary)", fontFamily: "'Rajdhani', sans-serif", fontSize: 15, cursor: "pointer" }}>
                   <input type="radio" name={`fulfillment-${order.id}`} value={FULFILLMENT_METHODS.LOCAL_HANDOFF} checked={fulfillmentMethod === FULFILLMENT_METHODS.LOCAL_HANDOFF} onChange={event => setFulfillmentMethod(event.target.value)} />
-                  <span><strong style={{ color: "var(--text-primary)" }}>Hand directly to customer</strong><br />No packing slip, shipping label, postage, or automatic printing.</span>
+                  <span><strong style={{ color: "var(--text-primary)" }}>Hand directly to customer</strong><br />Print a packing slip and send a customer confirmation email. No shipping label or postage.</span>
                 </label>
               </fieldset>
               {fulfillmentMethod === FULFILLMENT_METHODS.LOCAL_HANDOFF && (
                 <div style={{ padding: 11, border: "1px solid rgba(34,197,94,0.4)", background: "rgba(34,197,94,0.07)", color: "#22c55e", fontFamily: "'Rajdhani', sans-serif", fontSize: 14 }}>
-                  The order will be ready for a final <strong>Mark Handed Off</strong> action after payment is confirmed.
+                  After payment is confirmed, print the packing slip to send the confirmation email, then use <strong>Mark Handed Off</strong> when the customer receives the order.
                 </div>
               )}
             </div>
@@ -6035,13 +6054,13 @@ function AdminOperationsNav({ navigate, active }) {
 
 function orderEmailNotice(notification) {
   const messages = {
-    SENT: " The customer tracking email was sent.",
-    QUEUED: " The customer tracking email is queued for automatic delivery.",
-    PENDING: " The customer tracking email is queued for automatic delivery.",
-    SENDING: " The customer tracking email is being sent.",
-    ERROR: " The customer tracking email is queued for an automatic retry.",
-    RETRYING: " The customer tracking email is queued for an automatic retry.",
-    NEEDS_REVIEW: " The customer tracking email needs staff attention.",
+    SENT: " The customer confirmation email was sent.",
+    QUEUED: " The customer confirmation email is queued for automatic delivery.",
+    PENDING: " The customer confirmation email is queued for automatic delivery.",
+    SENDING: " The customer confirmation email is being sent.",
+    ERROR: " The customer confirmation email is queued for an automatic retry.",
+    RETRYING: " The customer confirmation email is queued for an automatic retry.",
+    NEEDS_REVIEW: " The customer confirmation email needs staff attention.",
     TEST_LABEL: " This is a Shippo test label, so no customer email was sent.",
     WAITING_FOR_PACKING_SLIP: " The customer email will send after the packing slip is printed.",
     WAITING_FOR_LABEL: " The customer email will send after a shipping label is printed.",
@@ -6053,21 +6072,24 @@ function orderEmailNoticeType(notification) {
   return notification?.state === "NEEDS_REVIEW" ? "error" : "success";
 }
 
-function trackingEmailStatusMessage(notification) {
+function orderEmailStatusMessage(notification) {
   const status = String(notification?.status || "").toUpperCase();
+  const emailName = notification?.fulfillment_method === FULFILLMENT_METHODS.LOCAL_HANDOFF
+    ? "Customer hand-delivery confirmation email"
+    : "Customer tracking email";
   if (status === "SENT") {
-    const sentAt = notification?.sent_at ? ` ${formatAdminOrderDate(notification.sent_at)}` : "";
-    return `Customer tracking email sent${sentAt}.`;
+    const sentAt = notification?.sent_at ? " " + formatAdminOrderDate(notification.sent_at) : "";
+    return emailName + " sent" + sentAt + ".";
   }
   if (status === "NEEDS_REVIEW") {
-    return `Customer tracking email needs staff attention. ${notification?.last_error || "Check the Netlify function logs before taking further action."}`;
+    return emailName + " needs staff attention. " + (notification?.last_error || "Check the Netlify function logs before taking further action.");
   }
   if (status === "ERROR") {
-    const retryAt = notification?.next_attempt_at ? ` after ${formatAdminOrderDate(notification.next_attempt_at)}` : "";
-    return `Customer tracking email is queued for an automatic retry${retryAt}.`;
+    const retryAt = notification?.next_attempt_at ? " after " + formatAdminOrderDate(notification.next_attempt_at) : "";
+    return emailName + " is queued for an automatic retry" + retryAt + ".";
   }
-  if (status === "SENDING") return "Customer tracking email is being sent.";
-  if (status === "PENDING") return "Customer tracking email is queued for automatic delivery.";
+  if (status === "SENDING") return emailName + " is being sent.";
+  if (status === "PENDING") return emailName + " is queued for automatic delivery.";
   return "";
 }
 
@@ -6083,7 +6105,7 @@ function OrderShippingControls({ order, session, onShipment, setNotice }) {
   const trackingNumber = shipment?.tracking_number || shipment?.trackingNumber || "";
   const trackingUrl = shipment?.tracking_url || shipment?.trackingUrl || "";
   const trackingEmail = order.trackingEmail || null;
-  const trackingEmailMessage = trackingEmailStatusMessage(trackingEmail);
+  const trackingEmailMessage = orderEmailStatusMessage(trackingEmail);
   const trackingEmailNeedsReview = trackingEmail?.status === "NEEDS_REVIEW";
   const provisional = orderHasProvisionalLots(order);
   const readyForLabel = order.fulfillment_status === "PACKED";

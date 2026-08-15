@@ -56,13 +56,13 @@ function createFakeSupabase({ isTest = false, fulfillmentMethod = "SHIP" } = {})
   const supabase = {
     async rpc(name, args) {
       if (name === "record_order_print_submission") {
+        if (fulfillmentMethod === "LOCAL_HANDOFF" && args.p_event_type === LABEL_EVENT) {
+          return { data: null, error: new Error("local_handoff_does_not_ship") };
+        }
         state.events.add(args.p_event_type);
         const hasPacking = state.events.has(PACKING_EVENT);
         const hasLabel = state.events.has(LABEL_EVENT);
         if (fulfillmentMethod === "LOCAL_HANDOFF") {
-          if (args.p_event_type === LABEL_EVENT) {
-            return { data: null, error: new Error("local_handoff_does_not_ship") };
-          }
           if (!hasPacking) {
             return { data: [{ delivery_id: null, delivery_status: null, readiness: "WAITING_FOR_PACKING_SLIP" }], error: null };
           }
@@ -293,6 +293,23 @@ test("local handoff sends once after the packing slip without a shipping label",
   assert.equal(reprint.state, "SENT");
   assert.equal(reprint.alreadySent, true);
   assert.equal(counter.calls, 1);
+});
+
+test("a rejected local-handoff label records no event, outbox, or email", async () => {
+  const { supabase, state } = createFakeSupabase({ fulfillmentMethod: "LOCAL_HANDOFF" });
+  const counter = { calls: 0 };
+  const result = await recordOrderPrintSubmission({
+    supabase,
+    orderId: handoffDelivery().order_id,
+    eventType: LABEL_EVENT,
+    actorUserId: "44444444-4444-4444-8444-444444444444",
+    jobId: 152,
+    sendOptions: { apiKey: "re_test_only", fetchImpl: successfulResend(counter) },
+  });
+  assert.equal(result.state, "NEEDS_REVIEW");
+  assert.equal(state.events.has(LABEL_EVENT), false);
+  assert.equal(state.outbox, null);
+  assert.equal(counter.calls, 0);
 });
 
 test("a persisted Shippo test label stays suppressed after the token is swapped", async () => {

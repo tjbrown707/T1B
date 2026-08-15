@@ -11,13 +11,34 @@ const WHITE = rgb(1, 1, 1);
 
 let cachedLogoBytes = null;
 
+export function isAllocationlessLegacyLocalHandoff(order) {
+  const allocations = order?.allocations;
+  const items = order?.items;
+  return order?.payment_status === "PAID"
+    && order?.fulfillment_method === "LOCAL_HANDOFF"
+    && order?.inventory_accounting_mode === "PRECOUNTED_LEGACY"
+    && Array.isArray(allocations)
+    && allocations.length === 0
+    && Array.isArray(items)
+    && items.length > 0
+    && items.length <= 200
+    && items.every(item => {
+      const quantity = Number(item?.qty);
+      return String(item?.id || item?.name || "").trim().length > 0
+        && Number.isInteger(quantity)
+        && quantity > 0
+        && quantity <= 1000;
+    });
+}
+
 export function assertOrderPrintable(order) {
   if (order?.payment_status !== "PAID") return "Confirm payment before printing the packing slip.";
-  if (order?.fulfillment_method === "LOCAL_HANDOFF") {
-    return "Local handoff orders do not create a packing slip.";
-  }
   const allocations = Array.isArray(order?.allocations) ? order.allocations : [];
-  if (allocations.length === 0) return "This order has no inventory allocation.";
+  if (allocations.length === 0) {
+    return isAllocationlessLegacyLocalHandoff(order)
+      ? ""
+      : "This order has no inventory allocation.";
+  }
   if (allocations.some(allocation => !allocation?.lot
       || allocation.lot.is_provisional
       || !String(allocation.lot.lot_number || "").trim())) {
@@ -30,12 +51,22 @@ export function assertOrderPrintable(order) {
 }
 
 export function buildPackingRows(order) {
+  if (isAllocationlessLegacyLocalHandoff(order)) {
+    return order.items.map(item => ({
+      productId: safe(item.id || ""),
+      item: (safe(item.name || item.id) + " " + safe(item.dose || "")).trim(),
+      lotNumber: "Not recorded (legacy)",
+      storageLocation: "-",
+      quantity: Number(item.qty),
+    }));
+  }
+
   const itemMap = new Map((order?.items || []).map(item => [item.id, item]));
   return (order?.allocations || []).map(allocation => {
     const item = itemMap.get(allocation.productId) || {};
     return {
       productId: safe(allocation.productId),
-      item: `${safe(item.name || allocation.productId)} ${safe(item.dose || "")}`.trim(),
+      item: (safe(item.name || allocation.productId) + " " + safe(item.dose || "")).trim(),
       lotNumber: safe(allocation.lot?.lot_number || "-"),
       storageLocation: safe(allocation.lot?.storage_location || "-"),
       quantity: Number(allocation.quantity) || 0,
@@ -68,7 +99,20 @@ function drawPackingSlip(pdf, fonts, logo, order, rows) {
 
   y = detailPair(page, fonts, "Order", order.order_number, "Order date", formatDate(order.created_at), y);
   y = detailPair(page, fonts, "Customer", order.customer_name, "Payment", "Paid", y);
-  y = drawWrapped(page, fonts, `Ship to: ${shippingAddress(order)}`, PAGE.margin, y - 2, 520, 9, GREY) - 15;
+  const deliveryLabel = order.fulfillment_method === "LOCAL_HANDOFF" ? "Deliver to" : "Ship to";
+  y = drawWrapped(page, fonts, deliveryLabel + ": " + shippingAddress(order), PAGE.margin, y - 2, 520, 9, GREY) - 15;
+  if (isAllocationlessLegacyLocalHandoff(order)) {
+    y = drawWrapped(
+      page,
+      fonts,
+      "Legacy cutoff order: inventory was pre-counted before lot tracking; lot and storage details were not recorded.",
+      PAGE.margin,
+      y,
+      520,
+      8,
+      GREY,
+    ) - 12;
+  }
 
   page.drawText("PICK, PACK & VERIFY", { x: PAGE.margin, y, size: 10, font: fonts.bold, color: BLACK });
   y -= 19;

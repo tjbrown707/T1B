@@ -50,9 +50,29 @@ export function orderHasProvisionalLots(order) {
       || !String(allocation.lot.lot_number || "").trim());
 }
 
-export function canPrintFulfillment(order) {
+export function isAllocationlessLegacyLocalHandoff(order) {
+  const allocations = order?.allocations;
+  const items = order?.items;
   return order?.payment_status === "PAID"
-    && order?.fulfillment_method !== "LOCAL_HANDOFF"
+    && order?.fulfillment_method === "LOCAL_HANDOFF"
+    && order?.inventory_accounting_mode === "PRECOUNTED_LEGACY"
+    && Array.isArray(allocations)
+    && allocations.length === 0
+    && Array.isArray(items)
+    && items.length > 0
+    && items.length <= 200
+    && items.every(item => {
+      const quantity = Number(item?.qty);
+      return String(item?.id || item?.name || "").trim().length > 0
+        && Number.isInteger(quantity)
+        && quantity > 0
+        && quantity <= 1000;
+    });
+}
+
+export function canPrintFulfillment(order) {
+  if (isAllocationlessLegacyLocalHandoff(order)) return true;
+  return order?.payment_status === "PAID"
     && Array.isArray(order?.allocations)
     && order.allocations.length > 0
     && order.allocations.every(allocation => allocation?.state === "COMMITTED")

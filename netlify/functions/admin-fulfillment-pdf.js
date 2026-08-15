@@ -6,7 +6,7 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3
 const METHODS = "GET, OPTIONS";
 const ORDER_FIELDS = [
   "id", "order_number", "status", "payment_status", "fulfillment_status", "fulfillment_method",
-  "payment_confirmed_at", "items", "subtotal", "discount_amount", "shipping",
+  "inventory_accounting_mode", "payment_confirmed_at", "items", "subtotal", "discount_amount", "shipping",
   "total", "payment_method", "customer_name", "customer_email", "customer_phone",
   "ship_address", "ship_city", "ship_state", "ship_zip", "created_at",
 ].join(",");
@@ -47,6 +47,34 @@ export default async function handler(request) {
   if (blocked) return fail(409, blocked);
 
   try {
+    if (order.fulfillment_method === "LOCAL_HANDOFF") {
+      const [printEventResult, deliveryResult] = await Promise.all([
+        auth.supabase
+          .from("order_events")
+          .select("details")
+          .eq("order_id", orderId)
+          .eq("event_type", "FULFILLMENT_PACKET_PRINTED"),
+        auth.supabase
+          .from("order_notification_outbox")
+          .select("id")
+          .eq("order_id", orderId)
+          .eq("notification_type", "ORDER_PROCESSED")
+          .eq("fulfillment_method", "LOCAL_HANDOFF")
+          .eq("template_version", 2)
+          .limit(1),
+      ]);
+      if (printEventResult.error || deliveryResult.error) {
+        console.error("admin-fulfillment-pdf: local print readiness failed:", printEventResult.error || deliveryResult.error);
+        return fail(500, "The packing-slip print status could not be verified.");
+      }
+      const printRecorded = (printEventResult.data || []).some(event => {
+        const jobId = Number(event?.details?.printnode_job_id);
+        return Number.isInteger(jobId) && jobId > 0;
+      });
+      if (!printRecorded || !(deliveryResult.data || []).length) {
+        return fail(409, "Use Print Packing Slip first so PrintNode records the job and queues the customer email.");
+      }
+    }
     const bytes = await buildFulfillmentPdf(order);
     console.info(`admin-fulfillment-pdf: staff ${auth.user.id} generated ${order.order_number}`);
     return new Response(bytes, {

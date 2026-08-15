@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { Buffer } from "node:buffer";
 import {
   ORDER_STATUS_VALUES,
+  canCompleteLocalHandoff,
   canDeleteOrder,
   hasOrderManagerRole,
   isLocalHandoff,
@@ -35,21 +36,31 @@ test("orders remain permanent audit records even after cancellation", () => {
   assert.equal(canDeleteOrder("cancelled"), false);
 });
 
-test("local handoff orders use a direct completion action", () => {
+test("local handoff completion unlocks only after the durable print and email records", () => {
   const order = {
     payment_status: "PAID",
     fulfillment_status: "READY_TO_PICK",
     fulfillment_method: "LOCAL_HANDOFF",
   };
   assert.equal(isLocalHandoff(order), true);
-  assert.deepEqual(nextFulfillmentAction(order), {
+  assert.equal(canCompleteLocalHandoff(order), false);
+  assert.equal(nextFulfillmentAction(order), null);
+
+  const ready = {
+    ...order,
+    packingSlipPrintRecorded: true,
+    trackingEmail: { fulfillment_method: "LOCAL_HANDOFF", template_version: 2, status: "PENDING" },
+  };
+  assert.equal(canCompleteLocalHandoff(ready), true);
+  assert.deepEqual(nextFulfillmentAction(ready), {
     action: "mark_handed_off",
     label: "Mark Handed Off",
     target: "DELIVERED",
   });
+  assert.equal(canCompleteLocalHandoff({ ...ready, packingSlipPrintRecorded: false }), false);
+  assert.equal(canCompleteLocalHandoff({ ...ready, trackingEmail: { ...ready.trackingEmail, template_version: 1 } }), false);
   assert.equal(nextFulfillmentAction({ ...order, fulfillment_method: "SHIP" }).action, "mark_picked");
 });
-
 test("pre-counted cutoff orders are identified independently of fulfillment", () => {
   assert.equal(isPrecountedOrder({ inventory_accounting_mode: "PRECOUNTED_LEGACY" }), true);
   assert.equal(isPrecountedOrder({ inventory_accounting_mode: "TRACKED" }), false);

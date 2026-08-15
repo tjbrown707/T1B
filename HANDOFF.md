@@ -1,6 +1,6 @@
 # Handoff — pick up here
 
-Written 2026-08-07, updated 2026-08-12. Read this before starting work; it
+Written 2026-08-07, updated 2026-08-14. Read this before starting work; it
 records state that is not obvious from the code or the git log.
 
 ---
@@ -16,9 +16,11 @@ for unusually large orders, so no fulfillment data is clipped to force a
 single sheet.
 
 For shipping orders, the customer tracking email is queued only after both the
-packing slip and shipping label return positive PrintNode job IDs. It uses the
-existing Netlify `RESEND_API_KEY`, includes the saved carrier/tracking details,
-and is idempotent across reprints and retries. Shippo's returned `test` flag is
+packing slip and shipping label return positive PrintNode job IDs. For local
+handoff, the same branded packing slip is available and its positive PrintNode
+job ID alone queues a separate no-tracking confirmation email. Both use the
+existing Netlify `RESEND_API_KEY` and are idempotent across reprints and retries.
+Shippo's returned `test` flag is
 persisted with the label; test and unknown-mode labels never email customers,
 even after the environment token changes. A protected Supabase outbox and a
 five-minute Netlify scheduled function recover temporary mail failures without
@@ -26,9 +28,12 @@ making a successful print look failed. PrintNode acceptance confirms spooler
 submission, not that paper physically exited the printer.
 
 Migrations: `20260814170438_order_processed_email_outbox.sql`,
-`20260814174429_order_notification_outbox_actor_index.sql`, and
-`20260814175636_harden_order_processed_email_queue.sql`. No historical orders
-are backfilled.
+`20260814174429_order_notification_outbox_actor_index.sql`,
+`20260814175636_harden_order_processed_email_queue.sql`,
+`20260814193000_local_handoff_packing_email.sql`, and
+`20260814203000_require_local_handoff_print_before_delivery.sql`. No historical
+orders are backfilled. Local **Mark Handed Off** stays locked until the positive
+PrintNode packing-slip audit and version-2 email outbox row both exist.
 
 ### August 10 inventory cutoff — DATABASE AND WEBSITE LIVE
 
@@ -73,9 +78,15 @@ Added on 2026-08-11 in migration
 `20260812051446_local_handoff_and_inventory_value.sql`, which is already applied
 to production. Payment confirmation now records the actual received-via channel
 (Cash App, Venmo, Cash, or Other) and either shipping or local handoff. Local
-handoff orders can move directly to **Mark Handed Off** and are blocked from
-fulfillment PDFs, PrintNode, Shippo rates, and label purchases in both server
-code and a database trigger. The inventory overview also calculates current
+handoff orders can print the branded packing slip and send a processed-order
+confirmation after PrintNode accepts that slip. **Mark Handed Off** unlocks only
+after that accepted print and durable email queue are recorded. Pre-counted
+cutoff orders with no allocation print their original order items with an honest
+legacy no-lot marker and never change inventory. Shippo rates, shipping-label
+printing/purchases, and postage remain blocked in the UI, server code, and
+database trigger.
+
+The inventory overview also calculates current
 on-hand retail value from the active single-vial catalog prices. Existing nine
 orders were preserved as shipping orders. The final `npm run verify` is green:
 zero lint problems, 97 tests, route smoke, build, and secret scan.

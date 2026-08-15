@@ -13,7 +13,7 @@ The secure inventory, order workflow, and fulfillment code went live on 2026-08-
 - Fulfillment documents and shipping labels stay blocked until payment is confirmed and every allocated vial has a real lot number.
 - Shippo is called directly by the secure server function. Supabase does not need to appear in Shippo's platform-sync list.
 - A purchased Shippo 4×6 label can print automatically through PrintNode.
-- For shipping orders, the customer receives a branded processed-order email with the tracking number after both the packing slip and a live Shippo label have been accepted by PrintNode. It normally sends immediately or within five minutes. Shippo test labels never email customers, and temporary email failures retry automatically.
+- For shipping orders, the customer receives a branded processed-order email with tracking after both the packing slip and a live Shippo label have been accepted by PrintNode. For local handoff, printing the packing slip sends a branded confirmation without tracking. Both normally send immediately or within five minutes; reprints do not send duplicates, Shippo test labels never email customers, and temporary email failures retry automatically.
 
 The default parcel is 9 × 4.25 × 0.5 inches and 1.9 ounces. The 0.5-inch thickness is a temporary assumption because Shippo requires all three dimensions. Staff can change dimensions and weight before requesting each rate.
 
@@ -79,9 +79,16 @@ The customer address, parcel measurements, and selected rate are sent only from 
 ### Local handoff orders
 
 When confirming payment in `/admin/orders`, choose the actual payment channel
-and select **Hand directly to customer**. Inventory is committed normally, but
-the order permanently blocks fulfillment PDFs, PrintNode jobs, Shippo rates,
-and postage. Use **Mark Handed Off** when the customer receives it.
+and select **Hand directly to customer**. Inventory is committed normally. Use
+**Print Packing Slip**; once PrintNode accepts that job, the customer confirmation
+email is durably queued and **Mark Handed Off** unlocks. **Preview PDF** becomes
+available only after that recorded print and does not trigger another email. The
+order permanently blocks Shippo rates, shipping labels, and postage. Use **Mark
+Handed Off** when the customer receives it.
+
+For a pre-counted cutoff order with no lot allocation, the packing slip uses the
+original ordered items and clearly marks the lot as not recorded. It creates no
+reservation, lot assignment, inventory deduction, or movement record.
 
 The confirmation window also records **Amount received**, defaulting to the
 original order total. For a confirmed order, expand **View fulfillment

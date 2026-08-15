@@ -8,6 +8,7 @@ import {
   assertOrderPrintable,
   buildFulfillmentPdf,
   buildPackingRows,
+  isAllocationlessLegacyLocalHandoff,
   packingRowLayout,
 } from "../netlify/functions/_shared/fulfillment-pdf.js";
 
@@ -114,10 +115,56 @@ test("packing slip keeps item checkboxes and only the packed-by footer line", ()
   assert.doesNotMatch(source, /FINAL CHECKS|Package sealed|Packing slip included|Verified by:/);
 });
 
+test("local handoff produces the same branded one-page packing slip", async () => {
+  const order = { ...printableOrder(), fulfillment_method: "LOCAL_HANDOFF" };
+  assert.equal(assertOrderPrintable(order), "");
+  const document = await PDFDocument.load(await buildFulfillmentPdf(order));
+  assert.equal(document.getPageCount(), 1);
+  assert.equal(document.getTitle(), "Tier One packing slip - T1B-260811-123456");
+});
+
+test("pre-counted local handoff without allocations prints honest original-item rows", async () => {
+  const order = {
+    ...printableOrder(),
+    fulfillment_method: "LOCAL_HANDOFF",
+    inventory_accounting_mode: "PRECOUNTED_LEGACY",
+    allocations: [],
+  };
+  assert.equal(isAllocationlessLegacyLocalHandoff(order), true);
+  assert.equal(assertOrderPrintable(order), "");
+  assert.deepEqual(buildPackingRows(order).map(row => ({
+    item: row.item,
+    lotNumber: row.lotNumber,
+    storageLocation: row.storageLocation,
+    quantity: row.quantity,
+  })), [{
+    item: "BPC-157 5 mg",
+    lotNumber: "Not recorded (legacy)",
+    storageLocation: "-",
+    quantity: 2,
+  }]);
+  const document = await PDFDocument.load(await buildFulfillmentPdf(order));
+  assert.equal(document.getPageCount(), 1);
+  const source = readFileSync("netlify/functions/_shared/fulfillment-pdf.js", "utf8");
+  assert.match(source, /inventory was pre-counted before lot tracking/);
+
+  assert.match(assertOrderPrintable({ ...order, fulfillment_method: "SHIP" }), /no inventory allocation/);
+  assert.match(assertOrderPrintable({ ...order, inventory_accounting_mode: "TRACKED" }), /no inventory allocation/);
+  assert.match(assertOrderPrintable({ ...order, payment_status: "AWAITING_PAYMENT" }), /Confirm payment/);
+  assert.match(assertOrderPrintable({
+    ...order,
+    allocations: [{
+      productId: "bpc157-5",
+      quantity: 2,
+      state: "RESERVED",
+      lot: { lot_number: "LOT-26-A", is_provisional: false },
+    }],
+  }), /not been committed/);
+});
+
 test("PDF generation fails closed for unpaid, uncommitted, or provisional orders", async () => {
   const order = printableOrder();
   assert.equal(assertOrderPrintable({ ...order, payment_status: "AWAITING_PAYMENT" }), "Confirm payment before printing the packing slip.");
-  assert.equal(assertOrderPrintable({ ...order, fulfillment_method: "LOCAL_HANDOFF" }), "Local handoff orders do not create a packing slip.");
   assert.match(assertOrderPrintable({ ...order, allocations: [{ ...order.allocations[0], state: "RESERVED" }] }), /not been committed/);
   assert.match(assertOrderPrintable({ ...order, allocations: [{ ...order.allocations[0], lot: { is_provisional: true } }] }), /real lot number/);
   await assert.rejects(() => buildFulfillmentPdf({ ...order, allocations: [] }), /no inventory allocation/);

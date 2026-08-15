@@ -78,21 +78,24 @@ async function listOrders(supabase, params) {
   let allocations;
   let shipments;
   let notifications;
+  let packingSlipPrintRecords;
   try {
-    [allocations, shipments, notifications] = await Promise.all([
+    [allocations, shipments, notifications, packingSlipPrintRecords] = await Promise.all([
       loadOrderAllocations(supabase, orders.map(order => order.id)),
       loadOrderShipments(supabase, orders.map(order => order.id)),
       loadOrderNotifications(supabase, orders.map(order => order.id)),
+      loadPackingSlipPrintRecords(supabase, orders.map(order => order.id)),
     ]);
   } catch (hydrationError) {
     console.error("admin-orders: related records failed:", hydrationError);
-    return fail(500, "Order inventory, shipping, and email details could not be loaded.");
+    return fail(500, "Order inventory, shipping, print, and email details could not be loaded.");
   }
   const hydrated = orders.map(order => ({
     ...order,
     allocations: allocations.get(order.id) || [],
     shipment: shipments.get(order.id) || null,
     trackingEmail: notifications.get(order.id) || null,
+    packingSlipPrintRecorded: packingSlipPrintRecords.has(order.id),
   }));
   const nextCursor = hasMore && orders.length > 0 ? encodeCursor(orders[orders.length - 1]) : null;
   return jsonResponse(200, {
@@ -147,7 +150,7 @@ async function loadOrderNotifications(supabase, orderIds) {
   if (orderIds.length === 0) return grouped;
   const { data, error } = await supabase
     .from("order_notification_outbox")
-    .select("order_id,status,attempt_count,next_attempt_at,sent_at,last_error,updated_at")
+    .select("order_id,fulfillment_method,template_version,status,attempt_count,next_attempt_at,sent_at,last_error,updated_at")
     .eq("notification_type", "ORDER_PROCESSED")
     .in("order_id", orderIds);
   if (error) {
@@ -156,6 +159,25 @@ async function loadOrderNotifications(supabase, orderIds) {
   }
   for (const notification of data || []) grouped.set(notification.order_id, notification);
   return grouped;
+}
+
+async function loadPackingSlipPrintRecords(supabase, orderIds) {
+  const recorded = new Set();
+  if (orderIds.length === 0) return recorded;
+  const { data, error } = await supabase
+    .from("order_events")
+    .select("order_id,details")
+    .eq("event_type", "FULFILLMENT_PACKET_PRINTED")
+    .in("order_id", orderIds);
+  if (error) {
+    console.error("admin-orders: packing-slip print audit read failed:", error);
+    throw new Error("Packing-slip print details could not be loaded.");
+  }
+  for (const event of data || []) {
+    const jobId = Number(event?.details?.printnode_job_id);
+    if (Number.isInteger(jobId) && jobId > 0) recorded.add(event.order_id);
+  }
+  return recorded;
 }
 
 async function updateOrderWorkflow(supabase, user, request) {
@@ -197,11 +219,13 @@ async function updateOrderWorkflow(supabase, user, request) {
   let allocations;
   let shipments;
   let notifications;
+  let packingSlipPrintRecords;
   try {
-    [allocations, shipments, notifications] = await Promise.all([
+    [allocations, shipments, notifications, packingSlipPrintRecords] = await Promise.all([
       loadOrderAllocations(supabase, [orderId]),
       loadOrderShipments(supabase, [orderId]),
       loadOrderNotifications(supabase, [orderId]),
+      loadPackingSlipPrintRecords(supabase, [orderId]),
     ]);
   } catch (hydrationError) {
     console.error("admin-orders: updated order hydration failed:", hydrationError);
@@ -212,6 +236,7 @@ async function updateOrderWorkflow(supabase, user, request) {
     allocations: allocations.get(orderId) || [],
     shipment: shipments.get(orderId) || null,
     trackingEmail: notifications.get(orderId) || null,
+    packingSlipPrintRecorded: packingSlipPrintRecords.has(orderId),
   };
   console.info(`admin-orders: staff ${user.id} performed ${action} on ${order.order_number}`);
   return jsonResponse(200, { order }, METHODS);
@@ -291,6 +316,9 @@ function workflowError(error, action) {
   }
   if (message.includes("paid_order_requires_refund")) {
     return fail(409, "A paid order cannot be cancelled as unpaid. Use the refund workflow instead.");
+  }
+  if (message.includes("local_handoff_requires_printnode_packing_slip")) {
+    return fail(409, "Print the packing slip through PrintNode before marking this order handed off.");
   }
   if (message.includes("invalid_fulfillment_method")
       || message.includes("invalid_payment_received_via")

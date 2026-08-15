@@ -10,7 +10,7 @@ const METHODS = "GET, POST, OPTIONS";
 const MAX_BODY_BYTES = 4 * 1024;
 const ORDER_FIELDS = [
   "id", "order_number", "status", "payment_status", "fulfillment_status", "fulfillment_method",
-  "payment_confirmed_at", "items", "subtotal", "discount_amount", "shipping",
+  "inventory_accounting_mode", "payment_confirmed_at", "items", "subtotal", "discount_amount", "shipping",
   "total", "payment_method", "customer_name", "customer_email", "customer_phone",
   "ship_address", "ship_city", "ship_state", "ship_zip", "created_at",
 ].join(",");

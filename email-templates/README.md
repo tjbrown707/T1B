@@ -172,17 +172,21 @@ once the underlying cause is fixed, the pending email needs one manual re-fire.
 
 ---
 
-## 4. Processed-order tracking email
+## 4. Processed-order emails
 
-`order-processed-v1.html` is read directly by the Netlify fulfillment functions;
-do not paste it into Supabase, EmailJS, or Resend. It uses the existing Netlify
-`RESEND_API_KEY`, so there is no additional dashboard secret to create.
+`order-processed-v1.html` and `order-processed-handoff-v2.html` are read directly
+by the Netlify fulfillment functions; do not paste them into Supabase, EmailJS,
+or Resend. They use the existing Netlify `RESEND_API_KEY`, so there is no
+additional dashboard secret to create.
 
 For a paid shipping order, whichever required PrintNode job finishes second
 (the branded packing slip or the 4×6 shipping label) atomically queues the
 email. The message says the order is prepared for carrier pickup and includes
 the carrier, service, tracking number, and an HTTPS tracking link when Shippo
-provides one. A reprint does not send a second email.
+provides one. For a paid local-handoff order, the accepted packing-slip
+PrintNode job alone queues a separate confirmation saying the order was
+processed and prepared for hand delivery; it contains no carrier or tracking
+data. A reprint does not send a second email.
 
 Shippo's `transaction.test` value is saved with the label. Test labels and
 older labels whose mode is unknown fail closed and never email a customer,
@@ -190,10 +194,11 @@ even if the Netlify Shippo token is changed to live later. Failed Resend sends
 remain in a protected outbox and the scheduled Netlify function retries them
 every five minutes. Ambiguous or repeated failures stop automatically for
 staff review rather than risk sending a late duplicate. The staff order screen
-shows whether the tracking email is queued, sent, retrying, or needs attention.
-The `v1` template and message renderer are intentionally immutable: do not
-edit an old version's HTML, text, subject, sender, or reply-to after it has sent
-live mail; create a new message version and idempotency-key version together.
+shows whether the relevant customer email is queued, sent, retrying, or needs
+attention. The shipping `v1` and hand-delivery `v2` templates and message
+renderers are intentionally immutable: do not edit an old version's HTML, text,
+subject, sender, or reply-to after it has sent live mail; create a new message
+version and idempotency-key version together.
 
 ### Known limits
 

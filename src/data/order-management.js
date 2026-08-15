@@ -71,10 +71,18 @@ export function canCancelUnpaidOrder(order) {
   return order?.payment_status === "AWAITING_PAYMENT";
 }
 
+export function canCompleteLocalHandoff(order) {
+  return order?.fulfillment_method === FULFILLMENT_METHODS.LOCAL_HANDOFF
+    && order?.packingSlipPrintRecorded === true
+    && order?.trackingEmail?.fulfillment_method === FULFILLMENT_METHODS.LOCAL_HANDOFF
+    && Number(order?.trackingEmail?.template_version) === 2;
+}
+
 export function nextFulfillmentAction(order) {
   if (order?.payment_status !== "PAID") return null;
   if (order.fulfillment_method === FULFILLMENT_METHODS.LOCAL_HANDOFF
-      && order.fulfillment_status === "READY_TO_PICK") {
+      && order.fulfillment_status === "READY_TO_PICK"
+      && canCompleteLocalHandoff(order)) {
     return { action: "mark_handed_off", label: "Mark Handed Off", target: "DELIVERED" };
   }
   if (order.fulfillment_method === FULFILLMENT_METHODS.LOCAL_HANDOFF) return null;

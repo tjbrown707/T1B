@@ -7,6 +7,7 @@ import {
   DEFAULT_PARCEL,
   OPENING_INVENTORY_QUANTITY,
   canPrintFulfillment,
+  isAllocationlessLegacyLocalHandoff,
   inventoryDashboardTotals,
   inventoryProductTotals,
   inventoryRetailValue,
@@ -48,7 +49,14 @@ const localHandoffEmailMigration = readFileSync(
   "supabase/migrations/20260814193000_local_handoff_packing_email.sql",
   "utf8",
 );
+const localHandoffGateMigration = readFileSync(
+  "supabase/migrations/20260814203000_require_local_handoff_print_before_delivery.sql",
+  "utf8",
+);
+const adminFulfillmentPdfSource = readFileSync("netlify/functions/admin-fulfillment-pdf.js", "utf8");
 const adminOrdersSource = readFileSync("netlify/functions/admin-orders.js", "utf8");
+const adminPrintSource = readFileSync("netlify/functions/admin-print.js", "utf8");
+const adminShippingSource = readFileSync("netlify/functions/admin-shipping.js", "utf8");
 const siteSource = readFileSync("site_1.jsx", "utf8");
 
 test("opening inventory is active at 50 for every catalog product", () => {
@@ -99,12 +107,27 @@ test("fulfillment stays blocked until payment, commitment, and real lot ids", ()
   };
   assert.equal(canPrintFulfillment(base), true);
   assert.equal(canPrintFulfillment({ ...base, payment_status: "AWAITING_PAYMENT" }), false);
-  assert.equal(canPrintFulfillment({ ...base, fulfillment_method: "LOCAL_HANDOFF" }), false);
+  assert.equal(canPrintFulfillment({ ...base, fulfillment_method: "LOCAL_HANDOFF" }), true);
   assert.equal(canPrintFulfillment({ ...base, allocations: [] }), false);
   assert.equal(canPrintFulfillment({ ...base, allocations: [{ ...base.allocations[0], state: "RESERVED" }] }), false);
   assert.equal(canPrintFulfillment({ ...base, allocations: [{ ...base.allocations[0], lot: { is_provisional: true } }] }), false);
-});
 
+  const legacyLocal = {
+    payment_status: "PAID",
+    fulfillment_method: "LOCAL_HANDOFF",
+    inventory_accounting_mode: "PRECOUNTED_LEGACY",
+    allocations: [],
+    items: [{ id: "bpc157-5", name: "BPC-157", qty: 2 }],
+  };
+  assert.equal(isAllocationlessLegacyLocalHandoff(legacyLocal), true);
+  assert.equal(canPrintFulfillment(legacyLocal), true);
+  assert.equal(canPrintFulfillment({ ...legacyLocal, fulfillment_method: "SHIP" }), false);
+  assert.equal(canPrintFulfillment({ ...legacyLocal, inventory_accounting_mode: "TRACKED" }), false);
+  assert.equal(canPrintFulfillment({ ...legacyLocal, payment_status: "AWAITING_PAYMENT" }), false);
+  assert.equal(canPrintFulfillment({ ...legacyLocal, items: [] }), false);
+  assert.equal(canPrintFulfillment({ ...legacyLocal, allocations: base.allocations }), true);
+  assert.equal(canPrintFulfillment({ ...legacyLocal, allocations: [{ ...base.allocations[0], state: "RELEASED" }] }), false);
+});
 test("inventory writes reject malformed dates, silent truncation, and unsafe adjustments", () => {
   const lotId = "11111111-1111-4111-8111-111111111111";
   const receive = validateInventoryOperation({
@@ -184,6 +207,10 @@ test("local handoff is persisted and shipping is blocked in the database", () =>
   assert.match(localHandoffMigration, /LOCAL_HANDOFF_COMPLETED/);
   assert.match(localHandoffMigration, /create trigger order_shipments_block_local_handoff/);
   assert.match(localHandoffMigration, /local_handoff_does_not_ship/);
+  assert.match(adminShippingSource, /fulfillment_method === "LOCAL_HANDOFF"[\s\S]+cannot create postage/);
+  assert.match(adminPrintSource, /fulfillment_method === "LOCAL_HANDOFF"[\s\S]+cannot print a shipping label/);
+  assert.match(siteSource, /payment_status === "PAID" && !isLocalHandoff\(order\)[\s\S]{0,200}<OrderShippingControls/);
+  assert.doesNotMatch(siteSource, /!isLocalHandoff\(order\) && <div[\s\S]{0,800}Print Packing Slip/);
   assert.match(localHandoffMigration, /revoke execute on function public\.confirm_order_payment\(uuid, text, text, text, uuid\)/);
   assert.match(paymentAmountMigration, /payment_amount_received numeric\(10, 2\)/);
   assert.match(paymentAmountMigration, /PAYMENT_AMOUNT_CORRECTED/);
@@ -195,6 +222,29 @@ test("local handoff is persisted and shipping is blocked in the database", () =>
   assert.doesNotMatch(precountedOrdersMigration, /legacy-precounted-restore:/);
 });
 
+test("local handoff completion requires the accepted print and queued email", () => {
+  assert.match(localHandoffGateMigration, /create or replace function public\.record_order_print_submission/);
+  const existingV2Lookup = localHandoffGateMigration.indexOf("if selected_delivery.id is not null then");
+  const firstEmailReadinessGate = localHandoffGateMigration.indexOf("or selected_order.fulfillment_status <> 'READY_TO_PICK'");
+  assert.ok(existingV2Lookup >= 0 && existingV2Lookup < firstEmailReadinessGate,
+    "An existing local v2 row must be reused before first-email readiness is checked.");
+  assert.match(localHandoffGateMigration, /'order-processed\/v1\/' \|\| p_order_id::text/);
+  assert.match(localHandoffGateMigration, /revoke execute on function public\.record_order_print_submission/);
+  assert.match(localHandoffGateMigration, /grant execute on function public\.record_order_print_submission[\s\S]+to service_role/);
+  assert.match(localHandoffGateMigration, /create trigger orders_require_local_handoff_print_before_delivery/);
+  assert.match(localHandoffGateMigration, /FULFILLMENT_PACKET_PRINTED/);
+  assert.match(localHandoffGateMigration, /printnode_job_id/);
+  assert.match(localHandoffGateMigration, /order_notification_outbox/);
+  assert.match(localHandoffGateMigration, /template_version = 2/);
+  assert.match(localHandoffGateMigration, /local_handoff_requires_printnode_packing_slip/);
+  assert.match(localHandoffGateMigration, /revoke execute on function public.require_local_handoff_print_before_delivery/);
+  assert.match(adminOrdersSource, /packingSlipPrintRecorded/);
+  assert.match(adminOrdersSource, /order_id,fulfillment_method,template_version,status/);
+  assert.match(adminFulfillmentPdfSource, /Use Print Packing Slip first/);
+  assert.match(adminFulfillmentPdfSource, /inventory_accounting_mode/);
+  assert.match(siteSource, /Preview PDF and Mark Handed Off unlock/);
+  assert.doesNotMatch(siteSource, /printing and postage are blocked/);
+});
 test("operational tables are server-only and database changes are atomic", () => {
   for (const table of [
     "inventory_products",
@@ -243,7 +293,8 @@ test("processed-order emails use a server-only idempotent outbox after both prin
   assert.match(localHandoffEmailMigration, /revoke execute on function public\.record_order_print_submission/);
   assert.match(adminOrdersSource, /from\("order_notification_outbox"\)/);
   assert.match(adminOrdersSource, /trackingEmail: notifications\.get/);
-  assert.match(siteSource, /Customer tracking email needs staff attention/);
+  assert.match(adminOrdersSource, /order_id,fulfillment_method,template_version,status/);
+  assert.match(siteSource, /Customer hand-delivery confirmation email/);
 });
 
 test("parcel defaults match the owner's package and shipping inputs are bounded", () => {
