@@ -1328,15 +1328,15 @@ function Hero({ statsActive = true }) {
       alignItems: "center",
       justifyContent: "center",
     }}>
-      {/* Lab Noir hero imagery with zoom + parallax */}
+      {/* Lab corridor hero imagery with zoom + parallax */}
       <div style={{
         position: "absolute",
         inset: 0,
         backgroundColor: "#090a0c",
-        backgroundImage: `url('${isMobile ? "/hero-lab-noir-mobile.webp" : "/hero-lab-noir.webp"}')`,
+        backgroundImage: `url('${isMobile ? "/hero-lab-corridor-logo-v2-mobile.webp" : "/hero-lab-corridor-logo-v2.webp"}')`,
         // Mobile uses its portrait composition, shifted right into the open
         // column beside the proof points while the desktop crop stays intact.
-        backgroundSize: isMobile ? "auto 90%" : "cover",
+        backgroundSize: isMobile ? "auto 76%" : "cover",
         backgroundPosition: isMobile ? "calc(100% + 60px) calc(50% - 70px)" : "center top",
         backgroundRepeat: "no-repeat",
         opacity: isMobile ? 0.66 : 0.78,
