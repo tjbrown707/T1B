@@ -1422,7 +1422,7 @@ function Hero({ statsActive = true }) {
           color: "var(--text-secondary)",
           marginBottom: 24,
           letterSpacing: "0.02em",
-        }}>Precision. Purity. Progress.</div>
+        }}>Precision. Purity. Tier One.</div>
 
         <p style={{
           fontFamily: "'Rajdhani', sans-serif",
