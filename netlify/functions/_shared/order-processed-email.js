@@ -5,12 +5,22 @@ import { getEnv } from "./http.js";
 const RESEND_ENDPOINT = "https://api.resend.com/emails";
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const RESEND_TIMEOUT_MS = 8000;
-const MESSAGE_VERSIONS = new Map([[1, Object.freeze({
-  templateFile: "order-processed-v1.html",
-  fromAddress: "Tier One BioSystems <noreply@tierone.bio>",
-  replyTo: "sales@tierone.bio",
-  render: renderOrderProcessedMessageV1,
-})]]);
+const MESSAGE_VERSIONS = new Map([
+  [1, Object.freeze({
+    fulfillmentMethod: "SHIP",
+    templateFile: "order-processed-v1.html",
+    fromAddress: "Tier One BioSystems <noreply@tierone.bio>",
+    replyTo: "sales@tierone.bio",
+    render: renderOrderProcessedMessageV1,
+  })],
+  [2, Object.freeze({
+    fulfillmentMethod: "LOCAL_HANDOFF",
+    templateFile: "order-processed-handoff-v2.html",
+    fromAddress: "Tier One BioSystems <noreply@tierone.bio>",
+    replyTo: "sales@tierone.bio",
+    render: renderOrderProcessedMessageV2,
+  })],
+]);
 
 const cachedTemplates = new Map();
 
@@ -110,7 +120,7 @@ export async function sendQueuedOrderProcessedEmail({
     return {
       state: "NEEDS_REVIEW",
       sent: false,
-      warning: "The tracking email needs staff attention.",
+      warning: "The customer confirmation email needs staff attention.",
     };
   }
   const { data, error } = claimResult;
@@ -119,7 +129,7 @@ export async function sendQueuedOrderProcessedEmail({
     return {
       state: "NEEDS_REVIEW",
       sent: false,
-      warning: "The tracking email needs staff attention.",
+      warning: "The customer confirmation email needs staff attention.",
     };
   }
 
@@ -129,7 +139,7 @@ export async function sendQueuedOrderProcessedEmail({
     return {
       state: "NEEDS_REVIEW",
       sent: false,
-      warning: "The tracking email needs staff attention.",
+      warning: "The customer confirmation email needs staff attention.",
     };
   }
 
@@ -151,7 +161,7 @@ export async function sendQueuedOrderProcessedEmail({
       return {
         state: "NEEDS_REVIEW",
         sent: false,
-        warning: "The tracking email needs staff attention.",
+        warning: "The customer confirmation email needs staff attention.",
       };
     }
     const { data: failedData, error: failError } = failureResult;
@@ -160,7 +170,7 @@ export async function sendQueuedOrderProcessedEmail({
       return {
         state: "NEEDS_REVIEW",
         sent: false,
-        warning: "The tracking email needs staff attention.",
+        warning: "The customer confirmation email needs staff attention.",
       };
     }
     const failed = firstRow(failedData);
@@ -170,8 +180,8 @@ export async function sendQueuedOrderProcessedEmail({
       state,
       sent: false,
       warning: state === "RETRYING"
-        ? "The tracking email is queued for an automatic retry."
-        : "The tracking email needs staff attention.",
+        ? "The customer confirmation email is queued for an automatic retry."
+        : "The customer confirmation email needs staff attention.",
     };
   }
 
@@ -190,7 +200,7 @@ export async function sendQueuedOrderProcessedEmail({
     return {
       state: "RETRYING",
       sent: false,
-      warning: "The tracking email is being reconciled automatically.",
+      warning: "The customer confirmation email is being reconciled automatically.",
     };
   }
   if (completeResult.error) {
@@ -198,7 +208,7 @@ export async function sendQueuedOrderProcessedEmail({
     return {
       state: "RETRYING",
       sent: false,
-      warning: "The tracking email is being reconciled automatically.",
+      warning: "The customer confirmation email is being reconciled automatically.",
     };
   }
   return {
@@ -351,6 +361,41 @@ function renderOrderProcessedMessageV1(values, selectedTemplate) {
   };
 }
 
+// Version 2 is an immutable hand-delivery provider payload. It deliberately
+// contains no carrier or tracking fields because no shipment is created.
+function renderOrderProcessedMessageV2(values, selectedTemplate) {
+  const html = renderTemplate(selectedTemplate, {
+    PREHEADER: escapeHtml("Your order has been processed and prepared for hand delivery."),
+    CUSTOMER_NAME: escapeHtml(values.customerName),
+    ORDER_NUMBER: escapeHtml(values.orderNumber),
+  });
+  if (/\{\{[A-Z_]+\}\}/.test(html)) {
+    throw new OrderEmailDeliveryError("The order email template has unresolved fields.", false);
+  }
+
+  const text = [
+    "TIER ONE BIOSYSTEMS",
+    "",
+    "ORDER PROCESSED",
+    "",
+    "Hi " + values.customerName + ",",
+    "",
+    "We've processed order " + values.orderNumber + " and prepared it for hand delivery.",
+    "",
+    "Questions about your order? Reply to this email or contact sales@tierone.bio.",
+    "",
+    "Tier One BioSystems",
+    "All products are sold for research and laboratory use only.",
+    "Not for human consumption. Not a drug, food, or cosmetic.",
+  ].join("\n");
+
+  return {
+    subject: "Order " + values.orderNumber + " processed - prepared for hand delivery",
+    html,
+    text,
+  };
+}
+
 export function safeTrackingUrl(value) {
   const text = plainText(value, 2000);
   if (!text) return "";
@@ -373,7 +418,8 @@ export function escapeHtml(value) {
 
 function normaliseDelivery(delivery) {
   const templateVersion = Number(delivery?.template_version);
-  if (!Number.isInteger(templateVersion) || !MESSAGE_VERSIONS.has(templateVersion)) {
+  const version = MESSAGE_VERSIONS.get(templateVersion);
+  if (!Number.isInteger(templateVersion) || !version) {
     throw new OrderEmailDeliveryError("The queued email has an unsupported template version.", false);
   }
   const recipientEmail = plainText(delivery?.recipient_email, 320);
@@ -384,18 +430,39 @@ function normaliseDelivery(delivery) {
   if (!idempotencyKey) {
     throw new OrderEmailDeliveryError("The queued email has no idempotency key.", false);
   }
-  if (!idempotencyKey.startsWith(`order-processed/v${templateVersion}/`)) {
+  if (!idempotencyKey.startsWith("order-processed/v" + templateVersion + "/")) {
     throw new OrderEmailDeliveryError("The queued email key does not match its template version.", false);
   }
+
+  // Version 1 rows existed before fulfillment_method was added. Defaulting
+  // only those rows to SHIP keeps an in-flight v1 delivery safe during rollout.
+  const fulfillmentMethod = plainText(delivery?.fulfillment_method, 32)
+    || (templateVersion === 1 ? "SHIP" : "");
+  if (fulfillmentMethod !== version.fulfillmentMethod) {
+    throw new OrderEmailDeliveryError("The queued email method does not match its template version.", false);
+  }
+
+  const shippingFields = {
+    carrier: plainText(delivery?.carrier, 80),
+    serviceName: plainText(delivery?.service_name, 120),
+    trackingNumber: plainText(delivery?.tracking_number, 160),
+    trackingUrl: safeTrackingUrl(delivery?.tracking_url),
+  };
+  if (templateVersion === 1) {
+    shippingFields.carrier = requiredText(delivery?.carrier, 80, "carrier");
+    shippingFields.trackingNumber = requiredText(delivery?.tracking_number, 160, "tracking number");
+  } else if (shippingFields.carrier || shippingFields.serviceName
+      || shippingFields.trackingNumber || plainText(delivery?.tracking_url, 2000)) {
+    throw new OrderEmailDeliveryError("A hand-delivery email cannot contain shipping fields.", false);
+  }
+
   return {
     templateVersion,
+    fulfillmentMethod,
     recipientEmail,
     customerName: plainText(delivery?.customer_name, 160) || "there",
     orderNumber: requiredText(delivery?.order_number, 80, "order number"),
-    carrier: requiredText(delivery?.carrier, 80, "carrier"),
-    serviceName: plainText(delivery?.service_name, 120),
-    trackingNumber: requiredText(delivery?.tracking_number, 160, "tracking number"),
-    trackingUrl: safeTrackingUrl(delivery?.tracking_url),
+    ...shippingFields,
     idempotencyKey,
   };
 }

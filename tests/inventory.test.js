@@ -44,6 +44,10 @@ const orderProcessedEmailHardeningMigration = readFileSync(
   "supabase/migrations/20260814175636_harden_order_processed_email_queue.sql",
   "utf8",
 );
+const localHandoffEmailMigration = readFileSync(
+  "supabase/migrations/20260814193000_local_handoff_packing_email.sql",
+  "utf8",
+);
 const adminOrdersSource = readFileSync("netlify/functions/admin-orders.js", "utf8");
 const siteSource = readFileSync("site_1.jsx", "utf8");
 
@@ -231,6 +235,12 @@ test("processed-order emails use a server-only idempotent outbox after both prin
   assert.match(orderProcessedEmailActorIndexMigration, /where triggered_by_user_id is not null/);
   assert.match(orderProcessedEmailHardeningMigration, /return next selected_delivery/);
   assert.match(orderProcessedEmailHardeningMigration, /if has_shipping_label[\s\S]+selected_shipment\.is_test is not false/);
+  assert.match(localHandoffEmailMigration, /template_version in \(1, 2\)/);
+  assert.match(localHandoffEmailMigration, /fulfillment_method = 'LOCAL_HANDOFF'[\s\S]+template_version = 2/);
+  assert.match(localHandoffEmailMigration, /'order-processed\/v2\/' \|\| p_order_id::text/);
+  assert.match(localHandoffEmailMigration, /local_handoff_does_not_ship/);
+  assert.match(localHandoffEmailMigration, /CUSTOMER_HANDOFF_EMAIL_SENT/);
+  assert.match(localHandoffEmailMigration, /revoke execute on function public\.record_order_print_submission/);
   assert.match(adminOrdersSource, /from\("order_notification_outbox"\)/);
   assert.match(adminOrdersSource, /trackingEmail: notifications\.get/);
   assert.match(siteSource, /Customer tracking email needs staff attention/);

@@ -22,6 +22,7 @@ function baseDelivery(overrides = {}) {
     customer_name: "Research Customer",
     order_number: "T1B-260814-123456",
     template_version: 1,
+    fulfillment_method: "SHIP",
     carrier: "USPS",
     service_name: "Ground Advantage",
     tracking_number: "9400111899223856928499",
@@ -32,7 +33,20 @@ function baseDelivery(overrides = {}) {
   };
 }
 
-function createFakeSupabase({ isTest = false } = {}) {
+function handoffDelivery(overrides = {}) {
+  return baseDelivery({
+    template_version: 2,
+    fulfillment_method: "LOCAL_HANDOFF",
+    carrier: null,
+    service_name: null,
+    tracking_number: null,
+    tracking_url: null,
+    idempotency_key: "order-processed/v2/22222222-2222-4222-8222-222222222222",
+    ...overrides,
+  });
+}
+
+function createFakeSupabase({ isTest = false, fulfillmentMethod = "SHIP" } = {}) {
   const state = {
     events: new Set(),
     outbox: null,
@@ -45,27 +59,23 @@ function createFakeSupabase({ isTest = false } = {}) {
         state.events.add(args.p_event_type);
         const hasPacking = state.events.has(PACKING_EVENT);
         const hasLabel = state.events.has(LABEL_EVENT);
-        if (isTest && hasLabel) {
-          return {
-            data: [{
-              delivery_id: null,
-              delivery_status: null,
-              readiness: "TEST_LABEL",
-            }],
-            error: null,
-          };
+        if (fulfillmentMethod === "LOCAL_HANDOFF") {
+          if (args.p_event_type === LABEL_EVENT) {
+            return { data: null, error: new Error("local_handoff_does_not_ship") };
+          }
+          if (!hasPacking) {
+            return { data: [{ delivery_id: null, delivery_status: null, readiness: "WAITING_FOR_PACKING_SLIP" }], error: null };
+          }
+          if (!state.outbox) state.outbox = handoffDelivery();
+        } else {
+          if (isTest && hasLabel) {
+            return { data: [{ delivery_id: null, delivery_status: null, readiness: "TEST_LABEL" }], error: null };
+          }
+          if (!hasPacking || !hasLabel) {
+            return { data: [{ delivery_id: null, delivery_status: null, readiness: !hasPacking ? "WAITING_FOR_PACKING_SLIP" : "WAITING_FOR_LABEL" }], error: null };
+          }
+          if (!state.outbox) state.outbox = baseDelivery();
         }
-        if (!hasPacking || !hasLabel) {
-          return {
-            data: [{
-              delivery_id: null,
-              delivery_status: null,
-              readiness: !hasPacking ? "WAITING_FOR_PACKING_SLIP" : "WAITING_FOR_LABEL",
-            }],
-            error: null,
-          };
-        }
-        if (!state.outbox) state.outbox = baseDelivery();
         return {
           data: [{
             delivery_id: state.outbox.id,
@@ -139,6 +149,21 @@ test("the processed-order email is branded, escaped, and contains tracking in HT
   assert.match(rendered.text, /Not for human consumption/);
 });
 
+test("the hand-delivery email is branded, escaped, and contains no tracking payload", () => {
+  const rendered = renderOrderProcessedEmail(handoffDelivery({
+    customer_name: "<Local & Customer>",
+    order_number: "T1B-<handoff>",
+  }));
+  assert.match(rendered.subject, /prepared for hand delivery/);
+  assert.match(rendered.html, /&lt;Local &amp; Customer&gt;/);
+  assert.match(rendered.html, /T1B-&lt;handoff&gt;/);
+  assert.match(rendered.html, /hand delivery/i);
+  assert.doesNotMatch(rendered.html, /Track Package|Tracking number|USPS/i);
+  assert.doesNotMatch(rendered.html, /\{\{[A-Z_]+\}\}/);
+  assert.match(rendered.text, /prepared it for hand delivery/i);
+  assert.doesNotMatch(rendered.text, /tracking number:/i);
+});
+
 test("only bounded HTTPS tracking URLs become links", () => {
   assert.match(safeTrackingUrl("https://example.com/track?id=1"), /^https:/);
   assert.equal(safeTrackingUrl("http://example.com/track"), "");
@@ -170,17 +195,36 @@ test("Resend receives both bodies and a stable idempotency key", async () => {
   assert.match(payload.text, /Tracking number/);
 });
 
+test("Resend receives the stable hand-delivery v2 payload without tracking", async () => {
+  const counter = { calls: 0 };
+  const delivery = handoffDelivery();
+  await sendOrderProcessedDelivery(delivery, { apiKey: "re_test_only", fetchImpl: successfulResend(counter) });
+  assert.equal(counter.options.headers["Idempotency-Key"], delivery.idempotency_key);
+  const payload = JSON.parse(counter.options.body);
+  assert.match(payload.subject, /hand delivery/);
+  assert.match(payload.html, /Hand delivery/);
+  assert.doesNotMatch(payload.text, /Tracking number:/i);
+});
+
 test("template versions and idempotency-key versions must stay aligned", () => {
   const rendered = renderOrderProcessedEmail(baseDelivery());
   assert.equal(rendered.from, "Tier One BioSystems <noreply@tierone.bio>");
   assert.equal(rendered.replyTo, "sales@tierone.bio");
   assert.throws(
-    () => renderOrderProcessedEmail(baseDelivery({ template_version: 2 })),
+    () => renderOrderProcessedEmail(baseDelivery({ template_version: 3 })),
     /unsupported template version/,
   );
   assert.throws(
     () => renderOrderProcessedEmail(baseDelivery({ idempotency_key: "order-processed/v2/order" })),
     /does not match its template version/,
+  );
+  assert.throws(
+    () => renderOrderProcessedEmail(handoffDelivery({ fulfillment_method: "SHIP" })),
+    /method does not match its template version/,
+  );
+  assert.throws(
+    () => renderOrderProcessedEmail(handoffDelivery({ carrier: "USPS" })),
+    /cannot contain shipping fields/,
   );
 });
 
@@ -228,6 +272,28 @@ for (const sequence of [
     assert.equal(counter.calls, 1);
   });
 }
+
+test("local handoff sends once after the packing slip without a shipping label", async () => {
+  const { supabase, state } = createFakeSupabase({ fulfillmentMethod: "LOCAL_HANDOFF" });
+  const counter = { calls: 0 };
+  const sendOptions = { apiKey: "re_test_only", fetchImpl: successfulResend(counter) };
+  const first = await recordOrderPrintSubmission({
+    supabase, orderId: handoffDelivery().order_id, eventType: PACKING_EVENT,
+    actorUserId: "44444444-4444-4444-8444-444444444444", jobId: 150, sendOptions,
+  });
+  assert.equal(first.state, "SENT");
+  assert.equal(counter.calls, 1);
+  assert.equal(state.sentCount, 1);
+  assert.equal(state.events.has(LABEL_EVENT), false);
+
+  const reprint = await recordOrderPrintSubmission({
+    supabase, orderId: handoffDelivery().order_id, eventType: PACKING_EVENT,
+    actorUserId: "44444444-4444-4444-8444-444444444444", jobId: 151, sendOptions,
+  });
+  assert.equal(reprint.state, "SENT");
+  assert.equal(reprint.alreadySent, true);
+  assert.equal(counter.calls, 1);
+});
 
 test("a persisted Shippo test label stays suppressed after the token is swapped", async () => {
   const { supabase, state } = createFakeSupabase({ isTest: true });
