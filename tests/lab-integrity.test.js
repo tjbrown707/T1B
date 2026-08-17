@@ -62,6 +62,15 @@ test("every product has a summary to show", () => {
   assert.deepEqual(uncovered, []);
 });
 
+test("every summary belongs to a product in the catalog", () => {
+  const catalogLabKeys = new Set(PRODUCTS.map(product => {
+    const doseKey = `${product.name} ${product.dose}`;
+    return LAB_RESULTS[doseKey] ? doseKey : product.name;
+  }));
+  const orphaned = Object.keys(LAB_RESULTS).filter(key => !catalogLabKeys.has(key));
+  assert.deepEqual(orphaned, [], "a lab summary is published for a product that is not sold");
+});
+
 test("withheld products expose no lab result to the UI", () => {
   for (const product of PRODUCTS) {
     if (!isLabResultWithheld(product.name, product.dose)) continue;

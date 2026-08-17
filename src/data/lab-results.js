@@ -7,7 +7,7 @@
 
 export const LAB_RESULTS = {
   "GLP-3RT 5 mg": {
-    lotNumber: "T1B-GLP3-5-2026-0412",
+    lotNumber: "T1B-4RLB",
     dateAnalyzed: "2026-03-18",
     molecularWeight: "3421.8 Da",
     tests: [
@@ -25,7 +25,7 @@ export const LAB_RESULTS = {
     ],
   },
   "GLP-3RT 10 mg": {
-    lotNumber: "T1B-GLP3-10-2026-0413",
+    lotNumber: "T1B-2CBM",
     dateAnalyzed: "2026-03-18",
     molecularWeight: "3421.8 Da",
     tests: [
@@ -43,7 +43,7 @@ export const LAB_RESULTS = {
     ],
   },
   "GLP-3RT 20 mg": {
-    lotNumber: "T1B-GLP3-20-2026-0414",
+    lotNumber: "T1B-6PE4",
     dateAnalyzed: "2026-03-19",
     molecularWeight: "3421.8 Da",
     tests: [
@@ -61,7 +61,7 @@ export const LAB_RESULTS = {
     ],
   },
   "GLP-3RT 30 mg": {
-    lotNumber: "T1B-GLP3-30-2026-0414",
+    lotNumber: "T1B-5H97",
     dateAnalyzed: "2026-03-19",
     molecularWeight: "3421.8 Da",
     tests: [
@@ -79,7 +79,7 @@ export const LAB_RESULTS = {
     ],
   },
   "Tesamorelin": {
-    lotNumber: "T1B-TESA-2026-0389",
+    lotNumber: "T1B-98FP",
     dateAnalyzed: "2026-03-15",
     molecularWeight: "5135.9 Da",
     tests: [
@@ -97,7 +97,7 @@ export const LAB_RESULTS = {
     ],
   },
   "CJC-1295 / Ipamorelin": {
-    lotNumber: "T1B-CJCI-2026-0401",
+    lotNumber: "T1B-8PTX",
     dateAnalyzed: "2026-03-20",
     molecularWeight: "CJC: 3367.9 Da / Ipa: 711.9 Da",
     tests: [
@@ -115,7 +115,7 @@ export const LAB_RESULTS = {
     ],
   },
   "BPC-157 5 mg": {
-    lotNumber: "T1B-BPC-5-2026-0377",
+    lotNumber: "T1B-29HL",
     dateAnalyzed: "2026-03-12",
     molecularWeight: "1419.5 Da",
     tests: [
@@ -133,7 +133,7 @@ export const LAB_RESULTS = {
     ],
   },
   "BPC-157 10 mg": {
-    lotNumber: "T1B-BPC-10-2026-0378",
+    lotNumber: "T1B-3NST",
     dateAnalyzed: "2026-03-13",
     molecularWeight: "1419.5 Da",
     tests: [
@@ -151,7 +151,7 @@ export const LAB_RESULTS = {
     ],
   },
   "TB-500": {
-    lotNumber: "T1B-TB5-2026-0395",
+    lotNumber: "T1B-7ADX",
     dateAnalyzed: "2026-03-17",
     molecularWeight: "4963.5 Da",
     tests: [
@@ -169,7 +169,7 @@ export const LAB_RESULTS = {
     ],
   },
   "Epitalon": {
-    lotNumber: "T1B-EPI-2026-0408",
+    lotNumber: "T1B-3M6B",
     dateAnalyzed: "2026-03-22",
     molecularWeight: "390.3 Da",
     tests: [
@@ -186,7 +186,7 @@ export const LAB_RESULTS = {
     ],
   },
   "GHK-Cu 50 mg": {
-    lotNumber: "T1B-GHK50-2026-0416",
+    lotNumber: "T1B-595B",
     dateAnalyzed: "2026-03-25",
     molecularWeight: "403.9 Da",
     tests: [
@@ -204,7 +204,7 @@ export const LAB_RESULTS = {
     ],
   },
   "GHK-Cu 100 mg": {
-    lotNumber: "T1B-GHK-2026-0415",
+    lotNumber: "T1B-49ST",
     dateAnalyzed: "2026-03-25",
     molecularWeight: "403.9 Da",
     tests: [
@@ -222,7 +222,7 @@ export const LAB_RESULTS = {
     ],
   },
   "SS-31": {
-    lotNumber: "T1B-SS31-2026-0421",
+    lotNumber: "T1B-5THN",
     dateAnalyzed: "2026-03-26",
     molecularWeight: "639.8 Da",
     tests: [
@@ -239,7 +239,7 @@ export const LAB_RESULTS = {
     ],
   },
   "Ipamorelin": {
-    lotNumber: "T1B-IPA-2026-0383",
+    lotNumber: "T1B-44BE",
     dateAnalyzed: "2026-03-14",
     molecularWeight: "711.9 Da",
     tests: [
@@ -257,7 +257,7 @@ export const LAB_RESULTS = {
     ],
   },
   "Kisspeptin": {
-    lotNumber: "T1B-KISS-2026-0427",
+    lotNumber: "T1B-6AXV",
     dateAnalyzed: "2026-03-28",
     molecularWeight: "1302.5 Da",
     tests: [
@@ -274,7 +274,7 @@ export const LAB_RESULTS = {
     ],
   },
   "MOTS-c": {
-    lotNumber: "T1B-MOT-2026-0430",
+    lotNumber: "T1B-8Q5H",
     dateAnalyzed: "2026-03-29",
     molecularWeight: "2174.6 Da",
     tests: [
@@ -291,7 +291,7 @@ export const LAB_RESULTS = {
     ],
   },
   "Selank": {
-    lotNumber: "T1B-SEL-2026-0392",
+    lotNumber: "T1B-6LCF",
     dateAnalyzed: "2026-03-16",
     molecularWeight: "751.9 Da",
     tests: [
@@ -308,7 +308,7 @@ export const LAB_RESULTS = {
     ],
   },
   "Semax": {
-    lotNumber: "T1B-SEM-2026-0398",
+    lotNumber: "T1B-6ENV",
     dateAnalyzed: "2026-03-19",
     molecularWeight: "813.9 Da",
     tests: [
@@ -325,7 +325,7 @@ export const LAB_RESULTS = {
     ],
   },
   "GLOW": {
-    lotNumber: "T1B-GLW-2026-0435",
+    lotNumber: "T1B-25GT",
     dateAnalyzed: "2026-03-30",
     molecularWeight: "Proprietary blend",
     tests: [
@@ -341,7 +341,7 @@ export const LAB_RESULTS = {
     ],
   },
   "KLOW": {
-    lotNumber: "T1B-KLW-2026-0438",
+    lotNumber: "T1B-6JCT",
     dateAnalyzed: "2026-03-31",
     molecularWeight: "Proprietary blend",
     tests: [
@@ -357,7 +357,7 @@ export const LAB_RESULTS = {
     ],
   },
   "HCG": {
-    lotNumber: "T1B-HCG-2026-0405",
+    lotNumber: "T1B-7QPK",
     dateAnalyzed: "2026-03-21",
     molecularWeight: "~25,700 Da",
     tests: [
@@ -374,7 +374,7 @@ export const LAB_RESULTS = {
     ],
   },
   "MT-1": {
-    lotNumber: "T1B-MT1-2026-0418",
+    lotNumber: "T1B-77VK",
     dateAnalyzed: "2026-03-24",
     molecularWeight: "1646.9 Da",
     tests: [
@@ -391,7 +391,7 @@ export const LAB_RESULTS = {
     ],
   },
   "MT-2": {
-    lotNumber: "T1B-MT2-2026-0419",
+    lotNumber: "T1B-4XCM",
     dateAnalyzed: "2026-03-24",
     molecularWeight: "1024.2 Da",
     tests: [
@@ -408,7 +408,7 @@ export const LAB_RESULTS = {
     ],
   },
   "Thymosin Alpha 1": {
-    lotNumber: "T1B-TA1-2026-0424",
+    lotNumber: "T1B-8ATN",
     dateAnalyzed: "2026-03-27",
     molecularWeight: "3108.3 Da",
     tests: [
@@ -425,7 +425,7 @@ export const LAB_RESULTS = {
     ],
   },
   "NAD+": {
-    lotNumber: "T1B-NAD-2026-0410",
+    lotNumber: "T1B-9P8D",
     dateAnalyzed: "2026-03-23",
     molecularWeight: "663.4 Da",
     tests: [
@@ -441,23 +441,8 @@ export const LAB_RESULTS = {
       { test: "Residual Solvents", method: "GC-HS", specification: "Meets USP <467>", result: "Within limits", pass: true },
     ],
   },
-  "BAC Water": {
-    lotNumber: "T1B-BAC-2026-0440",
-    dateAnalyzed: "2026-03-31",
-    molecularWeight: "N/A",
-    tests: [
-      { test: "Appearance", method: "Visual", specification: "Clear, colorless solution", result: "Clear, colorless", pass: true },
-      { test: "Labeled Volume", method: "Gravimetric", specification: "30.00 mL/vial", result: "30.00 mL/vial", pass: true },
-      { test: "Actual Volume", method: "Volumetric", specification: "29.50–30.50 mL/vial", result: "30.21 mL/vial", pass: true },
-      { test: "pH", method: "Potentiometric", specification: "4.5–7.0", result: "5.4", pass: true },
-      { test: "Benzyl Alcohol Content", method: "GC-FID", specification: "0.85–0.95%", result: "0.90%", pass: true },
-      { test: "Particulate Matter", method: "USP <788>", specification: "Meets USP requirements", result: "Within limits", pass: true },
-      { test: "Sterility", method: "USP <71>", specification: "No growth", result: "No growth", pass: true },
-      { test: "Bacterial Endotoxins", method: "LAL", specification: "< 0.25 EU/mL", result: "< 0.1 EU/mL", pass: true },
-    ],
-  },
   "IGF-1 LR3": {
-    lotNumber: "T1B-IGF-2026-0433",
+    lotNumber: "T1B-7R99",
     dateAnalyzed: "2026-03-29",
     molecularWeight: "9111.4 Da",
     tests: [
@@ -474,7 +459,7 @@ export const LAB_RESULTS = {
     ],
   },
   "KPV": {
-    lotNumber: "T1B-KPV-2026-0437",
+    lotNumber: "T1B-2M2T",
     dateAnalyzed: "2026-03-30",
     molecularWeight: "342.4 Da",
     tests: [
