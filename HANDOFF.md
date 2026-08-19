@@ -5,6 +5,28 @@ records state that is not obvious from the code or the git log.
 
 ---
 
+## Checkout no longer requires a return after payment — BUILT, VERIFIED
+
+Added 2026-08-18. The customer-facing `I HAVE SENT PAYMENT` step is gone. On
+the final checkout screen the Cash App/Venmo action now creates the real order,
+reserves inventory, sends the normal order notifications, and only then opens
+the selected payment service using the server-confirmed total. The page says
+plainly that the customer does not need to return because staff independently
+verifies every payment.
+
+Someone who clicks the payment action but does not pay will now appear as an
+unpaid order with reserved stock. Use the existing **Cancel Unpaid** action to
+release that reservation. This is intentional: a paid customer can no longer
+send money yet leave no durable order behind by forgetting a second website
+click.
+
+`npm run verify` is green with 125 tests, all route smoke tests, the production
+build, secret scan, and site-integrity check. The final Cash App and Venmo
+screens were also inspected locally at desktop and 390-pixel mobile widths
+without creating an order.
+
+---
+
 ## Inventory/fulfillment build — DATABASE AND WEBSITE LIVE
 
 ### Processed-order email + branded packing slip — DATABASE AND WEBSITE LIVE

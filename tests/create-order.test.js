@@ -154,10 +154,21 @@ test("order creation has a platform rate limit and rejects large bodies before d
 test("checkout notifications and receipts use the server-confirmed order", () => {
   const source = readFileSync("site_1.jsx", "utf8");
   const index = readFileSync("index.html", "utf8");
+  const paymentHandler = source.slice(
+    source.indexOf("async function handlePlaceOrderAndPay"),
+    source.indexOf("const inputStyle", source.indexOf("async function handlePlaceOrderAndPay")),
+  );
   assert.doesNotMatch(source, /redeem-discount/);
   assert.match(source, /formData\.append\("orderStatus", confirmed\.status\)/);
   assert.match(source, /orderSubtotal: `\$\$\{serverTotals\.subtotal\.toFixed\(2\)\}`/);
   assert.match(source, /orderTotal: `\$\$\{serverTotals\.total\.toFixed\(2\)\}`/);
+  assert.match(source, /No need to come back\./);
+  assert.doesNotMatch(source, /I HAVE SENT PAYMENT|PENDING_PAYMENT/);
+  assert.ok(
+    paymentHandler.indexOf('fetch("/.netlify/functions/create-order"')
+      < paymentHandler.indexOf("window.location.assign(paymentUrl)"),
+    "the durable order must be created before checkout leaves for the payment app",
+  );
   assert.match(index, /name="researchUseAcknowledged"/);
 });
 

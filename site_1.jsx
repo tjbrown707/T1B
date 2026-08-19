@@ -2753,8 +2753,6 @@ function CartPage({ cart, setCart }) {
   const [appliedShipping, setAppliedShipping] = useState(null); // { code, type, value, label } — free-shipping slot
   const [discountError, setDiscountError] = useState("");
   const [discountLoading, setDiscountLoading] = useState(false);
-  const [paymentInitiated, setPaymentInitiated] = useState(false);
-  const [returnedFromPayment, setReturnedFromPayment] = useState(false);
   const [researchAcknowledged, setResearchAcknowledged] = useState(false);
   const [orderSubmitting, setOrderSubmitting] = useState(false);
   const [orderSubmitError, setOrderSubmitError] = useState("");
@@ -2918,70 +2916,7 @@ function CartPage({ cart, setCart }) {
     setStep("payment");
   }
 
-  // Fires when the user clicks "Open Cash App" / "Open Venmo".
-  // Sends a "PENDING_PAYMENT" notification so the owner sees the order
-  // attempt even if the customer never returns to click confirm.
-  function handlePaymentInitiated(method) {
-    if (paymentInitiated) return; // one-shot per checkout
-    setPaymentInitiated(true);
-    const { name, email, phone, address, city, state, zip } = customerInfo;
-    const itemsText = cart.map(item => {
-      const unitPrice = getItemPrice(item);
-      const isBulk = item.qty >= 5;
-      return `${item.name} ${item.dose} x${item.qty} @ $${unitPrice.toFixed(2)}${isBulk ? " (bulk)" : ""} = $${(unitPrice * item.qty).toFixed(2)}`;
-    }).join("\n");
-    const formData = new URLSearchParams();
-    formData.append("form-name", "order");
-    formData.append("bot-field", "");
-    formData.append("orderStatus", "PENDING_PAYMENT");
-    formData.append("orderNumber", orderNumber);
-    formData.append("customerName", name);
-    formData.append("customerEmail", email);
-    formData.append("customerPhone", phone);
-    formData.append("shippingAddress", address);
-    formData.append("shippingCity", city);
-    formData.append("shippingState", state);
-    formData.append("shippingZip", zip);
-    formData.append("orderItems", itemsText);
-    formData.append("orderSubtotal", `$${subtotal.toFixed(2)}`);
-    formData.append("discountCode", [appliedDiscount?.code, appliedShipping?.code].filter(Boolean).join(", "));
-    formData.append("discountAmount", appliedDiscount ? `-$${discountAmount.toFixed(2)}` : "");
-    formData.append("shipping", shipping === 0 ? "FREE" : `$${shipping.toFixed(2)}`);
-    formData.append("paymentMethod", method);
-    formData.append("orderTotal", `$${total.toFixed(2)}`);
-    fetch("/", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: formData.toString(),
-    }).catch((err) => console.error("Pending payment notification error:", err));
-  }
-
-  // Watch for the customer returning to the tab after going to Cash App / Venmo.
-  // Trigger the "welcome back, please confirm" UI (banner + auto-scroll + pulse).
-  useEffect(() => {
-    if (step !== "payment" || !paymentInitiated) return;
-    function onVisibilityChange() {
-      if (document.visibilityState === "visible") {
-        setReturnedFromPayment(true);
-      }
-    }
-    document.addEventListener("visibilitychange", onVisibilityChange);
-    const originalTitle = document.title;
-    document.title = "← Confirm payment · Tier One BioSystems";
-    return () => {
-      document.removeEventListener("visibilitychange", onVisibilityChange);
-      document.title = originalTitle;
-    };
-  }, [step, paymentInitiated]);
-
-  // When the return-banner appears, scroll to the confirm button so it's right under the customer's thumb.
-  useEffect(() => {
-    if (!returnedFromPayment) return;
-    const btn = document.getElementById("confirm-payment-btn");
-    if (btn) btn.scrollIntoView({ behavior: "smooth", block: "center" });
-  }, [returnedFromPayment]);
-
-  // Confirming payment must not report success unless the order actually
+  // Opening a payment app must not happen until the order actually
   // reached somewhere durable. The previous version fired the Supabase insert,
   // the Netlify Forms post and the EmailJS send without awaiting any of them,
   // then cleared the cart unconditionally — so a customer on a flaky connection
@@ -2990,7 +2925,7 @@ function CartPage({ cart, setCart }) {
   // The order of operations now is: save durably, and only then do the things
   // that can be redone by hand (redeem the code, send the receipt). The cart is
   // the customer's only copy of the order, so it is cleared last of all.
-  async function handlePaymentConfirmed() {
+  async function handlePlaceOrderAndPay() {
     if (submittingRef.current) return;
     if (!orderNumber || cart.length === 0) {
       setOrderSubmitError("Your order details are incomplete. Go back to the cart and try again.");
@@ -3067,8 +3002,8 @@ function CartPage({ cart, setCart }) {
       console.error("Order save error:", err);
       setOrderSubmitError(
         (err?.message && !/HTTP \d+/.test(err.message) ? `${err.message} ` : "") +
-        `We could not confirm your order, so we have not cleared your cart. Nothing has been lost — ` +
-        `press Confirm again to retry. If it keeps failing, email ${CONTACT_EMAIL} quoting ${orderNumber} ` +
+        `We could not save your order, so we have not cleared your cart or opened the payment app. Nothing has been lost — ` +
+        `press the payment button again to retry. If it keeps failing, email ${CONTACT_EMAIL} quoting ${orderNumber} ` +
         `and we will finish it by hand.`
       );
       submittingRef.current = false;
@@ -3136,6 +3071,15 @@ function CartPage({ cart, setCart }) {
     setOrderSubmitting(false);
     setStep("confirmed");
     setCart([]);
+
+    // Leave for the payment app only after the server has created the order,
+    // reserved inventory, and returned its trusted total. The customer no
+    // longer has to come back and self-report a payment that staff verifies
+    // independently.
+    const paymentUrl = paymentMethod === "venmo"
+      ? `https://venmo.com/u/TierOneBio?txn=pay&amount=${serverTotals.total.toFixed(2)}&note=${encodeURIComponent(orderNumber)}`
+      : `https://cash.app/$TierOneBio/${serverTotals.total.toFixed(2)}`;
+    window.location.assign(paymentUrl);
   }
 
   const inputStyle = {
@@ -3471,129 +3415,31 @@ function CartPage({ cart, setCart }) {
             {paymentMethod === "cashapp" ? (
               <>
                 <p style={{ margin: "0 0 8px" }}>Send <strong style={{ color: "var(--text-primary)" }}>${total.toFixed(2)}</strong> to <strong style={{ color: "#00D632" }}>$TierOneBio</strong></p>
-                <p style={{ margin: "0 0 20px", color: "var(--text-dim)", fontSize: 14 }}>Paste the order number in the Cash App note so we can match your payment.</p>
-
-                <a
-                  href={`https://cash.app/$TierOneBio/${total.toFixed(2)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={() => handlePaymentInitiated("Cash App")}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: 10,
-                    width: "100%",
-                    padding: "16px 0",
-                    background: "#00D632",
-                    border: "none",
-                    color: "#fff",
-                    fontFamily: "'Orbitron', sans-serif",
-                    fontWeight: 700,
-                    fontSize: 14,
-                    letterSpacing: "0.15em",
-                    textTransform: "uppercase",
-                    textDecoration: "none",
-                    cursor: "pointer",
-                    transition: "all 0.2s",
-                    boxSizing: "border-box",
-                  }}
-                >
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="#fff">
-                    <path d="M23.59 3.47A5.1 5.1 0 0 0 20.55.42 5.07 5.07 0 0 0 17.13 0H6.87a5.07 5.07 0 0 0-3.42.42A5.1 5.1 0 0 0 .42 3.47 5.07 5.07 0 0 0 0 6.87v10.26a5.07 5.07 0 0 0 .42 3.42 5.1 5.1 0 0 0 3.05 3.05 5.07 5.07 0 0 0 3.42.42h10.26a5.07 5.07 0 0 0 3.42-.42 5.1 5.1 0 0 0 3.05-3.05 5.07 5.07 0 0 0 .42-3.42V6.87a5.1 5.1 0 0 0-.45-3.4zM17.4 10.29l-.87.87a.46.46 0 0 1-.36.15.48.48 0 0 1-.36-.15c-.87-.87-1.32-.87-1.56-.87-.42 0-.78.36-.78.78 0 .18.06.36.18.48.12.12.24.18.42.24l.84.3c1.38.48 2.22 1.38 2.22 2.94a3.09 3.09 0 0 1-2.1 3v.84a.48.48 0 0 1-.48.48h-.96a.48.48 0 0 1-.48-.48v-.78a4.03 4.03 0 0 1-2.1-1.14.48.48 0 0 1 0-.66l.84-.84a.48.48 0 0 1 .66 0c.72.66 1.32.84 1.8.84a1.2 1.2 0 0 0 1.2-1.2c0-.42-.24-.78-1.08-1.08l-.78-.3c-.96-.36-2.28-1.08-2.28-2.88a2.79 2.79 0 0 1 1.98-2.64v-.78a.48.48 0 0 1 .48-.48h.96a.48.48 0 0 1 .48.48v.72a3.3 3.3 0 0 1 1.68.9.48.48 0 0 1 .06.66z" />
-                  </svg>
-                  OPEN CASH APP
-                </a>
+                <p style={{ margin: 0, color: "var(--text-dim)", fontSize: 14 }}>Paste the order number in the Cash App note so we can match your payment.</p>
               </>
             ) : (
               <>
                 <p style={{ margin: "0 0 8px" }}>Send <strong style={{ color: "var(--text-primary)" }}>${total.toFixed(2)}</strong> to <strong style={{ color: "#008CFF" }}>@TierOneBio</strong></p>
-                <p style={{ margin: "0 0 20px", color: "var(--text-dim)", fontSize: 14 }}>Paste the order number in the Venmo note so we can match your payment.</p>
-
-                <a
-                  href={`https://venmo.com/u/TierOneBio?txn=pay&amount=${total.toFixed(2)}&note=${encodeURIComponent(orderNumber)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={() => handlePaymentInitiated("Venmo")}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: 10,
-                    width: "100%",
-                    padding: "16px 0",
-                    background: "#008CFF",
-                    border: "none",
-                    color: "#fff",
-                    fontFamily: "'Orbitron', sans-serif",
-                    fontWeight: 700,
-                    fontSize: 14,
-                    letterSpacing: "0.15em",
-                    textTransform: "uppercase",
-                    textDecoration: "none",
-                    cursor: "pointer",
-                    transition: "all 0.2s",
-                    boxSizing: "border-box",
-                  }}
-                >
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="#fff">
-                    <path d="M19.59 0H4.41A4.41 4.41 0 0 0 0 4.41v15.18A4.41 4.41 0 0 0 4.41 24h15.18A4.41 4.41 0 0 0 24 19.59V4.41A4.41 4.41 0 0 0 19.59 0zm-3.34 18.7H8.13L4.93 5.16h3.94l1.74 9.13c.46-.74 1.03-1.92 1.03-2.72 0-2.21-1.94-3.7-1.94-3.7l3.05-2.71c1.55 1.74 2.4 3.61 2.4 6.02 0 3.07-2.62 7.08-3 7.52z" />
-                  </svg>
-                  OPEN VENMO
-                </a>
+                <p style={{ margin: 0, color: "var(--text-dim)", fontSize: 14 }}>Your order number will be included in the Venmo note automatically.</p>
               </>
             )}
 
-            {/* MUST-RETURN warning — shown before they leave so they know to come back and confirm */}
             <div style={{
               marginTop: 20,
               padding: "14px 16px",
-              border: "1px solid rgba(245,158,11,0.5)",
-              background: "rgba(245,158,11,0.08)",
+              border: "1px solid rgba(34,197,94,0.45)",
+              background: "rgba(34,197,94,0.08)",
               display: "flex",
               gap: 10,
               alignItems: "flex-start",
             }}>
-              <span style={{ fontSize: 18, lineHeight: 1.3 }}>⚠️</span>
+              <span aria-hidden="true" style={{ fontSize: 18, lineHeight: 1.3 }}>✓</span>
               <span style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 15, color: "var(--text-secondary)", lineHeight: 1.5 }}>
-                <strong style={{ color: "#f59e0b" }}>Don't close this page.</strong> After you send payment in {paymentMethod === "venmo" ? "Venmo" : "Cash App"}, <strong style={{ color: "var(--text-primary)" }}>come back here</strong> and tap <strong style={{ color: "var(--text-primary)" }}>"I have sent payment"</strong> below. Your order will not be processed until you confirm it here.
+                <strong style={{ color: "#22c55e" }}>No need to come back.</strong> The button below saves your order first, then opens {paymentMethod === "venmo" ? "Venmo" : "Cash App"}. After you send payment, you are finished. We verify every payment ourselves.
               </span>
             </div>
-
-            <p style={{ margin: "20px 0 0", fontWeight: 600, color: "var(--text-primary)", fontSize: 17 }}>
-              Step 3: {paymentInitiated ? "Confirm your payment below" : "Confirm below — after you've paid"}
-            </p>
           </div>
         </div>
-
-        {returnedFromPayment && (
-          <div style={{
-            padding: "14px 18px",
-            marginBottom: 16,
-            border: "1px solid #22c55e",
-            background: "rgba(34,197,94,0.08)",
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-            animation: "pulseReturn 1.6s ease-in-out infinite",
-          }}>
-            <span style={{
-              fontFamily: "'Orbitron', sans-serif",
-              fontSize: 11,
-              fontWeight: 700,
-              letterSpacing: "0.15em",
-              color: "#22c55e",
-              textTransform: "uppercase",
-              whiteSpace: "nowrap",
-            }}>Welcome back</span>
-            <span style={{
-              fontFamily: "'Rajdhani', sans-serif",
-              fontSize: 14,
-              color: "var(--text-secondary)",
-              lineHeight: 1.4,
-            }}>Once your payment is sent, tap "I have sent payment" below to finalize your order.</span>
-          </div>
-        )}
 
         {orderSubmitError && (
           <div role="alert" style={{
@@ -3608,49 +3454,31 @@ function CartPage({ cart, setCart }) {
           }}>{orderSubmitError}</div>
         )}
 
-        {paymentInitiated ? (
-          <button
-            id="confirm-payment-btn"
-            onClick={handlePaymentConfirmed}
-            disabled={orderSubmitting}
-            aria-busy={orderSubmitting}
-            style={{
-              width: "100%",
-              padding: "16px 0",
-              background: orderSubmitting ? "var(--bg-card-hover)" : "var(--red-primary)",
-              border: "1px solid var(--red-primary)",
-              color: orderSubmitting ? "var(--text-secondary)" : "#fff",
-              fontFamily: "'Orbitron', sans-serif",
-              fontWeight: 700,
-              fontSize: 14,
-              letterSpacing: "0.2em",
-              textTransform: "uppercase",
-              cursor: orderSubmitting ? "wait" : "pointer",
-              transition: "all 0.2s",
-              marginBottom: 16,
-              boxShadow: returnedFromPayment && !orderSubmitting ? "0 0 0 0 rgba(196,30,42,0.6)" : "none",
-              animation: returnedFromPayment && !orderSubmitting ? "pulseConfirm 1.6s ease-out infinite" : "none",
-            }}
-            onMouseEnter={e => { if (orderSubmitting) return; e.target.style.background = "transparent"; e.target.style.color = "var(--red-primary)"; }}
-            onMouseLeave={e => { if (orderSubmitting) return; e.target.style.background = "var(--red-primary)"; e.target.style.color = "#fff"; }}
-          >{orderSubmitting ? "SAVING YOUR ORDER…" : (orderSubmitError ? "RETRY CONFIRMATION" : "I HAVE SENT PAYMENT")}</button>
-        ) : (
-          <div style={{
+        <button
+          type="button"
+          onClick={handlePlaceOrderAndPay}
+          disabled={orderSubmitting}
+          aria-busy={orderSubmitting}
+          style={{
             width: "100%",
             padding: "16px 0",
-            border: "1px dashed var(--border)",
-            background: "rgba(17,17,17,0.4)",
-            color: "var(--text-dim)",
-            fontFamily: "'Rajdhani', sans-serif",
+            background: orderSubmitting ? "var(--bg-card-hover)" : paymentMethod === "venmo" ? "#008CFF" : "#00D632",
+            border: `1px solid ${paymentMethod === "venmo" ? "#008CFF" : "#00D632"}`,
+            color: orderSubmitting ? "var(--text-secondary)" : "#fff",
+            fontFamily: "'Orbitron', sans-serif",
+            fontWeight: 700,
             fontSize: 14,
-            textAlign: "center",
-            lineHeight: 1.5,
+            letterSpacing: "0.13em",
+            textTransform: "uppercase",
+            cursor: orderSubmitting ? "wait" : "pointer",
+            transition: "all 0.2s",
             marginBottom: 16,
-            boxSizing: "border-box",
-          }}>
-            Tap <strong style={{ color: "var(--text-secondary)" }}>Open {paymentMethod === "venmo" ? "Venmo" : "Cash App"}</strong> above first.<br />Your confirmation button will appear here once you do.
-          </div>
-        )}
+          }}
+        >
+          {orderSubmitting
+            ? "SAVING YOUR ORDER…"
+            : `${orderSubmitError ? "RETRY & OPEN" : "PLACE ORDER & OPEN"} ${paymentMethod === "venmo" ? "VENMO" : "CASH APP"}`}
+        </button>
 
         <div style={{
           fontFamily: "'Rajdhani', sans-serif",
