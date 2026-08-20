@@ -35,7 +35,9 @@ test("one HSTS policy is set for HTML and function responses, without preload", 
   assert.doesNotMatch(toml, /Strict-Transport-Security = "[^"]*preload/);
   assert.doesNotMatch(toml, /stats\.g\.doubleclick\.net/);
   assert.doesNotMatch(toml, /api\.emailjs\.com/);
-  assert.doesNotMatch(toml, /script-src[^"]*'unsafe-inline'/);
+  const csp = toml.match(/Content-Security-Policy = "([^"]+)"/)?.[1] || "";
+  assert.match(csp, /script-src 'self' https:\/\/www\.googletagmanager\.com/);
+  assert.doesNotMatch(csp, /script-src[^;]*'unsafe-inline'/);
   assert.equal(HSTS_VALUE, "max-age=31536000; includeSubDomains");
   assert.doesNotMatch(HSTS_VALUE, /preload/);
 
