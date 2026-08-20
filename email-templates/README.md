@@ -50,8 +50,9 @@ Once custom SMTP is on, you can also raise the rate limits under
 **Authentication → Rate Limits**.
 
 > Note: this same verified Resend domain is also used by the server-side
-> processed-order/tracking email described below. EmailJS still handles the
-> original checkout confirmation email.
+> processed-order/tracking email described below. Checkout confirmation email
+> is also sent from the server (`create-order`) through EmailJS. The browser
+> no longer calls EmailJS.
 
 ---
 
@@ -211,3 +212,26 @@ version and idempotency-key version together.
   remembering when scheduling one against the 30-day expiry.
 - **No stacking.** The checkout allows one discount code plus one free-shipping
   code, so a welcome code can't be combined with another discount.
+
+## 5. Checkout confirmation (EmailJS, server-side)
+
+The order receipt template (`email-template.html`, EmailJS template in the
+dashboard) is sent by `netlify/functions/create-order.js` after the order is
+saved. If the EmailJS private key is missing, the function does **not** fall
+back to the browser — the order is still saved and the confirmation screen
+says the receipt could not be sent.
+
+**Site configuration → Environment variables** — add all four. None of these
+belong in the repo:
+
+| Variable | Where to copy it from |
+|---|---|
+| `EMAILJS_SERVICE_ID` | EmailJS → Email Services |
+| `EMAILJS_TEMPLATE_ID` | EmailJS → Email Templates |
+| `EMAILJS_PUBLIC_KEY` | EmailJS → Account → API keys (public) |
+| `EMAILJS_PRIVATE_KEY` | EmailJS → Account → API keys (private) |
+
+After deploy: in the EmailJS dashboard, restrict allowed origins to
+`https://www.tierone.bio`, then rotate the public service / template / key
+IDs that used to ship in the browser bundle and update the four env vars
+to the new values.

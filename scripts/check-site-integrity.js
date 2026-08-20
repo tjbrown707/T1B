@@ -95,6 +95,10 @@ if (sitemap) {
   if (listed.has(canonicalUrl("/cart"))) fail("Sitemap must not contain /cart.");
 }
 
+if (/emailjs\.send|@emailjs\/browser/.test(source)) {
+  fail("site_1.jsx must not call EmailJS from the browser.");
+}
+
 // ── 4. Prerender output must exist for every route ──────────────────────────
 if (hasDist) {
   for (const route of allRoutes(today)) {
@@ -102,6 +106,35 @@ if (hasDist) {
     if (!existsSync(join(DIST, file))) fail(`Prerendered page missing: dist/${file}`);
   }
   if (!existsSync(join(DIST, "404.html"))) fail("dist/404.html is missing — unknown URLs would not return a 404.");
+
+  const securityTxt = join(DIST, ".well-known", "security.txt");
+  if (!existsSync(securityTxt)) {
+    fail("dist/.well-known/security.txt is missing.");
+  } else {
+    const text = readFileSync(securityTxt, "utf8");
+    if (!/^Contact:\s*mailto:sales@tierone\.bio\s*$/m.test(text)) {
+      fail("security.txt must list the existing sales@ contact.");
+    }
+    if (!/^Expires:\s*\d{4}-\d{2}-\d{2}T/m.test(text)) {
+      fail("security.txt must include an RFC 9116 Expires timestamp.");
+    }
+    if (!text.includes("https://www.tierone.bio/privacy")) {
+      fail("security.txt must link the existing privacy policy.");
+    }
+  }
+
+  for (const route of allRoutes(today).filter(entry => entry.staffOnly)) {
+    const file = `${route.path.replace(/^\//, "")}.html`;
+    const target = join(DIST, file);
+    if (!existsSync(target)) continue;
+    const html = readFileSync(target, "utf8");
+    if (!/noindex/.test(html)) {
+      fail(`Staff route ${route.path} must ship noindex in its empty shell.`);
+    }
+    if (/Order management|Inventory management|Staff order/i.test(html)) {
+      fail(`Staff route ${route.path} was prerendered with staff copy.`);
+    }
+  }
 
   // The prerender fallback stylesheet must never target #root. React clears
   // #root's children on mount but leaves the element itself, so a rule on

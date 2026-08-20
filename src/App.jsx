@@ -1,5 +1,6 @@
 import { BrowserRouter } from "react-router-dom"
 import { AuthProvider } from "./AuthContext.jsx"
+import ConsentBanner from "./ConsentBanner.jsx"
 import Site from "../site_1.jsx"
 
 // This file is just thin wiring.
@@ -11,6 +12,7 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
         <Site />
+        <ConsentBanner />
       </AuthProvider>
     </BrowserRouter>
   )

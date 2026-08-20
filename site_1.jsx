@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef, useCallback, lazy, Suspense } from "react";
 import { Routes, Route, Navigate, useNavigate, useLocation, useParams, useSearchParams } from "react-router-dom";
-import emailjs from "@emailjs/browser";
 import { supabase } from "./supabaseClient";
 import { useAuth } from "./src/AuthContext.jsx";
 
@@ -2918,7 +2917,7 @@ function CartPage({ cart, setCart }) {
 
   // Opening a payment app must not happen until the order actually
   // reached somewhere durable. The previous version fired the Supabase insert,
-  // the Netlify Forms post and the EmailJS send without awaiting any of them,
+  // the Netlify Forms post and the confirmation email without awaiting any of them,
   // then cleared the cart unconditionally — so a customer on a flaky connection
   // saw "order received", lost their cart, and left no record behind.
   //
@@ -3040,32 +3039,9 @@ function CartPage({ cart, setCart }) {
       }
     }
 
-    // Send confirmation email to customer via EmailJS. If this fails the
-    // confirmation screen says so, instead of promising an email that is
-    // never going to arrive.
-    try {
-      await emailjs.send("service_r3r7crs", "template_i9k8u2a", {
-        customerName: name,
-        customerEmail: email,
-        customerPhone: phone,
-        orderNumber: orderNumber,
-        orderItems: itemsText,
-        orderSubtotal: `$${serverTotals.subtotal.toFixed(2)}`,
-        discountCode: confirmed.discountCode,
-        discountAmount: serverTotals.discountAmount > 0 ? `-$${serverTotals.discountAmount.toFixed(2)}` : "",
-        shipping: serverTotals.shipping === 0 ? "FREE" : `$${serverTotals.shipping.toFixed(2)}`,
-        paymentMethod: paymentMethod === "venmo" ? "Venmo" : "Cash App",
-        orderTotal: `$${serverTotals.total.toFixed(2)}`,
-        shippingAddress: address,
-        shippingCity: city,
-        shippingState: state,
-        shippingZip: zip,
-      }, "E2QQt-tqFcuyhtZOD");
-      setReceiptSent(true);
-    } catch (err) {
-      console.error("Email error:", err);
-      setReceiptSent(false);
-    }
+    // Confirmation mail is sent by create-order on the server. The browser
+    // never talks to EmailJS; a missing server key fails closed there.
+    setReceiptSent(confirmed.receiptSent === true);
 
     submittingRef.current = false;
     setOrderSubmitting(false);
@@ -6584,10 +6560,16 @@ function PrivacyPage() {
         <p>We do not sell, trade, or rent your personal information to third parties. We share information only with service providers required to fulfill your order (shipping carriers, email service, payment platforms) and only the information necessary for that purpose.</p>
 
         <h2 style={policyHeadingStyle}>Cookies & Analytics</h2>
-        <p>We use Google Analytics to understand site traffic. This service may set cookies. We use localStorage in your browser to remember your cart between visits. You can clear this at any time through your browser settings.</p>
+        <p>Google Analytics is not loaded until you accept the analytics prompt. If you decline, the tracker is not added to the page. If you accept, Google Analytics may set first-party cookies on this site, including:</p>
+        <ul style={{ paddingLeft: 24 }}>
+          <li><code>_ga</code> — distinguishes unique visitors</li>
+          <li><code>_ga_HY1FDLSRTJ</code> — keeps track of the current analytics session</li>
+        </ul>
+        <p>We use these counts to understand site traffic. Advertising cookies from DoubleClick are not used. You can change a stored choice by clearing this site's cookies and site data in your browser, which will show the prompt again.</p>
+        <p>We also use localStorage in your browser to remember your cart between visits. You can clear this at any time through your browser settings.</p>
 
         <h2 style={policyHeadingStyle}>Data Security</h2>
-        <p>Order data is transmitted over HTTPS and stored on secure third-party services (Netlify Forms, EmailJS). Payments occur outside our site through Cash App or Venmo and we never see or store payment credentials.</p>
+        <p>Order data is transmitted over HTTPS and stored on our hosting and database providers. Order confirmation email is sent from the server. Payments occur outside our site through Cash App or Venmo and we never see or store payment credentials.</p>
 
         <h2 style={policyHeadingStyle}>Contact</h2>
         <p>For privacy questions or data deletion requests, contact <a href="mailto:sales@tierone.bio" style={{ color: "var(--red-primary)" }}>sales@tierone.bio</a>.</p>

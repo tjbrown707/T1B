@@ -6,11 +6,36 @@
 // then just as permitted as this one. Moving it into the bundle lets the policy
 // drop that allowance entirely.
 //
-// NOTE: analytics still load on every visit, exactly as before. Whether they
-// should instead wait for a consent choice depends on where visitors are, and
-// is a decision to take alongside the privacy-policy rewrite.
+// The tracker is not loaded until the visitor accepts. Declining stores that
+// choice and leaves gtag unloaded. Advertising / DoubleClick collection is
+// left off even after accept.
 
-const MEASUREMENT_ID = "G-HY1FDLSRTJ";
+export const MEASUREMENT_ID = "G-HY1FDLSRTJ";
+export const ANALYTICS_CONSENT_KEY = "tierone-analytics-consent";
+
+export function getAnalyticsConsent(storage) {
+  const store = resolveStorage(storage);
+  if (!store) return null;
+  try {
+    const value = store.getItem(ANALYTICS_CONSENT_KEY);
+    return value === "granted" || value === "denied" ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+export function acceptAnalytics(storage) {
+  persistConsent("granted", storage);
+  initAnalytics();
+}
+
+export function declineAnalytics(storage) {
+  persistConsent("denied", storage);
+}
+
+export function initAnalyticsIfGranted(storage) {
+  if (getAnalyticsConsent(storage) === "granted") initAnalytics();
+}
 
 export function initAnalytics() {
   if (typeof window === "undefined" || window.__tierOneAnalyticsLoaded) return;
@@ -20,10 +45,35 @@ export function initAnalytics() {
   function gtag() { window.dataLayer.push(arguments); }
   window.gtag = gtag;
   gtag("js", new Date());
-  gtag("config", MEASUREMENT_ID, { anonymize_ip: true });
+  gtag("config", MEASUREMENT_ID, {
+    anonymize_ip: true,
+    allow_google_signals: false,
+    allow_ad_personalization_signals: false,
+  });
 
   const script = document.createElement("script");
   script.async = true;
   script.src = `https://www.googletagmanager.com/gtag/js?id=${MEASUREMENT_ID}`;
   document.head.appendChild(script);
+}
+
+function persistConsent(value, storage) {
+  const store = resolveStorage(storage);
+  if (!store) return;
+  try {
+    store.setItem(ANALYTICS_CONSENT_KEY, value);
+  } catch {
+    // Private mode can refuse localStorage. The in-memory choice still stands
+    // for this visit; the banner may reappear next time.
+  }
+}
+
+function resolveStorage(storage) {
+  if (storage) return storage;
+  if (typeof window === "undefined") return null;
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
 }

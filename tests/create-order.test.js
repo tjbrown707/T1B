@@ -10,6 +10,7 @@ import createOrder, {
 } from "../netlify/functions/create-order.js";
 import validateDiscount from "../netlify/functions/validate-discount.js";
 import { PRODUCTS } from "../src/data/catalog.js";
+import { HSTS_VALUE } from "../netlify/functions/_shared/http.js";
 
 function validRequest(overrides = {}) {
   return {
@@ -159,9 +160,11 @@ test("checkout notifications and receipts use the server-confirmed order", () =>
     source.indexOf("const inputStyle", source.indexOf("async function handlePlaceOrderAndPay")),
   );
   assert.doesNotMatch(source, /redeem-discount/);
+  assert.doesNotMatch(source, /emailjs\.send|@emailjs\/browser/);
   assert.match(source, /formData\.append\("orderStatus", confirmed\.status\)/);
-  assert.match(source, /orderSubtotal: `\$\$\{serverTotals\.subtotal\.toFixed\(2\)\}`/);
-  assert.match(source, /orderTotal: `\$\$\{serverTotals\.total\.toFixed\(2\)\}`/);
+  assert.match(source, /formData\.append\("orderSubtotal"/);
+  assert.match(source, /formData\.append\("orderTotal"/);
+  assert.match(source, /setReceiptSent\(confirmed\.receiptSent === true\)/);
   assert.match(source, /No need to come back\./);
   assert.doesNotMatch(source, /I HAVE SENT PAYMENT|PENDING_PAYMENT/);
   assert.ok(
@@ -170,6 +173,22 @@ test("checkout notifications and receipts use the server-confirmed order", () =>
     "the durable order must be created before checkout leaves for the payment app",
   );
   assert.match(index, /name="researchUseAcknowledged"/);
+});
+
+test("create-order refuses a mismatched browser Origin without echoing it", async () => {
+  const response = await createOrder(new Request("https://www.tierone.bio/.netlify/functions/create-order", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Origin: "https://evil.example",
+    },
+    body: JSON.stringify({ customerEmail: "victim@example.com" }),
+  }));
+  assert.equal(response.status, 403);
+  assert.equal(response.headers.get("strict-transport-security"), HSTS_VALUE);
+  const body = await response.text();
+  assert.match(body, /Request not allowed/);
+  assert.doesNotMatch(body, /evil\.example|victim@example\.com/);
 });
 
 test("the schema keeps order creation server-only and redemption transactional", () => {

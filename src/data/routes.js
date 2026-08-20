@@ -218,6 +218,7 @@ export const STATIC_ROUTES = [
     description: "Staff order management for Tier One BioSystems.",
     h1: "Order management",
     noindex: true,
+    staffOnly: true,
   },
   {
     path: "/admin/inventory",
@@ -225,6 +226,7 @@ export const STATIC_ROUTES = [
     description: "Staff lot-level inventory management for Tier One BioSystems.",
     h1: "Inventory management",
     noindex: true,
+    staffOnly: true,
   },
   {
     // Compatibility route for the first admin-console deployment. React
@@ -235,6 +237,7 @@ export const STATIC_ROUTES = [
     description: "Staff order management for Tier One BioSystems.",
     h1: "Order management",
     noindex: true,
+    staffOnly: true,
   },
   {
     path: "/reset-password",

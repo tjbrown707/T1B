@@ -8,7 +8,8 @@ import { PRODUCTS } from "../../src/data/catalog.js";
 import { MAX_CART_QUANTITY } from "../../src/data/cart.js";
 import { isSaleActive } from "../../src/data/pricing.js";
 import { orderTotals, orderLineItems, isShippingDiscountCode } from "../../src/data/order-totals.js";
-import { getEnv, jsonResponse, readBearerToken, readJsonBody } from "./_shared/http.js";
+import { getEnv, jsonResponse, readBearerToken, readJsonBody, rejectCrossOrigin } from "./_shared/http.js";
+import { orderReceiptParams, sendOrderReceipt } from "./_shared/emailjs.js";
 
 const MAX_BODY_BYTES = 32 * 1024;
 const ORDER_NUMBER_PATTERN = /^T1B-\d{6}-\d{6}$/;
@@ -25,6 +26,8 @@ const CUSTOMER_LIMITS = {
 };
 
 export default async function handler(request) {
+  const blocked = rejectCrossOrigin(request, "POST, OPTIONS");
+  if (blocked) return blocked;
   if (request.method === "OPTIONS") return jsonResponse(204, null, "POST, OPTIONS");
   if (request.method !== "POST") return fail(405, "Method not allowed");
 
@@ -127,11 +130,26 @@ export default async function handler(request) {
     return fail(409, "That order reference is already in use. Please start a new order.");
   }
 
+  const receipt = await sendOrderReceipt(orderReceiptParams({
+    customer: input.customer,
+    orderNumber: saved.order_number,
+    itemsText: saved.items_text || itemsText,
+    totals: {
+      subtotal: Number(saved.subtotal),
+      discountAmount: Number(saved.discount_amount),
+      shipping: Number(saved.shipping),
+      total: Number(saved.total),
+    },
+    discountCode: saved.discount_code || "",
+    paymentMethod: saved.payment_method,
+  }));
+
   return jsonResponse(200, {
     ok: true,
     orderNumber: saved.order_number,
     status: saved.status,
     discountCode: saved.discount_code || "",
+    receiptSent: receipt.ok,
     totals: {
       subtotal: Number(saved.subtotal),
       discountAmount: Number(saved.discount_amount),

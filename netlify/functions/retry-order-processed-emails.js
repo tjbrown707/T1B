@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-import { getEnv } from "./_shared/http.js";
+import { getEnv, securityHeaders } from "./_shared/http.js";
 import { drainOrderProcessedEmailQueue } from "./_shared/order-processed-email.js";
 
 export default async function handler() {
@@ -7,7 +7,7 @@ export default async function handler() {
   const serviceRoleKey = getEnv("SUPABASE_SERVICE_ROLE_KEY");
   if (!supabaseUrl || !serviceRoleKey) {
     console.error("retry-order-processed-emails: Supabase env vars missing");
-    return new Response(null, { status: 204 });
+    return new Response(null, { status: 204, headers: securityHeaders() });
   }
 
   const supabase = createClient(supabaseUrl, serviceRoleKey, {
@@ -19,7 +19,7 @@ export default async function handler() {
   console.info(
     `retry-order-processed-emails: processed ${results.length}, sent ${sent}, needs review ${attention}`,
   );
-  return new Response(null, { status: 204 });
+  return new Response(null, { status: 204, headers: securityHeaders() });
 }
 
 export const config = {
