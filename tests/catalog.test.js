@@ -112,6 +112,50 @@ test("article references point somewhere resolvable", () => {
   }
 });
 
+// Library cards, prerendered HTML, and search snippets all read title / excerpt
+// / meta from ARTICLE_META. Keep those in pathway and model-system language.
+test("article listing copy is not framed as consumer wellness", () => {
+  const banned = [
+    /\bweight management\b/i,
+    /\bsupplementation\b/i,
+    /\brecovery\b/i,
+    /\btissue repair\b/i,
+    /\bnootropic\b/i,
+    /\bstack\b/i,
+    /\bexercise mimetic\b/i,
+    /\bmetabolic health\b/i,
+  ];
+  for (const article of ARTICLE_META) {
+    const listing = [
+      article.title,
+      article.excerpt,
+      article.metaTitle,
+      article.metaDescription,
+      ...(article.tags || []),
+    ].join(" ");
+    for (const pattern of banned) {
+      assert.ok(!pattern.test(listing), `${article.slug} listing copy matches ${pattern}: "${listing}"`);
+    }
+  }
+});
+
+test("required research-library titles use pathway language", () => {
+  const bySlug = Object.fromEntries(ARTICLE_META.map(a => [a.slug, a]));
+  const expected = {
+    "nad-plus-supplementation-research": "NAD+ in Cellular Models: Mechanisms and Current Research",
+    "selank-semax-russian-nootropic-peptides": "Selank and Semax: BDNF and Cytokine Modulation Research",
+    "mots-c-mitochondrial-peptide-research": "MOTS-c: Mitochondrial Peptide and AMPK Signaling Research",
+    "tissue-repair-peptide-blends-research": "Combined Peptide Studies: BPC-157, GHK-Cu, and TB-500",
+    "bpc-157-vs-tb-500-tissue-repair": "BPC-157 vs TB-500: Angiogenesis and Actin-Regulation Research",
+    "cjc-1295-ipamorelin-growth-hormone-stack": "CJC-1295 and Ipamorelin: Dual-Receptor GHRH and Ghrelin-Mimetic Research",
+    "retatrutide-vs-tirzepatide-vs-semaglutide": "Retatrutide vs Tirzepatide vs Semaglutide: A Research Comparison",
+    "tesamorelin-growth-hormone-research": "GHRH Analog Research: Tesamorelin Mechanism and Findings",
+  };
+  for (const [slug, title] of Object.entries(expected)) {
+    assert.equal(bySlug[slug]?.title, title, `${slug} title drifted`);
+  }
+});
+
 test("related product ids on articles all exist", () => {
   const ids = new Set(PRODUCTS.map(p => p.id));
   for (const article of ARTICLE_META) {
