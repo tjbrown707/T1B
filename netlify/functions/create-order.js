@@ -3,13 +3,14 @@
 // recomputed from the catalog, then the order insert and personal-code
 // redemption happen in one Postgres transaction.
 
-import { createClient } from "@supabase/supabase-js";
+import { createClient as defaultCreateClient } from "@supabase/supabase-js";
 import { PRODUCTS } from "../../src/data/catalog.js";
 import { MAX_CART_QUANTITY } from "../../src/data/cart.js";
 import { isSaleActive } from "../../src/data/pricing.js";
 import { orderTotals, orderLineItems, isShippingDiscountCode } from "../../src/data/order-totals.js";
 import { getEnv, jsonResponse, readBearerToken, readJsonBody, rejectCrossOrigin } from "./_shared/http.js";
-import { orderReceiptParams, sendOrderReceipt } from "./_shared/emailjs.js";
+import { deliverOrderReceipt, orderReceiptParams } from "./_shared/order-receipt.js";
+import { clientIp, readTurnstileToken, verifyTurnstileToken } from "./_shared/turnstile.js";
 
 const MAX_BODY_BYTES = 32 * 1024;
 const ORDER_NUMBER_PATTERN = /^T1B-\d{6}-\d{6}$/;
@@ -25,7 +26,11 @@ const CUSTOMER_LIMITS = {
   zip: 20,
 };
 
-export default async function handler(request) {
+export function createOrderHandler({
+  createClient = defaultCreateClient,
+  fetchImpl = fetch,
+} = {}) {
+  return async function handler(request) {
   const blocked = rejectCrossOrigin(request, "POST, OPTIONS");
   if (blocked) return blocked;
   if (request.method === "OPTIONS") return jsonResponse(204, null, "POST, OPTIONS");
@@ -37,6 +42,14 @@ export default async function handler(request) {
   const validated = validateOrderRequest(parsed.data);
   if (validated.error) return fail(400, validated.error);
   const input = validated.data;
+
+  const turnstile = await verifyTurnstileToken(input.turnstileToken, {
+    fetchImpl,
+    remoteIp: clientIp(request),
+  });
+  if (!turnstile.ok) {
+    return fail(403, turnstile.error || "Bot verification failed. Please try again.");
+  }
 
   const supabaseUrl = getEnv("SUPABASE_URL");
   const serviceRoleKey = getEnv("SUPABASE_SERVICE_ROLE_KEY");
@@ -130,26 +143,31 @@ export default async function handler(request) {
     return fail(409, "That order reference is already in use. Please start a new order.");
   }
 
-  const receipt = await sendOrderReceipt(orderReceiptParams({
-    customer: input.customer,
-    orderNumber: saved.order_number,
-    itemsText: saved.items_text || itemsText,
-    totals: {
-      subtotal: Number(saved.subtotal),
-      discountAmount: Number(saved.discount_amount),
-      shipping: Number(saved.shipping),
-      total: Number(saved.total),
-    },
-    discountCode: saved.discount_code || "",
-    paymentMethod: saved.payment_method,
-  }));
+  const receipt = await deliverOrderReceipt({
+    supabase,
+    orderId: saved.id,
+    fetchImpl,
+    params: orderReceiptParams({
+      customer: input.customer,
+      orderNumber: saved.order_number,
+      itemsText: saved.items_text || itemsText,
+      totals: {
+        subtotal: Number(saved.subtotal),
+        discountAmount: Number(saved.discount_amount),
+        shipping: Number(saved.shipping),
+        total: Number(saved.total),
+      },
+      discountCode: saved.discount_code || "",
+      paymentMethod: saved.payment_method,
+    }),
+  });
 
   return jsonResponse(200, {
     ok: true,
     orderNumber: saved.order_number,
     status: saved.status,
     discountCode: saved.discount_code || "",
-    receiptSent: receipt.ok,
+    receiptSent: receipt.ok === true,
     totals: {
       subtotal: Number(saved.subtotal),
       discountAmount: Number(saved.discount_amount),
@@ -159,7 +177,11 @@ export default async function handler(request) {
     itemsText: saved.items_text || "",
     items: Array.isArray(saved.items) ? saved.items : [],
   }, "POST, OPTIONS");
+  };
 }
+
+const handler = createOrderHandler();
+export default handler;
 
 export function validateOrderRequest(body) {
   if (!body || typeof body !== "object" || Array.isArray(body)) return { error: "Invalid request." };
@@ -200,6 +222,8 @@ export function validateOrderRequest(body) {
     return { error: "Choose Cash App or Venmo as the payment method." };
   }
   const paymentMethod = body.paymentMethod === "venmo" ? "Venmo" : "Cash App";
+  const turnstileToken = readTurnstileToken(body.turnstileToken);
+  if (!turnstileToken) return { error: "Bot verification failed. Please try again." };
 
   const rawCodes = body.discountCodes ?? [];
   if (!Array.isArray(rawCodes) || rawCodes.length > 2) return { error: "Too many discount codes were supplied." };
@@ -211,7 +235,7 @@ export function validateOrderRequest(body) {
     if (!discountCodes.includes(code)) discountCodes.push(code);
   }
 
-  return { data: { orderNumber, customer, items, paymentMethod, discountCodes } };
+  return { data: { orderNumber, customer, items, paymentMethod, discountCodes, turnstileToken } };
 }
 
 export function ordersMatch(saved, expected) {

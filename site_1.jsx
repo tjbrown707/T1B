@@ -37,6 +37,8 @@ import {
 } from "./src/data/pricing.js";
 import { getLabResults, isLabResultWithheld } from "./src/data/lab-integrity.js";
 import { readStoredCart, clampQuantity, MAX_CART_QUANTITY } from "./src/data/cart.js";
+import TurnstileField from "./src/TurnstileField.jsx";
+import { openCookieSettings } from "./src/cookie-settings.js";
 import {
   lineUnitPrice,
   orderTotals,
@@ -2272,6 +2274,23 @@ function Footer() {
           <FooterLink to="/returns">Returns</FooterLink>
           <FooterLink to="/terms">Terms of Service</FooterLink>
           <FooterLink to="/privacy">Privacy Policy</FooterLink>
+          <FooterLink to="/security">Vulnerability Disclosure</FooterLink>
+          <button
+            type="button"
+            onClick={openCookieSettings}
+            style={{
+              ...FOOTER_LINK_STYLE,
+              background: "none",
+              border: 0,
+              padding: "4px 0",
+              textAlign: "left",
+              width: "100%",
+            }}
+            onMouseEnter={e => { e.target.style.color = "var(--red-primary)"; }}
+            onMouseLeave={e => { e.target.style.color = "var(--text-secondary)"; }}
+          >
+            Cookie Settings
+          </button>
         </div>
       </div>
 
@@ -2756,6 +2775,8 @@ function CartPage({ cart, setCart }) {
   const [orderSubmitting, setOrderSubmitting] = useState(false);
   const [orderSubmitError, setOrderSubmitError] = useState("");
   const [receiptSent, setReceiptSent] = useState(true);
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const [turnstileReset, setTurnstileReset] = useState(0);
   // Which durable writes have already landed for this order number. Confirming
   // twice — a double click, or a retry after a partial failure — must not
   // create a second order row or a second notification.
@@ -2930,6 +2951,10 @@ function CartPage({ cart, setCart }) {
       setOrderSubmitError("Your order details are incomplete. Go back to the cart and try again.");
       return;
     }
+    if (!turnstileToken) {
+      setOrderSubmitError("Complete the verification check before placing the order.");
+      return;
+    }
     submittingRef.current = true;
     setOrderSubmitting(true);
     setOrderSubmitError("");
@@ -2988,6 +3013,7 @@ function CartPage({ cart, setCart }) {
           paymentMethod,
           discountCodes,
           researchAcknowledged,
+          turnstileToken,
         }),
       });
 
@@ -3007,6 +3033,8 @@ function CartPage({ cart, setCart }) {
       );
       submittingRef.current = false;
       setOrderSubmitting(false);
+      setTurnstileToken("");
+      setTurnstileReset(value => value + 1);
       return;
     }
 
@@ -3039,8 +3067,8 @@ function CartPage({ cart, setCart }) {
       }
     }
 
-    // Confirmation mail is sent by create-order on the server. The browser
-    // never talks to EmailJS; a missing server key fails closed there.
+    // Confirmation mail is sent by create-order through the Resend outbox.
+    // The browser never talks to EmailJS or Resend.
     setReceiptSent(confirmed.receiptSent === true);
 
     submittingRef.current = false;
@@ -3430,10 +3458,12 @@ function CartPage({ cart, setCart }) {
           }}>{orderSubmitError}</div>
         )}
 
+        <TurnstileField onToken={setTurnstileToken} resetKey={turnstileReset} />
+
         <button
           type="button"
           onClick={handlePlaceOrderAndPay}
-          disabled={orderSubmitting}
+          disabled={orderSubmitting || !turnstileToken}
           aria-busy={orderSubmitting}
           style={{
             width: "100%",
@@ -6565,7 +6595,7 @@ function PrivacyPage() {
           <li><code>_ga</code> — distinguishes unique visitors</li>
           <li><code>_ga_HY1FDLSRTJ</code> — keeps track of the current analytics session</li>
         </ul>
-        <p>We use these counts to understand site traffic. Advertising cookies from DoubleClick are not used. You can change a stored choice by clearing this site's cookies and site data in your browser, which will show the prompt again.</p>
+        <p>We use these counts to understand site traffic. Advertising cookies from DoubleClick are not used. You can change a stored choice at any time with Cookie Settings in the site footer. Rejecting analytics stops the tracker and removes the Google Analytics cookies.</p>
         <p>We also use localStorage in your browser to remember your cart between visits. You can clear this at any time through your browser settings.</p>
 
         <h2 style={policyHeadingStyle}>Data Security</h2>
@@ -6573,6 +6603,32 @@ function PrivacyPage() {
 
         <h2 style={policyHeadingStyle}>Contact</h2>
         <p>For privacy questions or data deletion requests, contact <a href="mailto:sales@tierone.bio" style={{ color: "var(--red-primary)" }}>sales@tierone.bio</a>.</p>
+      </PolicyShell>
+      <Footer />
+    </>
+  );
+}
+
+function SecurityPage() {
+  useRouteMeta("/security");
+  return (
+    <>
+      <PolicyShell kicker="SECURITY" title="Vulnerability Disclosure">
+        <p>Tier One BioSystems welcomes good-faith reports of security issues in www.tierone.bio, its checkout, and related services. This page is the policy linked from <code>/.well-known/security.txt</code>.</p>
+
+        <h2 style={policyHeadingStyle}>How to report</h2>
+        <p>Email <a href="mailto:sales@tierone.bio" style={{ color: "var(--red-primary)" }}>sales@tierone.bio</a> with a clear description of the issue, the affected URL or function, and the steps needed to reproduce it. Do not include customer personal data, payment credentials, or exploit code that modifies live data.</p>
+
+        <h2 style={policyHeadingStyle}>What we ask</h2>
+        <ul style={{ paddingLeft: 24 }}>
+          <li>Give us a reasonable chance to investigate and fix the issue before public disclosure.</li>
+          <li>Do not access, change, or delete another customer&apos;s data.</li>
+          <li>Do not disrupt checkout, inventory, or email delivery in order to demonstrate impact.</li>
+          <li>Social engineering, physical attacks, and denial-of-service testing are out of scope.</li>
+        </ul>
+
+        <h2 style={policyHeadingStyle}>What you can expect</h2>
+        <p>We will acknowledge a valid report when we can and let you know when the issue is resolved. There is no bug-bounty programme. Safe-harbor applies only to good-faith research that stays within this policy.</p>
       </PolicyShell>
       <Footer />
     </>
@@ -7634,6 +7690,7 @@ export default function App() {
         <Route path="/returns" element={<ReturnsPage />} />
         <Route path="/terms" element={<TermsPage />} />
         <Route path="/privacy" element={<PrivacyPage />} />
+        <Route path="/security" element={<SecurityPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
       </div>

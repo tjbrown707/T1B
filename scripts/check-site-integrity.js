@@ -23,6 +23,7 @@ import {
   todayISO,
 } from "../src/data/routes.js";
 import { ARTICLE_META } from "../src/data/articles.js";
+import { securityTxtProblems } from "../src/data/security-txt.js";
 
 const failures = [];
 const fail = (message) => failures.push(message);
@@ -112,15 +113,7 @@ if (hasDist) {
     fail("dist/.well-known/security.txt is missing.");
   } else {
     const text = readFileSync(securityTxt, "utf8");
-    if (!/^Contact:\s*mailto:sales@tierone\.bio\s*$/m.test(text)) {
-      fail("security.txt must list the existing sales@ contact.");
-    }
-    if (!/^Expires:\s*\d{4}-\d{2}-\d{2}T/m.test(text)) {
-      fail("security.txt must include an RFC 9116 Expires timestamp.");
-    }
-    if (!text.includes("https://www.tierone.bio/privacy")) {
-      fail("security.txt must link the existing privacy policy.");
-    }
+    for (const problem of securityTxtProblems(text)) fail(problem);
   }
 
   for (const route of allRoutes(today).filter(entry => entry.staffOnly)) {
