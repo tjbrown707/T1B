@@ -220,7 +220,18 @@ test("Resend receipts send from env vars and do not put PII in errors", async ()
     assert.equal(body.to[0], "researcher@example.com");
     assert.match(body.html, /T1B-260820-123456/);
     assert.match(body.text, /\$70\.00/);
-    assert.doesNotMatch(JSON.stringify(result), /researcher@example\.com/);
+
+    await assert.rejects(
+      () => sendOrderReceiptDelivery(receiptDelivery(), {
+        fetchImpl: () => Promise.reject(new Error("network down for researcher@example.com")),
+        apiKey: "re_test_key",
+      }),
+      error => {
+        assert.match(error.message, /Resend could not be reached/);
+        assert.doesNotMatch(error.message, /researcher@example\.com|T1B-260820-123456/);
+        return true;
+      },
+    );
   } finally {
     if (previous === undefined) delete globalThis.Netlify;
     else globalThis.Netlify = previous;

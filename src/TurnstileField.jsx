@@ -2,15 +2,14 @@ import { useEffect, useRef } from "react";
 
 const SCRIPT_SRC = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
 
-export function turnstileSiteKey() {
-  return import.meta.env.VITE_TURNSTILE_SITE_KEY || "";
-}
-
 export default function TurnstileField({ onToken, resetKey = 0 }) {
   const hostRef = useRef(null);
   const onTokenRef = useRef(onToken);
-  onTokenRef.current = onToken;
-  const siteKey = turnstileSiteKey();
+  const siteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY || "";
+
+  useEffect(() => {
+    onTokenRef.current = onToken;
+  }, [onToken]);
 
   useEffect(() => {
     onTokenRef.current("");
