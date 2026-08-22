@@ -76,7 +76,7 @@ export const PRODUCTS = [
     name: "CJC-1295 / Ipamorelin",
     dose: "5/5 mg",
     price: 75,
-    bulk: 65,
+    bulk: 70,
     image: "/cjc-1295-ipamorelin-5mg-5mg.jpg",
     category: "Growth Hormone Axis",
     research: "CJC-1295 is a synthetic GHRH analog with Drug Affinity Complex (DAC) technology, extending its half-life. Ipamorelin is a selective growth hormone secretagogue that mimics ghrelin. When combined, research suggests a synergistic effect on GH release via complementary mechanisms — CJC-1295 amplifies the GH pulse while Ipamorelin triggers it. Preclinical data indicates this combination promotes pulsatile GH secretion while minimizing cortisol and prolactin elevation.",
