@@ -50,8 +50,9 @@ Once custom SMTP is on, you can also raise the rate limits under
 **Authentication → Rate Limits**.
 
 > Note: this same verified Resend domain is also used by the server-side
-> processed-order/tracking email described below. EmailJS still handles the
-> original checkout confirmation email.
+> processed-order/tracking email described below, and by checkout confirmation
+> receipts (`create-order` → Resend outbox). The browser never calls EmailJS
+> or Resend.
 
 ---
 
@@ -85,7 +86,7 @@ transaction, so two tabs cannot use the same personal code on two orders.
 > | Key | Where it lives | What breaks if you revoke it |
 > |---|---|---|
 > | **Auth key** | Supabase → Authentication → SMTP Settings → Password | Signup confirmations, password resets, magic links — customers cannot create accounts or get back into them |
-> | **Netlify mail key** | Netlify → `RESEND_API_KEY` | Welcome + discount emails and processed-order tracking emails |
+> | **Netlify mail key** | Netlify → `RESEND_API_KEY` | Welcome + discount emails, checkout receipts, and processed-order tracking emails |
 >
 > They are deliberately separate so either can be rotated without taking down
 > the other half of your email. Resend shows a key's value only once at
@@ -211,3 +212,35 @@ version and idempotency-key version together.
   remembering when scheduling one against the 30-day expiry.
 - **No stacking.** The checkout allows one discount code plus one free-shipping
   code, so a welcome code can't be combined with another discount.
+
+## 5. Checkout confirmation (Resend outbox)
+
+The order receipt (`email-templates/order-receipt-v1.html`) is sent by
+`netlify/functions/create-order.js` after the order is saved. The send is
+queued in `order_receipt_outbox` and keyed by order ID, so a retry, a
+second tab, or a crash cannot send two receipts for the same order.
+
+If `RESEND_API_KEY` is missing, the function does **not** fall back to the
+browser — the order is still saved and the confirmation screen says the
+receipt could not be sent. Failed sends stay in the outbox and are retried
+by the existing five-minute scheduled function.
+
+Cloudflare Turnstile is checked on the server **before** the order is
+written or inventory is reserved. A missing or invalid token is rejected.
+
+**Site configuration → Environment variables.** None of the secrets belong
+in the repo, and none may use a `VITE_` prefix except the public site key:
+
+| Variable | Where to copy it from | Public? |
+|---|---|---|
+| `RESEND_API_KEY` | Resend → API Keys (the existing Netlify mail key is fine) | No |
+| `RESEND_FROM_ADDRESS` | optional; defaults to `Tier One BioSystems <noreply@tierone.bio>` | No |
+| `TURNSTILE_SECRET_KEY` | Cloudflare Turnstile → widget → Secret Key | No |
+| `VITE_TURNSTILE_SITE_KEY` | Cloudflare Turnstile → widget → Site Key | Yes — this one may be public |
+
+After adding `VITE_TURNSTILE_SITE_KEY`, trigger a new deploy so Vite can
+inline the public site key. The secret key is read only by the
+`create-order` function.
+
+Apply migration `20260820220000_order_receipt_outbox.sql` in the Supabase
+SQL editor before the new receipt path can persist outbox state.

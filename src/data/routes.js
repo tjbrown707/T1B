@@ -182,6 +182,13 @@ export const STATIC_ROUTES = [
     h1: "Privacy policy",
     priority: "0.5", changefreq: "yearly",
   },
+  {
+    path: "/security",
+    title: "Vulnerability Disclosure",
+    description: "How to report a security issue in the Tier One BioSystems website and checkout.",
+    h1: "Vulnerability disclosure",
+    priority: "0.3", changefreq: "yearly",
+  },
 
   // ── Transactional / account pages: served, but never indexed ──────────────
   {
@@ -218,6 +225,7 @@ export const STATIC_ROUTES = [
     description: "Staff order management for Tier One BioSystems.",
     h1: "Order management",
     noindex: true,
+    staffOnly: true,
   },
   {
     path: "/admin/inventory",
@@ -225,6 +233,7 @@ export const STATIC_ROUTES = [
     description: "Staff lot-level inventory management for Tier One BioSystems.",
     h1: "Inventory management",
     noindex: true,
+    staffOnly: true,
   },
   {
     // Compatibility route for the first admin-console deployment. React
@@ -235,6 +244,7 @@ export const STATIC_ROUTES = [
     description: "Staff order management for Tier One BioSystems.",
     h1: "Order management",
     noindex: true,
+    staffOnly: true,
   },
   {
     path: "/reset-password",

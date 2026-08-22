@@ -40,6 +40,14 @@ test("transactional pages are served but never indexed", () => {
   }
 });
 
+test("staff admin routes stay registered but are marked staff-only", () => {
+  for (const path of ["/admin", "/admin/orders", "/admin/inventory"]) {
+    assert.equal(routeMeta(path).noindex, true, `${path} should be noindex`);
+    assert.equal(routeMeta(path).staffOnly, true, `${path} should not be prerendered with staff copy`);
+  }
+  assert.equal(routeMeta("/privacy").staffOnly, undefined);
+});
+
 test("the sitemap contains no noindex page", () => {
   for (const route of sitemapRoutes()) {
     assert.notEqual(route.noindex, true, `${route.path} is noindex but in the sitemap`);

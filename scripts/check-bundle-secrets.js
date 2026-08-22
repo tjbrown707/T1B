@@ -85,6 +85,21 @@ const PATTERNS = [
     fix: "PrintNode calls belong in a Netlify Function; never read this environment variable from the Vite app.",
   },
   {
+    label: "Turnstile secret key name",
+    regex: /TURNSTILE_SECRET_KEY/g,
+    fix: "Turnstile siteverify belongs in a Netlify Function; never read this environment variable from the Vite app.",
+  },
+  {
+    label: "EmailJS private key name",
+    regex: /EMAILJS_PRIVATE_KEY/g,
+    fix: "Order receipts are sent by Resend from create-order. Do not put EmailJS keys in browser code.",
+  },
+  {
+    label: "EmailJS browser send client",
+    regex: /emailjs\.send|@emailjs\/browser/g,
+    fix: "Order receipts are sent by the Resend outbox in create-order. Do not call EmailJS from browser code.",
+  },
+  {
     label: "Postgres connection string with credentials",
     regex: /postgres(?:ql)?:\/\/[^\s:'"]+:[^\s@'"]+@/g,
     fix: "Database credentials must never reach the browser. Rotate the database password.",
@@ -99,6 +114,8 @@ const CONFIGURED_SERVER_SECRETS = [
   "RESEND_API_KEY",
   "SHIPPO_API_TOKEN",
   "PRINTNODE_API_KEY",
+  "EMAILJS_PRIVATE_KEY",
+  "TURNSTILE_SECRET_KEY",
 ].flatMap(name => {
   const value = process.env[name];
   return typeof value === "string" && value.length >= 8 ? [{ name, value }] : [];

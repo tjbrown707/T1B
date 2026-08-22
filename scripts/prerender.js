@@ -312,7 +312,27 @@ function write(route, body, filePath) {
   writeFileSync(target, html);
 }
 
+function staffHead() {
+  return [
+    `<title>${esc(SITE_NAME)}</title>`,
+    `<meta name="robots" content="noindex, nofollow" />`,
+    `<style>html { background: #0a0a0a; }</style>`,
+  ].join("\n    ");
+}
+
+function writeStaffShell(route) {
+  const filePath = `${route.path.replace(/^\//, "")}.html`;
+  const html = baseShell.replace("</head>", `    ${staffHead()}\n  </head>`);
+  const target = join(DIST, filePath);
+  mkdirSync(dirname(target), { recursive: true });
+  writeFileSync(target, html);
+}
+
 for (const route of routes) {
+  if (route.staffOnly) {
+    writeStaffShell(route);
+    continue;
+  }
   const body = chrome(
     route.product ? productBody(route)
       : route.article ? articleBody(route)
