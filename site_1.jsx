@@ -5139,7 +5139,7 @@ function AdminOrdersPage() {
           : isPrecountedOrder(payload.order)
             ? `${payload.order.order_number} is paid. Its inventory was already accounted before the August 10 cutoff, so stock was not changed.`
             : isLocalHandoff(payload.order)
-              ? `${payload.order.order_number} is paid and reserved for local handoff. Inventory was deducted once; print the packing slip through PrintNode before handoff. Shipping labels and postage stay disabled.`
+              ? `${payload.order.order_number} is paid and reserved for local handoff. Inventory was deducted once; print the packing slip through PrintNode before handoff. Carrier postage stays disabled; a free 4×6 pickup label is available in the order details.`
               : `${payload.order.order_number} is paid and ready to pick. Inventory was deducted once.`,
         cancel_unpaid: `${payload.order.order_number} was cancelled and its reserved stock was released.`,
         mark_picked: `${payload.order.order_number} is marked picked.`,
@@ -5203,6 +5203,53 @@ function AdminOrdersPage() {
       });
     } catch (error) {
       setNotice({ type: "error", text: error.message || "The packing slip could not be printed." });
+    } finally {
+      setActionKey("");
+    }
+  }
+
+  async function openLocalHandoffLabel(order) {
+    if (!isLocalHandoff(order) || order.payment_status !== "PAID" || !session?.access_token) return;
+    const key = `${order.id}:pickup-label-pdf`;
+    setActionKey(key);
+    setNotice({ type: "", text: "" });
+    const preview = window.open("", "_blank", "noopener,noreferrer");
+    try {
+      const res = await fetch(`/.netlify/functions/admin-local-handoff-label?orderId=${encodeURIComponent(order.id)}`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({}));
+        throw new Error(payload.error || `Label service returned HTTP ${res.status}`);
+      }
+      const url = URL.createObjectURL(await res.blob());
+      if (preview) preview.location.href = url;
+      else window.open(url, "_blank", "noopener,noreferrer");
+      window.setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch (error) {
+      preview?.close();
+      setNotice({ type: "error", text: error.message || "The pickup label could not be opened." });
+    } finally {
+      setActionKey("");
+    }
+  }
+
+  async function printLocalHandoffLabel(order) {
+    if (!isLocalHandoff(order) || order.payment_status !== "PAID" || !session?.access_token) return;
+    const key = `${order.id}:pickup-label-print`;
+    setActionKey(key);
+    setNotice({ type: "", text: "" });
+    try {
+      const res = await fetch("/.netlify/functions/admin-print", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ orderId: order.id, document: "local_handoff_label" }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload.error || `Print service returned HTTP ${res.status}`);
+      setNotice({ type: "success", text: `${order.order_number}'s free 4×6 pickup label was sent to the label printer.` });
+    } catch (error) {
+      setNotice({ type: "error", text: error.message || "The pickup label could not be printed." });
     } finally {
       setActionKey("");
     }
@@ -5396,7 +5443,15 @@ function AdminOrdersPage() {
                   )}
                   {order.payment_status === "PAID" && isLocalHandoff(order) && (
                     <div style={{ margin: "0 18px 18px", padding: 14, border: "1px solid rgba(34,197,94,0.4)", background: "rgba(34,197,94,0.07)", color: "#22c55e", fontFamily: "'Rajdhani', sans-serif", fontSize: 15 }}>
-                      <div>{localHandoffReady ? "Local handoff — the PrintNode packing-slip job and customer email are recorded. You can now mark the order handed off." : "Local handoff — use Print Packing Slip below first. That PrintNode job queues the customer email and unlocks Mark Handed Off; Preview PDF is unavailable until then."} Shipping labels and postage stay disabled.</div>
+                      <div>{localHandoffReady ? "Local handoff — the PrintNode packing-slip job and customer email are recorded. You can now mark the order handed off." : "Local handoff — use Print Packing Slip below first. That PrintNode job queues the customer email and unlocks Mark Handed Off; Preview PDF is unavailable until then."} Carrier postage stays disabled. The free 4×6 label below is only for identifying pickup orders.</div>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
+                        <button type="button" disabled={busy} onClick={() => openLocalHandoffLabel(order)} style={adminSecondaryButton(busy)}>
+                          {actionKey === `${order.id}:pickup-label-pdf` ? "Opening…" : "Open 4×6 Label"}
+                        </button>
+                        <button type="button" disabled={busy} onClick={() => printLocalHandoffLabel(order)} style={adminSecondaryButton(busy)}>
+                          {actionKey === `${order.id}:pickup-label-print` ? "Printing…" : "Print 4×6 Label"}
+                        </button>
+                      </div>
                       {localEmailMessage && (
                         <div role={localEmailNeedsReview ? "alert" : "status"} style={{ marginTop: 9, color: localEmailNeedsReview ? "#ff6b6b" : "var(--text-secondary)", fontSize: 14 }}>
                           {localEmailMessage}
@@ -5509,7 +5564,7 @@ function OrderPaymentConfirmation({ order, busy, confirming, onConfirm }) {
                 </label>
                 <label style={{ display: "flex", alignItems: "flex-start", gap: 9, marginTop: 12, color: "var(--text-secondary)", fontFamily: "'Rajdhani', sans-serif", fontSize: 15, cursor: "pointer" }}>
                   <input type="radio" name={`fulfillment-${order.id}`} value={FULFILLMENT_METHODS.LOCAL_HANDOFF} checked={fulfillmentMethod === FULFILLMENT_METHODS.LOCAL_HANDOFF} onChange={event => setFulfillmentMethod(event.target.value)} />
-                  <span><strong style={{ color: "var(--text-primary)" }}>Hand directly to customer</strong><br />Print a packing slip and send a customer confirmation email. No shipping label or postage.</span>
+                  <span><strong style={{ color: "var(--text-primary)" }}>Hand directly to customer</strong><br />Print a packing slip, send a customer confirmation email, and optionally print a free 4×6 pickup label. No carrier postage.</span>
                 </label>
               </fieldset>
               {fulfillmentMethod === FULFILLMENT_METHODS.LOCAL_HANDOFF && (
