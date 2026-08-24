@@ -1,11 +1,11 @@
 # Handoff — pick up here
 
-Written 2026-08-07, updated 2026-08-14. Read this before starting work; it
+Written 2026-08-07, updated 2026-08-24. Read this before starting work; it
 records state that is not obvious from the code or the git log.
 
 ---
 
-## Zelle checkout — DATABASE LIVE, WEBSITE READY, NOT YET DEPLOYED
+## Zelle checkout — LIVE IN PRODUCTION
 
 Added 2026-08-24. Zelle is a third customer checkout option beside Cash App
 and Venmo. The durable order and inventory reservation are created first; the
@@ -30,11 +30,11 @@ and 390-pixel mobile widths. Repo-wide `npm run verify` itself sees archived
 untracked `.codex-worktrees/` and lints their built bundles; the equivalent
 release commands passed with that local archive excluded.
 
-**Do not push the website until the owner updates EmailJS template
-`template_i9k8u2a` from `email-template.html`.** The live dashboard template is
-outside the repo and its current payment reminder names only Cash App/Venmo.
-Once pasted, commit and push the Zelle files to `main`; Netlify will deploy
-automatically.
+The owner updated EmailJS template `template_i9k8u2a` from
+`email-template.html`, and commit `062c10c` was pushed to `main` on 2026-08-24.
+Netlify deployed it successfully. Live verification found the Zelle checkout
+code in production asset `index-BMJNkA_j.js`, and the public QR image returned
+HTTP 200 as `image/jpeg`.
 
 The stale tracked edits that were present before this work were safely shelved
 as `stash@{0}: pre-zelle tracked local edits 2026-08-24` before fast-forwarding
