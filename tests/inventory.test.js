@@ -33,6 +33,10 @@ const precountedOrdersMigration = readFileSync(
   "supabase/migrations/20260813052015_protect_precounted_legacy_orders.sql",
   "utf8",
 );
+const zellePaymentMigration = readFileSync(
+  "supabase/migrations/20260824200440_add_zelle_payment_method.sql",
+  "utf8",
+);
 const orderProcessedEmailMigration = readFileSync(
   "supabase/migrations/20260814170438_order_processed_email_outbox.sql",
   "utf8",
@@ -170,6 +174,15 @@ test("staff workflow exposes only explicit state transitions", () => {
   assert.equal(localConfirmation.args.p_fulfillment_method, "LOCAL_HANDOFF");
   assert.equal(localConfirmation.args.p_payment_received_via, "Cash");
   assert.equal(localConfirmation.args.p_payment_amount_received, 25.5);
+  const zelleConfirmation = workflowRpc("confirm_payment", {
+    ...ids,
+    expectedPaymentStatus: "AWAITING_PAYMENT",
+    fulfillmentMethod: "SHIP",
+    paymentReceivedVia: "Zelle",
+    paymentAmountReceived: "25.50",
+  });
+  assert.equal(zelleConfirmation.name, "confirm_order_payment");
+  assert.equal(zelleConfirmation.args.p_payment_received_via, "Zelle");
   const correction = workflowRpc("update_payment_amount", {
     ...ids,
     expectedPaymentStatus: "PAID",
@@ -220,6 +233,9 @@ test("local handoff is persisted and shipping is blocked in the database", () =>
   assert.match(precountedOrdersMigration, /selected_order\.inventory_accounting_mode = 'TRACKED'/);
   assert.match(precountedOrdersMigration, /'inventory_changed', selected_order\.inventory_accounting_mode = 'TRACKED'/);
   assert.doesNotMatch(precountedOrdersMigration, /legacy-precounted-restore:/);
+  assert.match(zellePaymentMigration, /'Cash App', 'Venmo', 'Zelle', 'Cash', 'Other'/);
+  assert.match(zellePaymentMigration, /security invoker/);
+  assert.match(zellePaymentMigration, /revoke execute on function public\.confirm_order_payment\(uuid, text, text, text, numeric, uuid\)[\s\S]+from public, anon, authenticated/);
 });
 
 test("local handoff completion requires the accepted print and queued email", () => {

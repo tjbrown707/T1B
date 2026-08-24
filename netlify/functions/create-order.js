@@ -8,6 +8,7 @@ import { PRODUCTS } from "../../src/data/catalog.js";
 import { MAX_CART_QUANTITY } from "../../src/data/cart.js";
 import { isSaleActive } from "../../src/data/pricing.js";
 import { orderTotals, orderLineItems, isShippingDiscountCode } from "../../src/data/order-totals.js";
+import { checkoutPaymentMethodLabel } from "../../src/data/order-management.js";
 import { getEnv, jsonResponse, readBearerToken, readJsonBody } from "./_shared/http.js";
 
 const MAX_BODY_BYTES = 32 * 1024;
@@ -178,10 +179,8 @@ export function validateOrderRequest(body) {
     items.push({ id: product.id, qty });
   }
 
-  if (body.paymentMethod !== "cashapp" && body.paymentMethod !== "venmo") {
-    return { error: "Choose Cash App or Venmo as the payment method." };
-  }
-  const paymentMethod = body.paymentMethod === "venmo" ? "Venmo" : "Cash App";
+  const paymentMethod = checkoutPaymentMethodLabel(body.paymentMethod);
+  if (!paymentMethod) return { error: "Choose Cash App, Venmo, or Zelle as the payment method." };
 
   const rawCodes = body.discountCodes ?? [];
   if (!Array.isArray(rawCodes) || rawCodes.length > 2) return { error: "Too many discount codes were supplied." };

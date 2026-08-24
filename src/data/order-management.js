@@ -46,9 +46,20 @@ export const INVENTORY_ACCOUNTING_MODES = Object.freeze({
 export const PAYMENT_RECEIVED_OPTIONS = Object.freeze([
   "Cash App",
   "Venmo",
+  "Zelle",
   "Cash",
   "Other",
 ]);
+
+export const CHECKOUT_PAYMENT_METHODS = Object.freeze({
+  cashapp: "Cash App",
+  venmo: "Venmo",
+  zelle: "Zelle",
+});
+
+export function checkoutPaymentMethodLabel(value) {
+  return CHECKOUT_PAYMENT_METHODS[value] || null;
+}
 
 export const ORDER_STATUS_VALUES = Object.freeze(ORDER_STATUS_OPTIONS.map(option => option.value));
 

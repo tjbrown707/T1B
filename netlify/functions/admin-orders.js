@@ -3,6 +3,7 @@
 
 import { Buffer } from "node:buffer";
 import {
+  PAYMENT_RECEIVED_OPTIONS,
   isOrderStatus,
 } from "../../src/data/order-management.js";
 import { authenticateOrderManager } from "./_shared/admin-auth.js";
@@ -249,7 +250,7 @@ export function workflowRpc(action, input) {
   if (action === "confirm_payment"
       && input.expectedPaymentStatus === "AWAITING_PAYMENT"
       && ["SHIP", "LOCAL_HANDOFF"].includes(fulfillmentMethod)
-      && ["Cash App", "Venmo", "Cash", "Other"].includes(paymentReceivedVia)
+      && PAYMENT_RECEIVED_OPTIONS.includes(paymentReceivedVia)
       && paymentAmountReceived !== null) {
     return {
       name: "confirm_order_payment",

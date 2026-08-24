@@ -5,6 +5,44 @@ records state that is not obvious from the code or the git log.
 
 ---
 
+## Zelle checkout — DATABASE LIVE, WEBSITE READY, NOT YET DEPLOYED
+
+Added 2026-08-24. Zelle is a third customer checkout option beside Cash App
+and Venmo. The durable order and inventory reservation are created first; the
+confirmation screen then shows the owner's exact business QR image, amount,
+order-number memo, and same-device lookup instructions for `TierOneBio` /
+`TIER ONE BIO LLC`. The unmodified bank image lives at
+`public/zelle-tier-one-bio-qr.jpg`; CSS crops the surrounding screenshot so the
+QR stays large without altering its encoded pixels.
+
+Staff can select Zelle in **Confirm Payment**, and the server and database use
+the same explicit payment vocabulary. Migration
+`20260824200440_add_zelle_payment_method.sql` is already applied to production.
+Live verification found Zelle in both the check constraint and payment RPC,
+`service_role` execute access true, and `anon`/`authenticated` execute access
+false. The post-change security advisor has only the existing intentional INFO
+notices for server-only RLS tables.
+
+Release verification is green: 132 tests, all route smoke tests, production
+build, secret scan, site-integrity scan, and lint on the actual project tree.
+The checkout and QR confirmation screens were visually inspected at desktop
+and 390-pixel mobile widths. Repo-wide `npm run verify` itself sees archived
+untracked `.codex-worktrees/` and lints their built bundles; the equivalent
+release commands passed with that local archive excluded.
+
+**Do not push the website until the owner updates EmailJS template
+`template_i9k8u2a` from `email-template.html`.** The live dashboard template is
+outside the repo and its current payment reminder names only Cash App/Venmo.
+Once pasted, commit and push the Zelle files to `main`; Netlify will deploy
+automatically.
+
+The stale tracked edits that were present before this work were safely shelved
+as `stash@{0}: pre-zelle tracked local edits 2026-08-24` before fast-forwarding
+to production. Their feature content was already represented in newer deployed
+commits; the shelf was deliberately retained as a recoverable backup.
+
+---
+
 ## Checkout no longer requires a return after payment — BUILT, VERIFIED
 
 Added 2026-08-18. The customer-facing `I HAVE SENT PAYMENT` step is gone. On

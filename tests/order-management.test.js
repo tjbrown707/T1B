@@ -2,7 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { Buffer } from "node:buffer";
 import {
+  CHECKOUT_PAYMENT_METHODS,
   ORDER_STATUS_VALUES,
+  PAYMENT_RECEIVED_OPTIONS,
   canCompleteLocalHandoff,
   canDeleteOrder,
   hasOrderManagerRole,
@@ -10,6 +12,7 @@ import {
   isPrecountedOrder,
   isOrderStatus,
   nextFulfillmentAction,
+  checkoutPaymentMethodLabel,
 } from "../src/data/order-management.js";
 import {
   decodeCursor,
@@ -22,6 +25,13 @@ test("the order console accepts only the shared status vocabulary", () => {
   for (const status of ORDER_STATUS_VALUES) assert.equal(isOrderStatus(status), true);
   assert.equal(isOrderStatus("FREE PRODUCT"), false);
   assert.equal(isOrderStatus("paid"), false);
+});
+
+test("checkout and staff payment vocabularies include Zelle", () => {
+  assert.equal(CHECKOUT_PAYMENT_METHODS.zelle, "Zelle");
+  assert.equal(checkoutPaymentMethodLabel("zelle"), "Zelle");
+  assert.equal(checkoutPaymentMethodLabel("wire"), null);
+  assert.equal(PAYMENT_RECEIVED_OPTIONS.includes("Zelle"), true);
 });
 
 test("order-manager authorization trusts app metadata, never customer metadata", () => {

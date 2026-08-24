@@ -45,6 +45,7 @@ import {
   isShippingDiscountCode,
 } from "./src/data/order-totals.js";
 import {
+  CHECKOUT_PAYMENT_METHODS,
   FULFILLMENT_METHODS,
   ORDER_STATUS_OPTIONS,
   PAYMENT_RECEIVED_OPTIONS,
@@ -55,6 +56,7 @@ import {
   isLocalHandoff,
   isPrecountedOrder,
   nextFulfillmentAction,
+  checkoutPaymentMethodLabel,
 } from "./src/data/order-management.js";
 import {
   DEFAULT_PARCEL,
@@ -2735,6 +2737,12 @@ function ContactPage() {
 // them from environment variables. Codes are never included in the client
 // bundle. See netlify/functions/validate-discount.js.
 
+const CHECKOUT_PAYMENT_OPTIONS = Object.freeze([
+  { value: "cashapp", label: CHECKOUT_PAYMENT_METHODS.cashapp, color: "#00D632", background: "rgba(0,214,50,0.1)" },
+  { value: "venmo", label: CHECKOUT_PAYMENT_METHODS.venmo, color: "#008CFF", background: "rgba(0,143,227,0.1)" },
+  { value: "zelle", label: CHECKOUT_PAYMENT_METHODS.zelle, color: "#8A45D6", background: "rgba(138,69,214,0.12)" },
+]);
+
 function CartPage({ cart, setCart }) {
   useRouteMeta("/cart");
   const navigate = useNavigate();
@@ -2747,7 +2755,8 @@ function CartPage({ cart, setCart }) {
 
   const [orderNumber, setOrderNumber] = useState("");
   const [isMobile, setIsMobile] = useState(window.innerWidth < 700);
-  const [paymentMethod, setPaymentMethod] = useState("cashapp"); // cashapp | venmo
+  const [paymentMethod, setPaymentMethod] = useState("cashapp"); // cashapp | venmo | zelle
+  const [confirmedTotal, setConfirmedTotal] = useState(null);
   const [discountInput, setDiscountInput] = useState("");
   const [appliedDiscount, setAppliedDiscount] = useState(null); // { code, type, value, label } — order discount slot
   const [appliedShipping, setAppliedShipping] = useState(null); // { code, type, value, label } — free-shipping slot
@@ -2766,6 +2775,9 @@ function CartPage({ cart, setCart }) {
   // orderSubmitting as false and both would insert an order. A ref flips
   // synchronously, before the second click can get past it.
   const submittingRef = useRef(false);
+  const selectedPayment = CHECKOUT_PAYMENT_OPTIONS.find(option => option.value === paymentMethod)
+    || CHECKOUT_PAYMENT_OPTIONS[0];
+  const paymentMethodLabel = checkoutPaymentMethodLabel(paymentMethod);
 
   function startCustomerInfo() {
     // Prefill when the form opens. This preserves anything already typed if
@@ -2958,7 +2970,7 @@ function CartPage({ cart, setCart }) {
     formData.append("shippingCity", city);
     formData.append("shippingState", state);
     formData.append("shippingZip", zip);
-    formData.append("paymentMethod", paymentMethod === "venmo" ? "Venmo" : "Cash App");
+    formData.append("paymentMethod", paymentMethodLabel);
     // Recorded so there is evidence the acknowledgement was given for this order.
     formData.append("researchUseAcknowledged", researchAcknowledged ? "yes" : "no");
     // The money fields are appended after the server has priced the order, so
@@ -3002,7 +3014,7 @@ function CartPage({ cart, setCart }) {
       console.error("Order save error:", err);
       setOrderSubmitError(
         (err?.message && !/HTTP \d+/.test(err.message) ? `${err.message} ` : "") +
-        `We could not save your order, so we have not cleared your cart or opened the payment app. Nothing has been lost — ` +
+        `We could not save your order, so we have not cleared your cart or opened the payment instructions. Nothing has been lost — ` +
         `press the payment button again to retry. If it keeps failing, email ${CONTACT_EMAIL} quoting ${orderNumber} ` +
         `and we will finish it by hand.`
       );
@@ -3054,7 +3066,7 @@ function CartPage({ cart, setCart }) {
         discountCode: confirmed.discountCode,
         discountAmount: serverTotals.discountAmount > 0 ? `-$${serverTotals.discountAmount.toFixed(2)}` : "",
         shipping: serverTotals.shipping === 0 ? "FREE" : `$${serverTotals.shipping.toFixed(2)}`,
-        paymentMethod: paymentMethod === "venmo" ? "Venmo" : "Cash App",
+        paymentMethod: paymentMethodLabel,
         orderTotal: `$${serverTotals.total.toFixed(2)}`,
         shippingAddress: address,
         shippingCity: city,
@@ -3069,8 +3081,14 @@ function CartPage({ cart, setCart }) {
 
     submittingRef.current = false;
     setOrderSubmitting(false);
+    setConfirmedTotal(serverTotals.total);
     setStep("confirmed");
     setCart([]);
+
+    // Zelle does not provide a dependable web payment link. Keep the customer
+    // on the confirmation screen, where the official business QR code and the
+    // same-device recipient name are shown after the order is safely stored.
+    if (paymentMethod === "zelle") return;
 
     // Leave for the payment app only after the server has created the order,
     // reserved inventory, and returned its trusted total. The customer no
@@ -3121,7 +3139,7 @@ function CartPage({ cart, setCart }) {
         <div style={{
           border: "1px solid rgba(34,197,94,0.3)",
           background: "rgba(34,197,94,0.03)",
-          padding: "48px 32px",
+          padding: isMobile ? "32px 12px" : "48px 32px",
           marginBottom: 24,
         }}>
           <div style={{
@@ -3149,6 +3167,50 @@ function CartPage({ cart, setCart }) {
             Your order has been received. Please allow up to 24 hours for payment confirmation
             and order processing.
           </p>
+          {paymentMethod === "zelle" && (
+            <div style={{
+              margin: "0 auto 28px",
+              padding: isMobile ? "20px 10px" : "24px 20px",
+              maxWidth: 470,
+              border: "1px solid rgba(138,69,214,0.5)",
+              background: "rgba(138,69,214,0.08)",
+              textAlign: "left",
+            }}>
+              <div style={{
+                fontFamily: "'Orbitron', sans-serif",
+                fontSize: 12,
+                fontWeight: 700,
+                letterSpacing: "0.12em",
+                color: "#b985f4",
+                textAlign: "center",
+                marginBottom: 12,
+              }}>COMPLETE YOUR ZELLE PAYMENT</div>
+              <p style={{ margin: "0 0 16px", color: "var(--text-secondary)", fontFamily: "'Rajdhani', sans-serif", fontSize: 16, lineHeight: 1.6, textAlign: "center" }}>
+                Send <strong style={{ color: "var(--text-primary)" }}>${Number(confirmedTotal || 0).toFixed(2)}</strong> to <strong style={{ color: "#b985f4" }}>TIER ONE BIO LLC</strong> and include <strong style={{ color: "var(--text-primary)" }}>{orderNumber}</strong> in the memo.
+              </p>
+              <div style={{
+                width: "min(100%, 360px)",
+                aspectRatio: "1 / 1",
+                overflow: "hidden",
+                position: "relative",
+                margin: "0 auto 16px",
+                background: "#fff",
+                border: "8px solid #fff",
+                boxSizing: "border-box",
+              }}>
+                <img
+                  src="/zelle-tier-one-bio-qr.jpg"
+                  alt="Zelle QR code for TIER ONE BIO LLC"
+                  width="1035"
+                  height="1280"
+                  style={{ position: "absolute", display: "block", width: "153.33%", maxWidth: "none", height: "auto", left: "-26.67%", top: "-44.44%" }}
+                />
+              </div>
+              <p style={{ margin: 0, color: "var(--text-dim)", fontFamily: "'Rajdhani', sans-serif", fontSize: 14, lineHeight: 1.55, textAlign: "center" }}>
+                Scan this code from your bank&apos;s Zelle section. If you are paying on this same phone, search for <strong style={{ color: "var(--text-secondary)" }}>TierOneBio</strong> and verify the recipient is <strong style={{ color: "var(--text-secondary)" }}>TIER ONE BIO LLC</strong> before sending.
+              </p>
+            </div>
+          )}
           <div style={{
             padding: "16px 24px",
             border: "1px solid var(--border)",
@@ -3377,39 +3439,31 @@ function CartPage({ cart, setCart }) {
             <p style={{ margin: "0 0 12px", fontWeight: 600, color: "var(--text-primary)", fontSize: 17 }}>Step 2: Choose payment method</p>
 
             {/* Payment method tabs */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 20 }}>
-              <button
-                onClick={() => setPaymentMethod("cashapp")}
-                style={{
-                  padding: "12px 0",
-                  background: paymentMethod === "cashapp" ? "rgba(0,214,50,0.1)" : "transparent",
-                  border: paymentMethod === "cashapp" ? "1px solid #00D632" : "1px solid var(--border)",
-                  color: paymentMethod === "cashapp" ? "#00D632" : "var(--text-secondary)",
-                  fontFamily: "'Orbitron', sans-serif",
-                  fontWeight: 700,
-                  fontSize: 12,
-                  letterSpacing: "0.15em",
-                  textTransform: "uppercase",
-                  cursor: "pointer",
-                  transition: "all 0.2s",
-                }}
-              >Cash App</button>
-              <button
-                onClick={() => setPaymentMethod("venmo")}
-                style={{
-                  padding: "12px 0",
-                  background: paymentMethod === "venmo" ? "rgba(0,143,227,0.1)" : "transparent",
-                  border: paymentMethod === "venmo" ? "1px solid #008CFF" : "1px solid var(--border)",
-                  color: paymentMethod === "venmo" ? "#008CFF" : "var(--text-secondary)",
-                  fontFamily: "'Orbitron', sans-serif",
-                  fontWeight: 700,
-                  fontSize: 12,
-                  letterSpacing: "0.15em",
-                  textTransform: "uppercase",
-                  cursor: "pointer",
-                  transition: "all 0.2s",
-                }}
-              >Venmo</button>
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, 1fr)", gap: 8, marginBottom: 20 }}>
+              {CHECKOUT_PAYMENT_OPTIONS.map(option => {
+                const active = paymentMethod === option.value;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setPaymentMethod(option.value)}
+                    aria-pressed={active}
+                    style={{
+                      padding: "12px 8px",
+                      background: active ? option.background : "transparent",
+                      border: active ? `1px solid ${option.color}` : "1px solid var(--border)",
+                      color: active ? option.color : "var(--text-secondary)",
+                      fontFamily: "'Orbitron', sans-serif",
+                      fontWeight: 700,
+                      fontSize: 12,
+                      letterSpacing: "0.12em",
+                      textTransform: "uppercase",
+                      cursor: "pointer",
+                      transition: "all 0.2s",
+                    }}
+                  >{option.label}</button>
+                );
+              })}
             </div>
 
             {paymentMethod === "cashapp" ? (
@@ -3417,10 +3471,15 @@ function CartPage({ cart, setCart }) {
                 <p style={{ margin: "0 0 8px" }}>Send <strong style={{ color: "var(--text-primary)" }}>${total.toFixed(2)}</strong> to <strong style={{ color: "#00D632" }}>$TierOneBio</strong></p>
                 <p style={{ margin: 0, color: "var(--text-dim)", fontSize: 14 }}>Paste the order number in the Cash App note so we can match your payment.</p>
               </>
-            ) : (
+            ) : paymentMethod === "venmo" ? (
               <>
                 <p style={{ margin: "0 0 8px" }}>Send <strong style={{ color: "var(--text-primary)" }}>${total.toFixed(2)}</strong> to <strong style={{ color: "#008CFF" }}>@TierOneBio</strong></p>
                 <p style={{ margin: 0, color: "var(--text-dim)", fontSize: 14 }}>Your order number will be included in the Venmo note automatically.</p>
+              </>
+            ) : (
+              <>
+                <p style={{ margin: "0 0 8px" }}>Send <strong style={{ color: "var(--text-primary)" }}>${total.toFixed(2)}</strong> via Zelle to <strong style={{ color: "#b985f4" }}>TIER ONE BIO LLC</strong></p>
+                <p style={{ margin: 0, color: "var(--text-dim)", fontSize: 14 }}>Place the order first. The official business QR code and same-device recipient name will appear on the next screen.</p>
               </>
             )}
 
@@ -3435,7 +3494,7 @@ function CartPage({ cart, setCart }) {
             }}>
               <span aria-hidden="true" style={{ fontSize: 18, lineHeight: 1.3 }}>✓</span>
               <span style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 15, color: "var(--text-secondary)", lineHeight: 1.5 }}>
-                <strong style={{ color: "#22c55e" }}>No need to come back.</strong> The button below saves your order first, then opens {paymentMethod === "venmo" ? "Venmo" : "Cash App"}. After you send payment, you are finished. We verify every payment ourselves.
+                <strong style={{ color: "#22c55e" }}>Your order is saved first.</strong> The button below {paymentMethod === "zelle" ? "then shows the official Zelle QR code" : `then opens ${paymentMethodLabel}`}. After you send payment, you are finished. We verify every payment ourselves.
               </span>
             </div>
           </div>
@@ -3462,8 +3521,8 @@ function CartPage({ cart, setCart }) {
           style={{
             width: "100%",
             padding: "16px 0",
-            background: orderSubmitting ? "var(--bg-card-hover)" : paymentMethod === "venmo" ? "#008CFF" : "#00D632",
-            border: `1px solid ${paymentMethod === "venmo" ? "#008CFF" : "#00D632"}`,
+            background: orderSubmitting ? "var(--bg-card-hover)" : selectedPayment.color,
+            border: `1px solid ${selectedPayment.color}`,
             color: orderSubmitting ? "var(--text-secondary)" : "#fff",
             fontFamily: "'Orbitron', sans-serif",
             fontWeight: 700,
@@ -3477,7 +3536,9 @@ function CartPage({ cart, setCart }) {
         >
           {orderSubmitting
             ? "SAVING YOUR ORDER…"
-            : `${orderSubmitError ? "RETRY & OPEN" : "PLACE ORDER & OPEN"} ${paymentMethod === "venmo" ? "VENMO" : "CASH APP"}`}
+            : paymentMethod === "zelle"
+              ? `${orderSubmitError ? "RETRY & SHOW" : "PLACE ORDER & SHOW"} ZELLE QR`
+              : `${orderSubmitError ? "RETRY & OPEN" : "PLACE ORDER & OPEN"} ${paymentMethodLabel.toUpperCase()}`}
         </button>
 
         <div style={{
@@ -6580,7 +6641,7 @@ function ReturnsPage() {
         <p>Contact <a href="mailto:sales@tierone.bio" style={{ color: "var(--red-primary)" }}>sales@tierone.bio</a> within 7 days of delivery with your order number, a description of the issue, and photos if applicable. We will respond within 1 business day with next steps.</p>
 
         <h2 style={policyHeadingStyle}>Refund Method</h2>
-        <p>Approved refunds are issued via the original payment method (Cash App or Venmo) within 3 business days of resolution.</p>
+        <p>Approved refunds are issued via the original payment method (Cash App, Venmo, or Zelle) within 3 business days of resolution.</p>
       </PolicyShell>
       <Footer />
     </>
@@ -6642,7 +6703,7 @@ function PrivacyPage() {
         <p>We use Google Analytics to understand site traffic. This service may set cookies. We use localStorage in your browser to remember your cart between visits. You can clear this at any time through your browser settings.</p>
 
         <h2 style={policyHeadingStyle}>Data Security</h2>
-        <p>Order data is transmitted over HTTPS and stored on secure third-party services (Netlify Forms, EmailJS). Payments occur outside our site through Cash App or Venmo and we never see or store payment credentials.</p>
+        <p>Order data is transmitted over HTTPS and stored on secure third-party services (Netlify Forms, EmailJS). Payments occur outside our site through Cash App, Venmo, or Zelle, and we never see or store payment credentials.</p>
 
         <h2 style={policyHeadingStyle}>Contact</h2>
         <p>For privacy questions or data deletion requests, contact <a href="mailto:sales@tierone.bio" style={{ color: "var(--red-primary)" }}>sales@tierone.bio</a>.</p>
@@ -6687,8 +6748,8 @@ function FAQPage() {
     { q: "How do I view a Certificate of Analysis (COA)?", a: "Every product page has a green VIEW CERTIFICATE OF ANALYSIS button. Clicking it opens that product's most recent lot data with all test results, methods, specifications, and pass/fail status." },
     { q: "How long does shipping take?", a: "Orders paid before 2:00 PM Arizona time ship the same business day from Phoenix, AZ via UPS or FedEx. Standard ground delivery within the continental US is typically 2–5 business days." },
     { q: "Do you offer free shipping?", a: "Yes. Orders of $200 or more (after any discounts applied) ship free. Orders under $200 are charged a flat $10 shipping fee." },
-    { q: "What payment methods do you accept?", a: "Currently Cash App ($TierOneBio) and Venmo (@TierOneBio). At checkout you'll select your preferred method and follow the on-screen instructions to complete payment." },
-    { q: "Why don't you accept credit cards?", a: "Most major card processors restrict research peptide sales due to category-level policy. Cash App and Venmo allow us to keep the catalog accessible and prices low without surprise account terminations or held funds." },
+    { q: "What payment methods do you accept?", a: "We accept Cash App ($TierOneBio), Venmo (@TierOneBio), and Zelle (TierOneBio / TIER ONE BIO LLC). At checkout you'll select your preferred method and follow the on-screen instructions to complete payment." },
+    { q: "Why don't you accept credit cards?", a: "Most major card processors restrict research peptide sales due to category-level policy. Cash App, Venmo, and Zelle allow us to keep the catalog accessible and prices low without surprise account terminations or held funds." },
     { q: "How should I store the products?", a: "Lyophilized vials should be stored in a laboratory freezer (0°F / -18°C) for long-term storage. Once reconstituted with bacteriostatic water, store refrigerated (35–46°F / 2–8°C) and use within the storage window listed on the product page." },
     { q: "Do you offer bulk discounts?", a: "Yes. Each product has a discounted per-vial price when you order 5 or more of the same compound and dose. The bulk price is shown on every product card and product page." },
     { q: "Do you ship internationally?", a: "Not at this time. We currently ship to the United States only." },

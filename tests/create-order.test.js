@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 
 import createOrder, {
   canUsePersonalDiscount,
@@ -38,6 +38,10 @@ test("order requests are trimmed and reduced to catalog ids and quantities", () 
   assert.deepEqual(result.data.items, [{ id: PRODUCTS[0].id, qty: 2 }]);
   assert.equal(result.data.paymentMethod, "Cash App");
   assert.deepEqual(result.data.discountCodes, ["WELCOME10"]);
+
+  const zelleResult = validateOrderRequest(validRequest({ paymentMethod: "zelle" }));
+  assert.equal(zelleResult.error, undefined);
+  assert.equal(zelleResult.data.paymentMethod, "Zelle");
 });
 
 test("legacy discount codes containing @ pass validation and order submission", async () => {
@@ -83,7 +87,7 @@ test("legacy discount codes containing @ pass validation and order submission", 
 });
 
 test("order request bounds reject malformed or oversized customer input", () => {
-  assert.match(validateOrderRequest(validRequest({ paymentMethod: "wire" })).error, /Cash App or Venmo/);
+  assert.match(validateOrderRequest(validRequest({ paymentMethod: "wire" })).error, /Cash App, Venmo, or Zelle/);
   assert.match(validateOrderRequest(validRequest({
     customer: { ...validRequest().customer, email: "not-an-email" },
   })).error, /valid email/);
@@ -154,6 +158,7 @@ test("order creation has a platform rate limit and rejects large bodies before d
 test("checkout notifications and receipts use the server-confirmed order", () => {
   const source = readFileSync("site_1.jsx", "utf8");
   const index = readFileSync("index.html", "utf8");
+  const emailTemplate = readFileSync("email-template.html", "utf8");
   const paymentHandler = source.slice(
     source.indexOf("async function handlePlaceOrderAndPay"),
     source.indexOf("const inputStyle", source.indexOf("async function handlePlaceOrderAndPay")),
@@ -162,8 +167,12 @@ test("checkout notifications and receipts use the server-confirmed order", () =>
   assert.match(source, /formData\.append\("orderStatus", confirmed\.status\)/);
   assert.match(source, /orderSubtotal: `\$\$\{serverTotals\.subtotal\.toFixed\(2\)\}`/);
   assert.match(source, /orderTotal: `\$\$\{serverTotals\.total\.toFixed\(2\)\}`/);
-  assert.match(source, /No need to come back\./);
+  assert.match(source, /Your order is saved first\./);
   assert.doesNotMatch(source, /I HAVE SENT PAYMENT|PENDING_PAYMENT/);
+  assert.match(source, /src="\/zelle-tier-one-bio-qr\.jpg"/);
+  assert.match(source, /if \(paymentMethod === "zelle"\) return/);
+  assert.equal(existsSync("public/zelle-tier-one-bio-qr.jpg"), true);
+  assert.match(emailTemplate, /TierOneBio \/ TIER ONE BIO LLC<\/strong> \(Zelle\)/);
   assert.ok(
     paymentHandler.indexOf('fetch("/.netlify/functions/create-order"')
       < paymentHandler.indexOf("window.location.assign(paymentUrl)"),
