@@ -1,11 +1,11 @@
 # Handoff — pick up here
 
-Written 2026-08-07, updated 2026-08-24. Read this before starting work; it
+Written 2026-08-07, updated 2026-08-25. Read this before starting work; it
 records state that is not obvious from the code or the git log.
 
 ---
 
-## Checkout security hardening — BUILT 2026-08-25
+## Checkout security hardening — LIVE IN PRODUCTION
 
 Customer receipts and staff new-order alerts now originate inside
 `create-order.js` through the existing server-only Netlify `RESEND_API_KEY`.
@@ -25,6 +25,14 @@ generation fails closed if secure browser randomness is unavailable.
 
 Migrations: `20260825151157_restrict_profile_updates.sql` and
 `20260825151207_add_unpaid_reservation_expiry.sql`.
+
+Both migrations were applied to production before commit `e27e602` was pushed
+to `main`. Release verification is green: 138 tests, all route smoke tests,
+production build, secret scan, site-integrity scan, and lint on the real project
+tree. The live asset is `index-DNbFTPd2.js`; it contains the new receipt-result
+and secure-random handling and contains none of the former EmailJS identifiers.
+The live CSP and prerendered HTML also contain no EmailJS API allowance or
+hidden order form.
 
 ---
 
