@@ -182,6 +182,13 @@ export const STATIC_ROUTES = [
     h1: "Privacy policy",
     priority: "0.5", changefreq: "yearly",
   },
+  {
+    path: "/security",
+    title: "Vulnerability Disclosure",
+    description: "How to report a security issue in the Tier One BioSystems website and checkout.",
+    h1: "Vulnerability disclosure",
+    priority: "0.3", changefreq: "yearly",
+  },
 
   // ── Transactional / account pages: served, but never indexed ──────────────
   {

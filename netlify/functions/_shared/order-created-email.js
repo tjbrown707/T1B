@@ -42,7 +42,7 @@ function money(value) {
   return `$${amount.toFixed(2)}`;
 }
 
-function orderEmailValues(order) {
+export function orderEmailValues(order) {
   const discountCode = order.discount_code || "";
   const discountAmount = Number(order.discount_amount);
   return {
@@ -64,8 +64,7 @@ function orderEmailValues(order) {
   };
 }
 
-export function renderOrderReceipt(order, template = loadReceiptTemplate()) {
-  const values = orderEmailValues(order);
+export function renderOrderReceiptValues(values, template = loadReceiptTemplate()) {
   let html = template.replace(
     /\{\{#discountCode\}\}([\s\S]*?)\{\{\/discountCode\}\}/g,
     values.discountCode ? "$1" : "",
@@ -80,8 +79,11 @@ export function renderOrderReceipt(order, template = loadReceiptTemplate()) {
   return html;
 }
 
-function customerReceiptText(order) {
-  const values = orderEmailValues(order);
+export function renderOrderReceipt(order, template = loadReceiptTemplate()) {
+  return renderOrderReceiptValues(orderEmailValues(order), template);
+}
+
+export function customerReceiptTextValues(values) {
   return [
     `Thank you, ${values.customerName}!`,
     "",
@@ -108,6 +110,10 @@ function customerReceiptText(order) {
     "All products are sold for research and laboratory use only.",
     "Not for human consumption. Not a drug, food, or cosmetic.",
   ].filter(Boolean).join("\n");
+}
+
+export function customerReceiptText(order) {
+  return customerReceiptTextValues(orderEmailValues(order));
 }
 
 function staffNotification(order) {
@@ -162,40 +168,21 @@ async function deliver(message, { apiKey, fetchImpl }) {
   return false;
 }
 
-export async function sendOrderCreatedEmails(order, {
+export async function sendStaffOrderCreatedEmail(order, {
   apiKey = getEnv("RESEND_API_KEY") || "",
   fetchImpl = globalThis.fetch,
 } = {}) {
   if (!apiKey || typeof fetchImpl !== "function") {
     console.error("create-order: RESEND_API_KEY or email transport is unavailable");
-    return { receiptSent: false, staffNotificationSent: false };
+    return false;
   }
 
-  let receiptHtml;
-  try {
-    receiptHtml = renderOrderReceipt(order);
-  } catch (error) {
-    console.error("create-order: customer receipt template failed:", error);
-    return { receiptSent: false, staffNotificationSent: false };
-  }
   const staff = staffNotification(order);
-  const customerMessage = {
-    label: "customer receipt",
-    idempotencyKey: `order-receipt-v1/${order.id}`,
-    payload: {
-      from: SENDER,
-      to: [order.customer_email],
-      reply_to: STAFF_NOTIFICATION_EMAIL,
-      subject: `Tier One order ${order.order_number} received`,
-      html: receiptHtml,
-      text: customerReceiptText(order),
-    },
-  };
   const staffMessage = {
     label: "staff order notification",
     idempotencyKey: `order-staff-notification-v1/${order.id}`,
     payload: {
-      from: SENDER,
+      from: getEnv("RESEND_FROM_ADDRESS") || SENDER,
       to: [STAFF_NOTIFICATION_EMAIL],
       reply_to: order.customer_email,
       subject: `New order ${order.order_number} - awaiting payment`,
@@ -204,9 +191,5 @@ export async function sendOrderCreatedEmails(order, {
     },
   };
 
-  const [receiptSent, staffNotificationSent] = await Promise.all([
-    deliver(customerMessage, { apiKey, fetchImpl }),
-    deliver(staffMessage, { apiKey, fetchImpl }),
-  ]);
-  return { receiptSent, staffNotificationSent };
+  return deliver(staffMessage, { apiKey, fetchImpl });
 }

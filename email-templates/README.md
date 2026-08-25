@@ -176,14 +176,24 @@ once the underlying cause is fixed, the pending email needs one manual re-fire.
 
 `email-template.html` at the repo root is read directly by
 `netlify/functions/create-order.js`. After the order is priced, saved, and its
-inventory is reserved, that function sends two messages through Resend:
+inventory is reserved, the function copies the receipt fields from the trusted
+database row into `order_receipt_outbox` and then sends through Resend:
 
-- the branded receipt to the email on the saved order; and
+- the branded receipt to the email on the saved order, with automatic retries
+  from the five-minute scheduled function; and
 - a staff alert to `sales@tierone.bio`, with Reply-To set to the customer.
 
-Both messages use the existing Netlify `RESEND_API_KEY` and an idempotency key
-based on the database order ID. Do not paste `email-template.html` into EmailJS;
-the browser no longer contains an EmailJS key or calls its API.
+Both messages use the existing Netlify `RESEND_API_KEY` and separate
+idempotency keys based on the database order ID. The customer receipt is one
+row per order and survives a Resend outage or a lost browser response; the
+existing staff alert remains server-side and idempotent. Do not paste
+`email-template.html` into EmailJS; the browser contains no EmailJS key and
+does not call its API.
+
+The outbox records `template_version = 1`. Treat `email-template.html` as the
+immutable v1 receipt: a copy change that must also affect queued retries needs
+a new template version and a matching idempotency-key version, not an in-place
+edit.
 
 ## 5. Processed-order emails
 

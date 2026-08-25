@@ -23,6 +23,7 @@ import {
   todayISO,
 } from "../src/data/routes.js";
 import { ARTICLE_META } from "../src/data/articles.js";
+import { securityTxtProblems } from "../src/data/security-txt.js";
 
 const failures = [];
 const fail = (message) => failures.push(message);
@@ -95,6 +96,10 @@ if (sitemap) {
   if (listed.has(canonicalUrl("/cart"))) fail("Sitemap must not contain /cart.");
 }
 
+if (/emailjs\.send|@emailjs\/browser/.test(source)) {
+  fail("site_1.jsx must not call EmailJS from the browser.");
+}
+
 // ── 4. Prerender output must exist for every route ──────────────────────────
 if (hasDist) {
   for (const route of allRoutes(today)) {
@@ -102,6 +107,14 @@ if (hasDist) {
     if (!existsSync(join(DIST, file))) fail(`Prerendered page missing: dist/${file}`);
   }
   if (!existsSync(join(DIST, "404.html"))) fail("dist/404.html is missing — unknown URLs would not return a 404.");
+
+  const securityTxt = join(DIST, ".well-known", "security.txt");
+  if (!existsSync(securityTxt)) {
+    fail("dist/.well-known/security.txt is missing.");
+  } else {
+    const text = readFileSync(securityTxt, "utf8");
+    for (const problem of securityTxtProblems(text)) fail(problem);
+  }
 
   // The prerender fallback stylesheet must never target #root. React clears
   // #root's children on mount but leaves the element itself, so a rule on

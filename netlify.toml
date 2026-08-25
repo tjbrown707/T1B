@@ -35,7 +35,9 @@
     # injected inline scripts outright. 'unsafe-inline' stays on style-src for
     # now because every component in site_1.jsx styles itself with a style={{}}
     # prop; removing it means migrating all of them to classes first.
-    Content-Security-Policy = "default-src 'self'; script-src 'self' https://www.googletagmanager.com https://www.google-analytics.com; connect-src 'self' https://nmafhetkofrekabqawgb.supabase.co https://www.google-analytics.com https://analytics.google.com https://region1.google-analytics.com https://stats.g.doubleclick.net; img-src 'self' data: https:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; form-action 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'"
+    # gtag is loaded only after analytics consent. Cloudflare Turnstile is
+    # rendered at checkout and independently verified by create-order.
+    Content-Security-Policy = "default-src 'self'; script-src 'self' https://www.googletagmanager.com https://www.google-analytics.com https://challenges.cloudflare.com; connect-src 'self' https://nmafhetkofrekabqawgb.supabase.co https://www.google-analytics.com https://analytics.google.com https://region1.google-analytics.com https://challenges.cloudflare.com; img-src 'self' data: https:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; frame-src https://challenges.cloudflare.com; form-action 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'"
 
 # Vite fingerprints built assets in their filenames. They can be cached for a
 # year because a changed file always receives a new URL.

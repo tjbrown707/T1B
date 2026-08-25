@@ -86,6 +86,7 @@ const FOOTER = [
   ["/returns", "Returns"],
   ["/terms", "Terms"],
   ["/privacy", "Privacy"],
+  ["/security", "Security"],
 ];
 
 const linkList = (items) =>
@@ -206,6 +207,13 @@ function staticBody(route, articles) {
   if (route.path === "/lab-results") {
     const withSummary = PRODUCTS.filter(p => getLabResults(p.name, p.dose));
     return `${head}${linkList(withSummary.map(p => [`/product/${p.id}`, `${p.name} ${p.dose}`]))}`;
+  }
+  if (route.path === "/security") {
+    return `${head}
+<h2>How to report</h2>
+<p>Email <a href="mailto:${esc(CONTACT_EMAIL)}">${esc(CONTACT_EMAIL)}</a> with the affected URL and clear reproduction steps. Do not include customer data or modify live data.</p>
+<h2>Scope</h2>
+<p>Good-faith reports about this website, checkout, and related services are welcome. Denial-of-service testing, social engineering, physical attacks, and disruption of inventory, fulfillment, or email are out of scope.</p>`;
   }
   return head;
 }
