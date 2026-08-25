@@ -181,7 +181,9 @@ database row into `order_receipt_outbox` and then sends through Resend:
 
 - the branded receipt to the email on the saved order, with automatic retries
   from the five-minute scheduled function; and
-- a staff alert to `sales@tierone.bio`, with Reply-To set to the customer.
+- a compact staff operations alert to `sales@tierone.bio`, with the total,
+  items, shipping details, an Admin Orders link, and Reply-To set to the
+  customer.
 
 Both messages use the existing Netlify `RESEND_API_KEY` and separate
 idempotency keys based on the database order ID. The customer receipt is one

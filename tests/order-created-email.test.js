@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  renderStaffOrderNotification,
   renderOrderReceipt,
   sendStaffOrderCreatedEmail,
 } from "../netlify/functions/_shared/order-created-email.js";
@@ -64,7 +65,27 @@ test("order creation preserves the staff alert with a stable Resend idempotency 
   assert.ok(staff);
   assert.equal(staff.options.headers["Idempotency-Key"], "order-staff-notification-v1/11111111-1111-4111-8111-111111111111");
   assert.equal(staff.body.reply_to, "researcher@example.com");
-  assert.match(staff.body.text, /Research-use acknowledgement: Yes/);
+  assert.match(staff.body.text, /Research-use acknowledgement: Confirmed/);
+  assert.match(staff.body.html, /Open Admin Orders/);
+  assert.doesNotMatch(staff.body.html, /<pre/);
+});
+
+test("staff alert is compact, mobile-friendly, and escapes customer input", () => {
+  const rendered = renderStaffOrderNotification(sampleOrder({
+    customer_name: '<img src=x onerror="alert(1)">',
+    items_text: "Line one\n<script>alert(1)</script>",
+  }));
+
+  assert.match(rendered.html, /max-width:620px/);
+  assert.match(rendered.html, /AWAITING PAYMENT/);
+  assert.match(rendered.html, /TOTAL DUE/);
+  assert.match(rendered.html, /CUSTOMER &amp; SHIPPING/);
+  assert.match(rendered.html, /https:\/\/www\.tierone\.bio\/admin\/orders/);
+  assert.match(rendered.text, /T1B-260825-123456 · \$91\.00 · Zelle/);
+  assert.match(rendered.text, /Zelle\n\nITEMS/);
+  assert.doesNotMatch(rendered.html, /<script>|<img/);
+  assert.match(rendered.html, /&lt;script&gt;alert\(1\)&lt;\/script&gt;/);
+  assert.match(rendered.html, /&lt;img src=x onerror=&quot;alert\(1\)&quot;&gt;/);
 });
 
 test("staff delivery failure is reported without affecting the durable order", async () => {
