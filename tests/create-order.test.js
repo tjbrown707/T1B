@@ -5,6 +5,7 @@ import { existsSync, readFileSync } from "node:fs";
 import createOrder, {
   canUsePersonalDiscount,
   config,
+  createOrderHandler,
   ordersMatch,
   validateOrderRequest,
 } from "../netlify/functions/create-order.js";
@@ -27,6 +28,7 @@ function validRequest(overrides = {}) {
     items: [{ id: PRODUCTS[0].id, qty: 2 }],
     paymentMethod: "cashapp",
     discountCodes: [" welcome10 "],
+    turnstileToken: "test-turnstile-token",
     ...overrides,
   };
 }
@@ -38,6 +40,7 @@ test("order requests are trimmed and reduced to catalog ids and quantities", () 
   assert.deepEqual(result.data.items, [{ id: PRODUCTS[0].id, qty: 2 }]);
   assert.equal(result.data.paymentMethod, "Cash App");
   assert.deepEqual(result.data.discountCodes, ["WELCOME10"]);
+  assert.equal(result.data.turnstileToken, "test-turnstile-token");
 
   const zelleResult = validateOrderRequest(validRequest({ paymentMethod: "zelle" }));
   assert.equal(zelleResult.error, undefined);
@@ -96,6 +99,7 @@ test("order request bounds reject malformed or oversized customer input", () => 
   })).error, /too long/);
   assert.match(validateOrderRequest(validRequest({ discountCodes: ["A", "B", "C"] })).error, /Too many/);
   assert.match(validateOrderRequest(validRequest({ discountCodes: ["<script>"] })).error, /Invalid discount/);
+  assert.match(validateOrderRequest(validRequest({ turnstileToken: "" })).error, /Bot verification/);
 });
 
 test("replayed order numbers must match every immutable order field", () => {
@@ -155,6 +159,106 @@ test("order creation has a platform rate limit and rejects large bodies before d
   assert.equal(response.status, 413);
 });
 
+test("verified checkout saves once, queues the receipt, and preserves the staff alert", async () => {
+  const previousNetlify = globalThis.Netlify;
+  const env = {
+    SUPABASE_URL: "https://example.supabase.co",
+    SUPABASE_SERVICE_ROLE_KEY: "service-role-test",
+    RESEND_API_KEY: "re_test_key",
+    TURNSTILE_SECRET_KEY: "turnstile-secret",
+  };
+  globalThis.Netlify = { env: { get(name) { return env[name]; } } };
+
+  const orderId = "11111111-1111-4111-8111-111111111111";
+  const deliveryId = "22222222-2222-4222-8222-222222222222";
+  let createCalls = 0;
+  const resendRecipients = [];
+  let delivery = null;
+  const supabase = {
+    auth: { getUser: async () => ({ data: { user: null }, error: null }) },
+    from() {
+      throw new Error("discount lookup should not run without a code");
+    },
+    async rpc(name, args) {
+      if (name === "create_order_transaction") {
+        createCalls += 1;
+        return {
+          data: { id: orderId, ...args.order_payload },
+          error: null,
+        };
+      }
+      if (name === "enqueue_order_receipt") {
+        assert.equal(args.p_order_id, orderId);
+        if (!delivery) {
+          delivery = {
+            id: deliveryId,
+            order_id: orderId,
+            status: "PENDING",
+            recipient_email: "researcher@example.com",
+            customer_name: "Research Customer",
+            order_number: "T1B-260811-123456",
+            items_text: "BPC-157 10mg x2",
+            subtotal: "90.00",
+            discount_code: "",
+            discount_amount: "0.00",
+            shipping: "10.00",
+            payment_method: "Zelle",
+            total: "100.00",
+            shipping_address: "123 Lab Road",
+            shipping_city: "Phoenix",
+            shipping_state: "AZ",
+            shipping_zip: "85001",
+            customer_phone: "555-555-1212",
+            idempotency_key: `order-receipt/v1/${orderId}`,
+            claim_token: null,
+          };
+        }
+        return { data: { ...delivery }, error: null };
+      }
+      if (name === "claim_order_receipt") {
+        delivery.status = "SENDING";
+        delivery.claim_token = "claim-1";
+        return { data: [{ ...delivery }], error: null };
+      }
+      if (name === "complete_order_receipt") {
+        delivery.status = "SENT";
+        delivery.provider_message_id = args.p_provider_message_id;
+        return { data: { ...delivery }, error: null };
+      }
+      throw new Error(`unexpected RPC ${name}`);
+    },
+  };
+  const handler = createOrderHandler({
+    createClient: () => supabase,
+    fetchImpl: async (url, options) => {
+      if (String(url).includes("siteverify")) {
+        return new Response(JSON.stringify({ success: true }), { status: 200 });
+      }
+      const message = JSON.parse(options.body);
+      resendRecipients.push(message.to[0]);
+      return new Response(JSON.stringify({ id: `re_${resendRecipients.length}` }), { status: 200 });
+    },
+  });
+
+  try {
+    const response = await handler(new Request("https://www.tierone.bio/.netlify/functions/create-order", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Origin: "https://www.tierone.bio" },
+      body: JSON.stringify(validRequest({ paymentMethod: "zelle", discountCodes: [] })),
+    }));
+    const payload = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(payload.receiptSent, true);
+    assert.equal(payload.staffNotificationSent, true);
+    assert.equal(createCalls, 1);
+    assert.equal(delivery.status, "SENT");
+    assert.deepEqual(resendRecipients.sort(), ["researcher@example.com", "sales@tierone.bio"]);
+  } finally {
+    if (previousNetlify === undefined) delete globalThis.Netlify;
+    else globalThis.Netlify = previousNetlify;
+  }
+});
+
 test("checkout notifications and receipts use the server-confirmed order", () => {
   const source = readFileSync("site_1.jsx", "utf8");
   const index = readFileSync("index.html", "utf8");
@@ -168,7 +272,8 @@ test("checkout notifications and receipts use the server-confirmed order", () =>
   assert.doesNotMatch(source, /@emailjs\/browser|emailjs\.send|service_r3r7crs|template_i9k8u2a|E2QQt/);
   assert.doesNotMatch(paymentHandler, /form-name.*order|application\/x-www-form-urlencoded/);
   assert.doesNotMatch(index, /<form name="order"/);
-  assert.match(server, /sendOrderCreatedEmails\(saved\)/);
+  assert.match(server, /deliverOrderReceipt\(/);
+  assert.match(server, /sendStaffOrderCreatedEmail\(saved/);
   assert.match(paymentHandler, /setReceiptSent\(confirmed\.receiptSent === true\)/);
   assert.match(source, /Your order is saved first\./);
   assert.doesNotMatch(source, /I HAVE SENT PAYMENT|PENDING_PAYMENT/);
@@ -199,10 +304,19 @@ test("order references fail closed when secure randomness is unavailable", () =>
 test("the schema keeps order creation server-only and redemption transactional", () => {
   const schema = readFileSync("supabase/schema.sql", "utf8");
   const migration = readFileSync("supabase/migrations/20260811120000_inventory_fulfillment_foundation.sql", "utf8");
+  const receiptOutbox = readFileSync(
+    "supabase/migrations/20260825183632_add_order_receipt_outbox.sql",
+    "utf8",
+  );
   assert.match(migration, /alter column status set default 'AWAITING PAYMENT'/);
   assert.doesNotMatch(schema, /create policy "Users can insert their own orders"/);
   assert.match(migration, /create_order_transaction/);
   assert.match(migration, /grant execute on function public\.create_order_transaction\(jsonb, text\) to service_role/);
+  assert.match(receiptOutbox, /create table public\.order_receipt_outbox/);
+  assert.match(receiptOutbox, /from public\.orders/);
+  assert.match(receiptOutbox, /on conflict \(order_id\) do nothing/);
+  assert.match(receiptOutbox, /for update skip locked/);
+  assert.match(receiptOutbox, /revoke all on table public\.order_receipt_outbox from public, anon, authenticated/);
 });
 
 test("profile writes are column-scoped and only new orders receive an auto-release deadline", () => {

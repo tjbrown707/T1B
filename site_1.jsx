@@ -37,6 +37,8 @@ import {
 } from "./src/data/pricing.js";
 import { getLabResults, isLabResultWithheld } from "./src/data/lab-integrity.js";
 import { readStoredCart, clampQuantity, MAX_CART_QUANTITY } from "./src/data/cart.js";
+import TurnstileField from "./src/TurnstileField.jsx";
+import { openCookieSettings } from "./src/cookie-settings.js";
 import {
   lineUnitPrice,
   orderTotals,
@@ -2274,6 +2276,23 @@ function Footer() {
           <FooterLink to="/returns">Returns</FooterLink>
           <FooterLink to="/terms">Terms of Service</FooterLink>
           <FooterLink to="/privacy">Privacy Policy</FooterLink>
+          <FooterLink to="/security">Vulnerability Disclosure</FooterLink>
+          <button
+            type="button"
+            onClick={openCookieSettings}
+            style={{
+              ...FOOTER_LINK_STYLE,
+              background: "none",
+              border: 0,
+              padding: "4px 0",
+              textAlign: "left",
+              width: "100%",
+            }}
+            onMouseEnter={e => { e.target.style.color = "var(--red-primary)"; }}
+            onMouseLeave={e => { e.target.style.color = "var(--text-secondary)"; }}
+          >
+            Cookie Settings
+          </button>
         </div>
       </div>
 
@@ -2766,6 +2785,8 @@ function CartPage({ cart, setCart }) {
   const [orderSubmitError, setOrderSubmitError] = useState("");
   const [orderReferenceError, setOrderReferenceError] = useState("");
   const [receiptSent, setReceiptSent] = useState(true);
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const [turnstileReset, setTurnstileReset] = useState(0);
   // Re-entry guard. This has to be a ref, not the orderSubmitting state: React
   // batches state updates, so on a fast double-click both handlers would read
   // orderSubmitting as false and both would insert an order. A ref flips
@@ -2942,6 +2963,10 @@ function CartPage({ cart, setCart }) {
       setOrderSubmitError("Your order details are incomplete. Go back to the cart and try again.");
       return;
     }
+    if (!turnstileToken) {
+      setOrderSubmitError("Complete the verification check before placing the order.");
+      return;
+    }
     submittingRef.current = true;
     setOrderSubmitting(true);
     setOrderSubmitError("");
@@ -2973,6 +2998,7 @@ function CartPage({ cart, setCart }) {
           paymentMethod,
           discountCodes,
           researchAcknowledged,
+          turnstileToken,
         }),
       });
 
@@ -2991,6 +3017,11 @@ function CartPage({ cart, setCart }) {
       );
       submittingRef.current = false;
       setOrderSubmitting(false);
+      // Turnstile tokens expire after five minutes and are single-use. Any
+      // retry must obtain a fresh token, including when the order service
+      // committed but its response was lost.
+      setTurnstileToken("");
+      setTurnstileReset(value => value + 1);
       return;
     }
 
@@ -3433,10 +3464,12 @@ function CartPage({ cart, setCart }) {
           }}>{orderSubmitError}</div>
         )}
 
+        <TurnstileField onToken={setTurnstileToken} resetKey={turnstileReset} />
+
         <button
           type="button"
           onClick={handlePlaceOrderAndPay}
-          disabled={orderSubmitting}
+          disabled={orderSubmitting || !turnstileToken}
           aria-busy={orderSubmitting}
           style={{
             width: "100%",
@@ -3449,7 +3482,8 @@ function CartPage({ cart, setCart }) {
             fontSize: 14,
             letterSpacing: "0.13em",
             textTransform: "uppercase",
-            cursor: orderSubmitting ? "wait" : "pointer",
+            cursor: orderSubmitting ? "wait" : turnstileToken ? "pointer" : "not-allowed",
+            opacity: !orderSubmitting && !turnstileToken ? 0.65 : 1,
             transition: "all 0.2s",
             marginBottom: 16,
           }}
@@ -6630,13 +6664,45 @@ function PrivacyPage() {
         <p>We do not sell, trade, or rent your personal information to third parties. We share information only with service providers required to fulfill your order (shipping carriers, email service, payment platforms) and only the information necessary for that purpose.</p>
 
         <h2 style={policyHeadingStyle}>Cookies & Analytics</h2>
-        <p>We use Google Analytics to understand site traffic. This service may set cookies. We use localStorage in your browser to remember your cart between visits. You can clear this at any time through your browser settings.</p>
+        <p>Google Analytics is not loaded until you accept the analytics prompt. If you decline, the tracker is not added to the page. If you accept, Google Analytics may set first-party cookies on this site, including:</p>
+        <ul style={{ paddingLeft: 24 }}>
+          <li><code>_ga</code> — distinguishes unique visitors</li>
+          <li><code>_ga_HY1FDLSRTJ</code> — keeps track of the current analytics session</li>
+        </ul>
+        <p>We use these counts to understand site traffic. Advertising cookies from DoubleClick are not used. You can change a stored choice at any time with Cookie Settings in the site footer. Rejecting analytics stops the tracker and removes the Google Analytics cookies.</p>
+        <p>We also use localStorage in your browser to remember your cart and analytics choice between visits. You can clear these at any time through your browser settings.</p>
 
         <h2 style={policyHeadingStyle}>Data Security</h2>
         <p>Order data is transmitted over HTTPS, stored in Supabase, and sent through Resend for order emails. Contact-form messages are handled by Netlify Forms. Payments occur outside our site through Cash App, Venmo, or Zelle, and we never see or store payment credentials.</p>
 
         <h2 style={policyHeadingStyle}>Contact</h2>
         <p>For privacy questions or data deletion requests, contact <a href="mailto:sales@tierone.bio" style={{ color: "var(--red-primary)" }}>sales@tierone.bio</a>.</p>
+      </PolicyShell>
+      <Footer />
+    </>
+  );
+}
+
+function SecurityPage() {
+  useRouteMeta("/security");
+  return (
+    <>
+      <PolicyShell kicker="SECURITY" title="Vulnerability Disclosure">
+        <p>Tier One BioSystems welcomes good-faith reports of security issues in www.tierone.bio, its checkout, and related services. This page is the policy linked from <code>/.well-known/security.txt</code>.</p>
+
+        <h2 style={policyHeadingStyle}>How to report</h2>
+        <p>Email <a href="mailto:sales@tierone.bio" style={{ color: "var(--red-primary)" }}>sales@tierone.bio</a> with a clear description of the issue, the affected URL or function, and the steps needed to reproduce it. Do not include customer personal data, payment credentials, or exploit code that modifies live data.</p>
+
+        <h2 style={policyHeadingStyle}>What we ask</h2>
+        <ul style={{ paddingLeft: 24 }}>
+          <li>Give us a reasonable chance to investigate and fix the issue before public disclosure.</li>
+          <li>Do not access, change, or delete another customer&apos;s data.</li>
+          <li>Do not disrupt checkout, inventory, fulfillment, or email delivery to demonstrate impact.</li>
+          <li>Social engineering, physical attacks, and denial-of-service testing are out of scope.</li>
+        </ul>
+
+        <h2 style={policyHeadingStyle}>What you can expect</h2>
+        <p>We will acknowledge a valid report when we can and let you know when the issue is resolved. There is no bug-bounty program. Safe harbor applies only to good-faith research that stays within this policy.</p>
       </PolicyShell>
       <Footer />
     </>
@@ -7698,6 +7764,7 @@ export default function App() {
         <Route path="/returns" element={<ReturnsPage />} />
         <Route path="/terms" element={<TermsPage />} />
         <Route path="/privacy" element={<PrivacyPage />} />
+        <Route path="/security" element={<SecurityPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
       </div>

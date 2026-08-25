@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   renderOrderReceipt,
-  sendOrderCreatedEmails,
+  sendStaffOrderCreatedEmail,
 } from "../netlify/functions/_shared/order-created-email.js";
 
 function sampleOrder(overrides = {}) {
@@ -47,9 +47,9 @@ test("customer receipt rendering escapes input and handles discount sections", (
   assert.doesNotMatch(withoutDiscount, /SAVE10|\{\{#discountCode\}\}/);
 });
 
-test("order creation sends customer and staff messages through Resend with stable idempotency keys", async () => {
+test("order creation preserves the staff alert with a stable Resend idempotency key", async () => {
   const calls = [];
-  const result = await sendOrderCreatedEmails(sampleOrder(), {
+  const result = await sendStaffOrderCreatedEmail(sampleOrder(), {
     apiKey: "test-resend-key",
     fetchImpl: async (url, options) => {
       calls.push({ url, options, body: JSON.parse(options.body) });
@@ -57,34 +57,25 @@ test("order creation sends customer and staff messages through Resend with stabl
     },
   });
 
-  assert.deepEqual(result, { receiptSent: true, staffNotificationSent: true });
-  assert.equal(calls.length, 2);
+  assert.equal(result, true);
+  assert.equal(calls.length, 1);
   assert.ok(calls.every(call => call.url === "https://api.resend.com/emails"));
-  const customer = calls.find(call => call.body.to[0] === "researcher@example.com");
   const staff = calls.find(call => call.body.to[0] === "sales@tierone.bio");
-  assert.ok(customer);
   assert.ok(staff);
-  assert.equal(customer.options.headers["Idempotency-Key"], "order-receipt-v1/11111111-1111-4111-8111-111111111111");
   assert.equal(staff.options.headers["Idempotency-Key"], "order-staff-notification-v1/11111111-1111-4111-8111-111111111111");
   assert.equal(staff.body.reply_to, "researcher@example.com");
-  assert.match(customer.body.html, /T1B-260825-123456/);
   assert.match(staff.body.text, /Research-use acknowledgement: Yes/);
 });
 
-test("customer and staff delivery results are reported independently", async () => {
+test("staff delivery failure is reported without affecting the durable order", async () => {
   const previousError = console.error;
   console.error = () => {};
   try {
-    const result = await sendOrderCreatedEmails(sampleOrder(), {
+    const result = await sendStaffOrderCreatedEmail(sampleOrder(), {
       apiKey: "test-resend-key",
-      fetchImpl: async (_url, options) => {
-        const body = JSON.parse(options.body);
-        return body.to[0] === "sales@tierone.bio"
-          ? new Response("provider unavailable", { status: 503 })
-          : new Response("{}", { status: 200 });
-      },
+      fetchImpl: async () => new Response("provider unavailable", { status: 503 }),
     });
-    assert.deepEqual(result, { receiptSent: true, staffNotificationSent: false });
+    assert.equal(result, false);
   } finally {
     console.error = previousError;
   }

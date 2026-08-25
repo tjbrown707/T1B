@@ -85,6 +85,11 @@ const PATTERNS = [
     fix: "PrintNode calls belong in a Netlify Function; never read this environment variable from the Vite app.",
   },
   {
+    label: "Turnstile secret key name",
+    regex: /TURNSTILE_SECRET_KEY/g,
+    fix: "Turnstile siteverify belongs in a Netlify Function; never read this environment variable from the Vite app.",
+  },
+  {
     label: "Postgres connection string with credentials",
     regex: /postgres(?:ql)?:\/\/[^\s:'"]+:[^\s@'"]+@/g,
     fix: "Database credentials must never reach the browser. Rotate the database password.",
@@ -99,6 +104,7 @@ const CONFIGURED_SERVER_SECRETS = [
   "RESEND_API_KEY",
   "SHIPPO_API_TOKEN",
   "PRINTNODE_API_KEY",
+  "TURNSTILE_SECRET_KEY",
 ].flatMap(name => {
   const value = process.env[name];
   return typeof value === "string" && value.length >= 8 ? [{ name, value }] : [];

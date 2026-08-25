@@ -292,6 +292,11 @@ $$;
 revoke execute on function public.create_order_transaction(jsonb, text) from public, anon, authenticated;
 grant execute on function public.create_order_transaction(jsonb, text) to service_role;
 
+-- Checkout receipts: see
+-- supabase/migrations/20260825183632_add_order_receipt_outbox.sql for the
+-- durable, service-role-only Resend queue and its enqueue/claim/complete/fail
+-- RPCs. It is additive to the live fulfillment notification outbox.
+
 
 -- ─── Verifying this file still matches production ───────────────────────────
 -- RLS must be true for both tables:
