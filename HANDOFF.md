@@ -5,6 +5,29 @@ records state that is not obvious from the code or the git log.
 
 ---
 
+## Checkout security hardening — BUILT 2026-08-25
+
+Customer receipts and staff new-order alerts now originate inside
+`create-order.js` through the existing server-only Netlify `RESEND_API_KEY`.
+The browser EmailJS dependency, public service/template/key values, Netlify
+order form post, hidden order form, and EmailJS CSP allowance are gone. The
+contact form deliberately remains on Netlify Forms. `email-template.html` is
+now bundled as the runtime checkout-receipt template rather than pasted into
+EmailJS. Resend idempotency keys are tied to the immutable database order ID.
+
+New orders receive a durable `reservation_expires_at` deadline 24 hours after
+creation. An hourly Netlify scheduled function calls the existing atomic
+`cancel_unpaid_order` workflow after that deadline. Existing unpaid orders are
+grandfathered with a null deadline, so deploying this change cannot cancel the
+current backlog without review. Profile UPDATE is now granted only for
+`full_name`, `phone`, `address`, `city`, `state`, and `zip`. Order-number
+generation fails closed if secure browser randomness is unavailable.
+
+Migrations: `20260825151157_restrict_profile_updates.sql` and
+`20260825151207_add_unpaid_reservation_expiry.sql`.
+
+---
+
 ## Zelle checkout — LIVE IN PRODUCTION
 
 Added 2026-08-24. Zelle is a third customer checkout option beside Cash App
@@ -288,7 +311,8 @@ the deploy rather than shipping it. Verified in both directions.
 - Order payloads have size, field, email, payment, item and code validation;
   public endpoints use Netlify's durable rate limits.
 - Replayed order numbers return data only when every immutable field matches.
-- Netlify Forms and EmailJS now use the server-confirmed totals and item text.
+- At that release, Netlify Forms and EmailJS used server-confirmed totals; the
+  2026-08-25 hardening above supersedes both browser-side sends.
 - RLS policies use explicit authenticated roles and one-time `auth.uid()`
   evaluation; the public `rls_auto_enable()` execution grant was removed.
 - Staff queue indexes, validated accounting constraints and a status constraint
@@ -356,12 +380,10 @@ are covered. Only the `--all` sweep was ever region-scoped, and that is fixed.
 - **Branch protection on `main`** — block direct pushes, tick "do not allow
   bypassing". Without it the agent can skip every gate above.
 - **Fine-grained PAT** scoped to this repo only, Contents: write.
-- **Paste 5 dashboard templates.** 4 Supabase auth emails + the EmailJS order
-  confirmation (`template_i9k8u2a`). The repo is ahead of what is live: wide logo,
-  Gmail dark-mode fix, `sales@`/`admin@` addresses, and the discount-code row on
-  the receipt. `welcome-discount.html` needs no pasting — the function reads it.
-- **Netlify form notifications** to `sales@tierone.bio`, so orders arrive by email
-  instead of requiring a dashboard login.
+- **Paste 4 dashboard templates.** These are the Supabase auth emails only.
+  Checkout receipts and staff alerts are now read and sent by Netlify code;
+  nothing needs pasting into EmailJS and no Netlify order-form notification is
+  required. `welcome-discount.html` also needs no pasting.
 - **Set Supabase email OTP expiry to 1800 seconds.** Dashboard → Authentication
   → Providers → Email → OTP expiry → `1800` → Save. This is the
   one remaining security-advisor item that cannot be changed from the repo.

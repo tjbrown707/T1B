@@ -10,6 +10,7 @@ import { isSaleActive } from "../../src/data/pricing.js";
 import { orderTotals, orderLineItems, isShippingDiscountCode } from "../../src/data/order-totals.js";
 import { checkoutPaymentMethodLabel } from "../../src/data/order-management.js";
 import { getEnv, jsonResponse, readBearerToken, readJsonBody } from "./_shared/http.js";
+import { sendOrderCreatedEmails } from "./_shared/order-created-email.js";
 
 const MAX_BODY_BYTES = 32 * 1024;
 const ORDER_NUMBER_PATTERN = /^T1B-\d{6}-\d{6}$/;
@@ -128,6 +129,10 @@ export default async function handler(request) {
     return fail(409, "That order reference is already in use. Please start a new order.");
   }
 
+  // Both emails are rendered from the saved, server-priced order. Resend
+  // idempotency keys keep a replay from duplicating either message.
+  const emailDelivery = await sendOrderCreatedEmails(saved);
+
   return jsonResponse(200, {
     ok: true,
     orderNumber: saved.order_number,
@@ -141,6 +146,8 @@ export default async function handler(request) {
     },
     itemsText: saved.items_text || "",
     items: Array.isArray(saved.items) ? saved.items : [],
+    receiptSent: emailDelivery.receiptSent,
+    staffNotificationSent: emailDelivery.staffNotificationSent,
   }, "POST, OPTIONS");
 }
 

@@ -49,9 +49,9 @@ per hour, and often lands in spam. Custom SMTP makes it send from `noreply@tiero
 Once custom SMTP is on, you can also raise the rate limits under
 **Authentication → Rate Limits**.
 
-> Note: this same verified Resend domain is also used by the server-side
-> processed-order/tracking email described below. EmailJS still handles the
-> original checkout confirmation email.
+> Note: this same verified Resend domain is used by every server-side order
+> email described below, including the checkout receipt. EmailJS is no longer
+> part of checkout.
 
 ---
 
@@ -85,7 +85,7 @@ transaction, so two tabs cannot use the same personal code on two orders.
 > | Key | Where it lives | What breaks if you revoke it |
 > |---|---|---|
 > | **Auth key** | Supabase → Authentication → SMTP Settings → Password | Signup confirmations, password resets, magic links — customers cannot create accounts or get back into them |
-> | **Netlify mail key** | Netlify → `RESEND_API_KEY` | Welcome + discount emails and processed-order tracking emails |
+> | **Netlify mail key** | Netlify → `RESEND_API_KEY` | Checkout receipts, staff order alerts, welcome discounts, and processed-order emails |
 >
 > They are deliberately separate so either can be rotated without taking down
 > the other half of your email. Resend shows a key's value only once at
@@ -172,7 +172,20 @@ once the underlying cause is fixed, the pending email needs one manual re-fire.
 
 ---
 
-## 4. Processed-order emails
+## 4. Checkout receipt + staff order alert
+
+`email-template.html` at the repo root is read directly by
+`netlify/functions/create-order.js`. After the order is priced, saved, and its
+inventory is reserved, that function sends two messages through Resend:
+
+- the branded receipt to the email on the saved order; and
+- a staff alert to `sales@tierone.bio`, with Reply-To set to the customer.
+
+Both messages use the existing Netlify `RESEND_API_KEY` and an idempotency key
+based on the database order ID. Do not paste `email-template.html` into EmailJS;
+the browser no longer contains an EmailJS key or calls its API.
+
+## 5. Processed-order emails
 
 `order-processed-v1.html` and `order-processed-handoff-v2.html` are read directly
 by the Netlify fulfillment functions; do not paste them into Supabase, EmailJS,

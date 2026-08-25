@@ -159,26 +159,41 @@ test("checkout notifications and receipts use the server-confirmed order", () =>
   const source = readFileSync("site_1.jsx", "utf8");
   const index = readFileSync("index.html", "utf8");
   const emailTemplate = readFileSync("email-template.html", "utf8");
+  const server = readFileSync("netlify/functions/create-order.js", "utf8");
   const paymentHandler = source.slice(
     source.indexOf("async function handlePlaceOrderAndPay"),
     source.indexOf("const inputStyle", source.indexOf("async function handlePlaceOrderAndPay")),
   );
   assert.doesNotMatch(source, /redeem-discount/);
-  assert.match(source, /formData\.append\("orderStatus", confirmed\.status\)/);
-  assert.match(source, /orderSubtotal: `\$\$\{serverTotals\.subtotal\.toFixed\(2\)\}`/);
-  assert.match(source, /orderTotal: `\$\$\{serverTotals\.total\.toFixed\(2\)\}`/);
+  assert.doesNotMatch(source, /@emailjs\/browser|emailjs\.send|service_r3r7crs|template_i9k8u2a|E2QQt/);
+  assert.doesNotMatch(paymentHandler, /form-name.*order|application\/x-www-form-urlencoded/);
+  assert.doesNotMatch(index, /<form name="order"/);
+  assert.match(server, /sendOrderCreatedEmails\(saved\)/);
+  assert.match(paymentHandler, /setReceiptSent\(confirmed\.receiptSent === true\)/);
   assert.match(source, /Your order is saved first\./);
   assert.doesNotMatch(source, /I HAVE SENT PAYMENT|PENDING_PAYMENT/);
   assert.match(source, /src="\/zelle-tier-one-bio-qr\.jpg"/);
   assert.match(source, /if \(paymentMethod === "zelle"\) return/);
   assert.equal(existsSync("public/zelle-tier-one-bio-qr.jpg"), true);
   assert.match(emailTemplate, /TierOneBio \/ TIER ONE BIO LLC<\/strong> \(Zelle\)/);
+  assert.match(emailTemplate, /sent server-side.*Resend/s);
   assert.ok(
     paymentHandler.indexOf('fetch("/.netlify/functions/create-order"')
       < paymentHandler.indexOf("window.location.assign(paymentUrl)"),
     "the durable order must be created before checkout leaves for the payment app",
   );
-  assert.match(index, /name="researchUseAcknowledged"/);
+  assert.match(source, /name="researchUseAcknowledgment"/);
+});
+
+test("order references fail closed when secure randomness is unavailable", () => {
+  const source = readFileSync("site_1.jsx", "utf8");
+  const generator = source.slice(
+    source.indexOf("function generateOrderNumber"),
+    source.indexOf("function handleCheckout", source.indexOf("function generateOrderNumber")),
+  );
+  assert.match(generator, /globalThis\.crypto\?\.getRandomValues/);
+  assert.match(generator, /throw new Error\("Secure random-number generation is unavailable\."\)/);
+  assert.doesNotMatch(generator, /Math\.random/);
 });
 
 test("the schema keeps order creation server-only and redemption transactional", () => {
@@ -188,4 +203,26 @@ test("the schema keeps order creation server-only and redemption transactional",
   assert.doesNotMatch(schema, /create policy "Users can insert their own orders"/);
   assert.match(migration, /create_order_transaction/);
   assert.match(migration, /grant execute on function public\.create_order_transaction\(jsonb, text\) to service_role/);
+});
+
+test("profile writes are column-scoped and only new orders receive an auto-release deadline", () => {
+  const schema = readFileSync("supabase/schema.sql", "utf8");
+  const profileMigration = readFileSync(
+    "supabase/migrations/20260825151157_restrict_profile_updates.sql",
+    "utf8",
+  );
+  const expiryMigration = readFileSync(
+    "supabase/migrations/20260825151207_add_unpaid_reservation_expiry.sql",
+    "utf8",
+  );
+  const allowedColumns = /grant update \(full_name, phone, address, city, state, zip\)/i;
+  assert.match(schema, allowedColumns);
+  assert.match(profileMigration, allowedColumns);
+  assert.doesNotMatch(schema, /grant select, insert, update on table public\.profiles/i);
+  assert.ok(
+    expiryMigration.indexOf("add column if not exists reservation_expires_at")
+      < expiryMigration.indexOf("set default (now() + interval '24 hours')"),
+    "the default must be added after the nullable column so legacy orders stay exempt",
+  );
+  assert.match(expiryMigration, /where payment_status = 'AWAITING_PAYMENT'/);
 });

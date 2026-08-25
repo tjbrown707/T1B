@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef, useCallback, lazy, Suspense } from "react";
 import { Routes, Route, Navigate, useNavigate, useLocation, useParams, useSearchParams } from "react-router-dom";
-import emailjs from "@emailjs/browser";
 import { supabase } from "./supabaseClient";
 import { useAuth } from "./src/AuthContext.jsx";
 
@@ -2765,11 +2764,8 @@ function CartPage({ cart, setCart }) {
   const [researchAcknowledged, setResearchAcknowledged] = useState(false);
   const [orderSubmitting, setOrderSubmitting] = useState(false);
   const [orderSubmitError, setOrderSubmitError] = useState("");
+  const [orderReferenceError, setOrderReferenceError] = useState("");
   const [receiptSent, setReceiptSent] = useState(true);
-  // Which durable writes have already landed for this order number. Confirming
-  // twice — a double click, or a retry after a partial failure — must not
-  // create a second order row or a second notification.
-  const submissionRef = useRef({ orderNumber: null, supabase: false, netlify: false });
   // Re-entry guard. This has to be a ref, not the orderSubmitting state: React
   // batches state updates, so on a fast double-click both handlers would read
   // orderSubmitting as false and both would insert an order. A ref flips
@@ -2904,17 +2900,15 @@ function CartPage({ cart, setCart }) {
     const y = date.getFullYear().toString().slice(-2);
     const m = String(date.getMonth() + 1).padStart(2, "0");
     const d = String(date.getDate()).padStart(2, "0");
-    // 6 crypto-random digits rather than 4 from Math.random(): with only 9,000
-    // possible values a same-day collision became likely at modest volume,
-    // which would mean two different orders sharing one reference number.
-    let rand;
-    if (typeof crypto !== "undefined" && crypto.getRandomValues) {
-      const buf = new Uint32Array(1);
-      crypto.getRandomValues(buf);
-      rand = 100000 + (buf[0] % 900000);
-    } else {
-      rand = Math.floor(100000 + Math.random() * 900000);
+    // Six cryptographically random digits replace the old four-digit fallback:
+    // with only 9,000 possible values, a same-day collision became likely at
+    // modest volume and could make two orders share one reference number.
+    if (!globalThis.crypto?.getRandomValues) {
+      throw new Error("Secure random-number generation is unavailable.");
     }
+    const buf = new Uint32Array(1);
+    globalThis.crypto.getRandomValues(buf);
+    const rand = 100000 + (buf[0] % 900000);
     return `T1B-${y}${m}${d}-${rand}`;
   }
 
@@ -2923,20 +2917,25 @@ function CartPage({ cart, setCart }) {
     const { name, email, phone, address, city, state, zip } = customerInfo;
     if (!name || !email || !phone || !address || !city || !state || !zip) return;
 
-    const num = generateOrderNumber();
+    let num;
+    try {
+      num = generateOrderNumber();
+    } catch (error) {
+      console.error("Order reference generation failed:", error);
+      setOrderReferenceError(
+        `This browser cannot create a secure order reference. Reload the page or use a current browser; if it continues, email ${CONTACT_EMAIL}.`,
+      );
+      return;
+    }
+    setOrderReferenceError("");
     setOrderNumber(num);
     setStep("payment");
   }
 
-  // Opening a payment app must not happen until the order actually
-  // reached somewhere durable. The previous version fired the Supabase insert,
-  // the Netlify Forms post and the EmailJS send without awaiting any of them,
-  // then cleared the cart unconditionally — so a customer on a flaky connection
-  // saw "order received", lost their cart, and left no record behind.
-  //
-  // The order of operations now is: save durably, and only then do the things
-  // that can be redone by hand (redeem the code, send the receipt). The cart is
-  // the customer's only copy of the order, so it is cleared last of all.
+  // Opening a payment app must not happen until the order reaches somewhere
+  // durable. create-order saves and prices the order, reserves inventory, then
+  // sends both emails from that trusted row. The cart is cleared only after the
+  // server confirms that the durable order exists.
   async function handlePlaceOrderAndPay() {
     if (submittingRef.current) return;
     if (!orderNumber || cart.length === 0) {
@@ -2947,35 +2946,8 @@ function CartPage({ cart, setCart }) {
     setOrderSubmitting(true);
     setOrderSubmitError("");
 
-    // Reset the idempotency record if this is a different order number.
-    if (submissionRef.current.orderNumber !== orderNumber) {
-      submissionRef.current = { orderNumber, supabase: false, netlify: false };
-    }
-    const submission = submissionRef.current;
-
     const { name, email, phone, address, city, state, zip } = customerInfo;
-
-    // Build order items text
     const discountCodes = [appliedDiscount?.code, appliedShipping?.code].filter(Boolean);
-
-    // Submit to Netlify Forms
-    const formData = new URLSearchParams();
-    formData.append("form-name", "order");
-    formData.append("bot-field", "");
-    formData.append("orderNumber", orderNumber);
-    formData.append("customerName", name);
-    formData.append("customerEmail", email);
-    formData.append("customerPhone", phone);
-    formData.append("shippingAddress", address);
-    formData.append("shippingCity", city);
-    formData.append("shippingState", state);
-    formData.append("shippingZip", zip);
-    formData.append("paymentMethod", paymentMethodLabel);
-    // Recorded so there is evidence the acknowledgement was given for this order.
-    formData.append("researchUseAcknowledged", researchAcknowledged ? "yes" : "no");
-    // The money fields are appended after the server has priced the order, so
-    // that the notification the owner fulfils from carries the server's figures
-    // rather than the browser's.
 
     // ── The order is created and priced by the server. ────────────────────
     // Only product ids and quantities are sent: every figure below comes back
@@ -3009,7 +2981,6 @@ function CartPage({ cart, setCart }) {
         throw new Error(payload?.error || `order service: HTTP ${res.status}`);
       }
       confirmed = payload;
-      submission.supabase = true;
     } catch (err) {
       console.error("Order save error:", err);
       setOrderSubmitError(
@@ -3025,59 +2996,8 @@ function CartPage({ cart, setCart }) {
 
     // The order now exists with these figures. Everything downstream quotes
     // the server's numbers, not the browser's.
-    const itemsText = confirmed.itemsText;
     const serverTotals = confirmed.totals;
-
-    formData.append("orderStatus", confirmed.status);
-    formData.append("orderItems", itemsText);
-    formData.append("orderSubtotal", `$${serverTotals.subtotal.toFixed(2)}`);
-    formData.append("discountCode", confirmed.discountCode);
-    formData.append("discountAmount", serverTotals.discountAmount > 0 ? `-$${serverTotals.discountAmount.toFixed(2)}` : "");
-    formData.append("shipping", serverTotals.shipping === 0 ? "FREE" : `$${serverTotals.shipping.toFixed(2)}`);
-    formData.append("orderTotal", `$${serverTotals.total.toFixed(2)}`);
-
-    // Notifies the owner for fulfilment. The order is already saved, so a
-    // failure here is reported without discarding it.
-    if (!submission.netlify) {
-      try {
-        const res = await fetch("/", {
-          method: "POST",
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: formData.toString(),
-        });
-        submission.netlify = res.ok;
-        if (!res.ok) console.error("Order notification failed:", res.status);
-      } catch (err) {
-        console.error("Order notification error:", err);
-      }
-    }
-
-    // Send confirmation email to customer via EmailJS. If this fails the
-    // confirmation screen says so, instead of promising an email that is
-    // never going to arrive.
-    try {
-      await emailjs.send("service_r3r7crs", "template_i9k8u2a", {
-        customerName: name,
-        customerEmail: email,
-        customerPhone: phone,
-        orderNumber: orderNumber,
-        orderItems: itemsText,
-        orderSubtotal: `$${serverTotals.subtotal.toFixed(2)}`,
-        discountCode: confirmed.discountCode,
-        discountAmount: serverTotals.discountAmount > 0 ? `-$${serverTotals.discountAmount.toFixed(2)}` : "",
-        shipping: serverTotals.shipping === 0 ? "FREE" : `$${serverTotals.shipping.toFixed(2)}`,
-        paymentMethod: paymentMethodLabel,
-        orderTotal: `$${serverTotals.total.toFixed(2)}`,
-        shippingAddress: address,
-        shippingCity: city,
-        shippingState: state,
-        shippingZip: zip,
-      }, "E2QQt-tqFcuyhtZOD");
-      setReceiptSent(true);
-    } catch (err) {
-      console.error("Email error:", err);
-      setReceiptSent(false);
-    }
+    setReceiptSent(confirmed.receiptSent === true);
 
     submittingRef.current = false;
     setOrderSubmitting(false);
@@ -3589,8 +3509,6 @@ function CartPage({ cart, setCart }) {
           flexDirection: "column",
           gap: 20,
         }}>
-          <input type="hidden" name="form-name" value="order" />
-
           <div>
             <label style={labelStyle}>Full Name *</label>
             <input
@@ -3812,6 +3730,18 @@ function CartPage({ cart, setCart }) {
               <a href="/terms" target="_blank" rel="noopener noreferrer" style={{ color: "var(--red-primary)" }}>Terms of Service</a>.
             </span>
           </label>
+
+          {orderReferenceError && (
+            <div role="alert" style={{
+              padding: "14px 16px",
+              border: "1px solid var(--red-primary)",
+              background: "rgba(196,30,42,0.08)",
+              fontFamily: "'Rajdhani', sans-serif",
+              fontSize: 15,
+              color: "var(--text-primary)",
+              lineHeight: 1.6,
+            }}>{orderReferenceError}</div>
+          )}
 
           <div style={{ display: "flex", gap: 16, marginTop: 8 }}>
             <button type="button" onClick={() => setStep("cart")} style={{
@@ -6703,7 +6633,7 @@ function PrivacyPage() {
         <p>We use Google Analytics to understand site traffic. This service may set cookies. We use localStorage in your browser to remember your cart between visits. You can clear this at any time through your browser settings.</p>
 
         <h2 style={policyHeadingStyle}>Data Security</h2>
-        <p>Order data is transmitted over HTTPS and stored on secure third-party services (Netlify Forms, EmailJS). Payments occur outside our site through Cash App, Venmo, or Zelle, and we never see or store payment credentials.</p>
+        <p>Order data is transmitted over HTTPS, stored in Supabase, and sent through Resend for order emails. Contact-form messages are handled by Netlify Forms. Payments occur outside our site through Cash App, Venmo, or Zelle, and we never see or store payment credentials.</p>
 
         <h2 style={policyHeadingStyle}>Contact</h2>
         <p>For privacy questions or data deletion requests, contact <a href="mailto:sales@tierone.bio" style={{ color: "var(--red-primary)" }}>sales@tierone.bio</a>.</p>

@@ -64,19 +64,18 @@ create policy "Users can update their own profile"
   with check ((select auth.uid()) = id);
 
 revoke all on table public.profiles from anon, authenticated;
-grant select, insert, update on table public.profiles to authenticated;
+grant select, insert on table public.profiles to authenticated;
+grant update (full_name, phone, address, city, state, zip)
+  on table public.profiles to authenticated;
 
 -- NOTE: there is deliberately no DELETE policy. Profile rows are removed by
 -- the cascade from auth.users, not by the customer.
 --
 -- WARNING — read before adding columns to this table.
---   The UPDATE policy authorises the ROW, not individual COLUMNS. A customer
---   can write any column in their own row. Adding a privilege column here
---   (is_admin, role, credit_balance, discount_tier, …) would therefore create
---   self-service privilege escalation: any signed-in user could grant it to
---   themselves with a single API call.
---   Keep privilege and money fields in a separate table that has no
---   user-writable policy at all.
+--   The UPDATE policy authorises the ROW, while the column-level grant above
+--   limits the writable fields. New customer-editable columns must be added to
+--   that grant deliberately. Keep privilege and money fields in a separate
+--   table that has no user-writable policy at all.
 
 
 -- ─── orders ─────────────────────────────────────────────────────────────────
@@ -104,7 +103,8 @@ create table if not exists public.orders (
   ship_city       text,
   ship_state      text,
   ship_zip        text,
-  created_at      timestamptz not null default now()
+  created_at      timestamptz not null default now(),
+  reservation_expires_at timestamptz default (now() + interval '24 hours')
 );
 
 alter table public.orders enable row level security;
