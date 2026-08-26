@@ -138,7 +138,7 @@ Orders can reserve the starting inventory immediately, even while lot IDs are pr
 
 ## 6. Test before using a real order
 
-1. Place a small test order with Cash App or Venmo.
+1. Place a small test order with Cash App, Venmo, or Zelle.
 2. Confirm the inventory screen shows those units as **Reserved** while on-hand remains unchanged.
 3. In `/admin/orders`, click **Confirm Payment**.
 4. Confirm reserved decreases and on-hand decreases by the ordered quantity.

@@ -44,3 +44,24 @@ export function jsonResponse(status, payload, methods) {
     },
   });
 }
+
+// Browser requests include Origin. Missing Origin remains allowed for scheduled
+// jobs, server-to-server calls, and local unit tests. A mismatched browser
+// origin is refused before any request body or secret-backed work is handled.
+export function isAllowedOrigin(request) {
+  const origin = request.headers.get("origin");
+  if (!origin) return true;
+  if (origin === SITE_ORIGIN) return true;
+  try {
+    const url = new URL(origin);
+    return url.protocol === "http:"
+      && (url.hostname === "localhost" || url.hostname === "127.0.0.1");
+  } catch {
+    return false;
+  }
+}
+
+export function rejectCrossOrigin(request, methods) {
+  if (isAllowedOrigin(request)) return null;
+  return jsonResponse(403, { ok: false, error: "Request not allowed." }, methods);
+}

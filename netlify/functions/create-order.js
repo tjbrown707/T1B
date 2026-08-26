@@ -3,12 +3,22 @@
 // recomputed from the catalog, then the order insert and personal-code
 // redemption happen in one Postgres transaction.
 
-import { createClient } from "@supabase/supabase-js";
+import { createClient as defaultCreateClient } from "@supabase/supabase-js";
 import { PRODUCTS } from "../../src/data/catalog.js";
 import { MAX_CART_QUANTITY } from "../../src/data/cart.js";
 import { isSaleActive } from "../../src/data/pricing.js";
 import { orderTotals, orderLineItems, isShippingDiscountCode } from "../../src/data/order-totals.js";
-import { getEnv, jsonResponse, readBearerToken, readJsonBody } from "./_shared/http.js";
+import { checkoutPaymentMethodLabel } from "../../src/data/order-management.js";
+import {
+  getEnv,
+  jsonResponse,
+  readBearerToken,
+  readJsonBody,
+  rejectCrossOrigin,
+} from "./_shared/http.js";
+import { sendStaffOrderCreatedEmail } from "./_shared/order-created-email.js";
+import { deliverOrderReceipt } from "./_shared/order-receipt.js";
+import { clientIp, readTurnstileToken, verifyTurnstileToken } from "./_shared/turnstile.js";
 
 const MAX_BODY_BYTES = 32 * 1024;
 const ORDER_NUMBER_PATTERN = /^T1B-\d{6}-\d{6}$/;
@@ -24,7 +34,13 @@ const CUSTOMER_LIMITS = {
   zip: 20,
 };
 
-export default async function handler(request) {
+export function createOrderHandler({
+  createClient = defaultCreateClient,
+  fetchImpl = globalThis.fetch,
+} = {}) {
+  return async function handler(request) {
+  const blocked = rejectCrossOrigin(request, "POST, OPTIONS");
+  if (blocked) return blocked;
   if (request.method === "OPTIONS") return jsonResponse(204, null, "POST, OPTIONS");
   if (request.method !== "POST") return fail(405, "Method not allowed");
 
@@ -34,6 +50,14 @@ export default async function handler(request) {
   const validated = validateOrderRequest(parsed.data);
   if (validated.error) return fail(400, validated.error);
   const input = validated.data;
+
+  const turnstile = await verifyTurnstileToken(input.turnstileToken, {
+    fetchImpl,
+    remoteIp: clientIp(request),
+  });
+  if (!turnstile.ok) {
+    return fail(403, turnstile.error || "Bot verification failed. Please try again.");
+  }
 
   const supabaseUrl = getEnv("SUPABASE_URL");
   const serviceRoleKey = getEnv("SUPABASE_SERVICE_ROLE_KEY");
@@ -127,6 +151,18 @@ export default async function handler(request) {
     return fail(409, "That order reference is already in use. Please start a new order.");
   }
 
+  // The customer receipt is copied from this saved, server-priced row into a
+  // protected outbox before Resend is called. The current staff alert remains
+  // server-side and keeps its own stable Resend idempotency key.
+  const [receipt, staffNotificationSent] = await Promise.all([
+    deliverOrderReceipt({
+      supabase,
+      orderId: saved.id,
+      fetchImpl,
+    }),
+    sendStaffOrderCreatedEmail(saved, { fetchImpl }),
+  ]);
+
   return jsonResponse(200, {
     ok: true,
     orderNumber: saved.order_number,
@@ -140,8 +176,14 @@ export default async function handler(request) {
     },
     itemsText: saved.items_text || "",
     items: Array.isArray(saved.items) ? saved.items : [],
+    receiptSent: receipt.ok === true,
+    staffNotificationSent,
   }, "POST, OPTIONS");
+  };
 }
+
+const handler = createOrderHandler();
+export default handler;
 
 export function validateOrderRequest(body) {
   if (!body || typeof body !== "object" || Array.isArray(body)) return { error: "Invalid request." };
@@ -178,10 +220,10 @@ export function validateOrderRequest(body) {
     items.push({ id: product.id, qty });
   }
 
-  if (body.paymentMethod !== "cashapp" && body.paymentMethod !== "venmo") {
-    return { error: "Choose Cash App or Venmo as the payment method." };
-  }
-  const paymentMethod = body.paymentMethod === "venmo" ? "Venmo" : "Cash App";
+  const paymentMethod = checkoutPaymentMethodLabel(body.paymentMethod);
+  if (!paymentMethod) return { error: "Choose Cash App, Venmo, or Zelle as the payment method." };
+  const turnstileToken = readTurnstileToken(body.turnstileToken);
+  if (!turnstileToken) return { error: "Bot verification failed. Please try again." };
 
   const rawCodes = body.discountCodes ?? [];
   if (!Array.isArray(rawCodes) || rawCodes.length > 2) return { error: "Too many discount codes were supplied." };
@@ -193,7 +235,7 @@ export function validateOrderRequest(body) {
     if (!discountCodes.includes(code)) discountCodes.push(code);
   }
 
-  return { data: { orderNumber, customer, items, paymentMethod, discountCodes } };
+  return { data: { orderNumber, customer, items, paymentMethod, discountCodes, turnstileToken } };
 }
 
 export function ordersMatch(saved, expected) {

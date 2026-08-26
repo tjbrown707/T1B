@@ -2,6 +2,10 @@ import { Buffer } from "node:buffer";
 import { authenticateOrderManager } from "./_shared/admin-auth.js";
 import { assertOrderPrintable, buildFulfillmentPdf } from "./_shared/fulfillment-pdf.js";
 import { jsonResponse, readJsonBody } from "./_shared/http.js";
+import {
+  assertLocalHandoffLabelPrintable,
+  buildLocalHandoffLabelPdf,
+} from "./_shared/local-handoff-label.js";
 import { recordOrderPrintSubmission } from "./_shared/order-processed-email.js";
 import { printNodeConfig, submitPrintNodeJob } from "./_shared/printnode.js";
 
@@ -35,6 +39,7 @@ export default async function handler(request) {
   const document = typeof parsed.data?.document === "string" ? parsed.data.document.trim() : "";
   if (!UUID_PATTERN.test(orderId)) return fail(400, "Invalid order id.");
   if (document === "fulfillment") return printFulfillment(auth, orderId, config);
+  if (document === "local_handoff_label") return printLocalHandoffLabel(auth, orderId, config);
   if (document === "label") return printLabel(auth, orderId, config);
   return fail(400, "Choose a valid document to print.");
 }
@@ -86,6 +91,39 @@ async function printFulfillment(auth, orderId, config) {
   } catch (error) {
     console.error("admin-print: fulfillment print failed:", error);
     return fail(502, "PrintNode could not print the packing slip.");
+  }
+}
+
+async function printLocalHandoffLabel(auth, orderId, config) {
+  if (!config.labelConfigured) {
+    return fail(503, "The 4x6 label printer is not configured yet. Use Open 4x6 Label to print it from the browser.");
+  }
+  const { data: order, error } = await auth.supabase
+    .from("orders")
+    .select(ORDER_FIELDS)
+    .eq("id", orderId)
+    .maybeSingle();
+  if (error) {
+    console.error("admin-print: local handoff label load failed:", error);
+    return fail(500, "The pickup label could not be loaded.");
+  }
+  if (!order) return fail(404, "Order not found.");
+  const blocked = assertLocalHandoffLabelPrintable(order);
+  if (blocked) return fail(409, blocked);
+
+  try {
+    const bytes = await buildLocalHandoffLabelPdf(order);
+    const jobId = await submitPrintNodeJob({
+      printerId: config.labelPrinterId,
+      title: `${order.order_number} - local handoff label`,
+      contentType: "pdf_base64",
+      content: Buffer.from(bytes).toString("base64"),
+    });
+    console.info(`admin-print: staff ${auth.user.id} printed local handoff label ${order.order_number} as job ${jobId}`);
+    return jsonResponse(200, { printed: true, jobId }, METHODS);
+  } catch (printError) {
+    console.error("admin-print: local handoff label print failed:", printError);
+    return fail(502, "PrintNode could not print the pickup label. Use Open 4x6 Label to print it from the browser.");
   }
 }
 

@@ -1,0 +1,103 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+
+import {
+  renderStaffOrderNotification,
+  renderOrderReceipt,
+  sendStaffOrderCreatedEmail,
+} from "../netlify/functions/_shared/order-created-email.js";
+
+function sampleOrder(overrides = {}) {
+  return {
+    id: "11111111-1111-4111-8111-111111111111",
+    order_number: "T1B-260825-123456",
+    items_text: "BPC-157 10mg x2 @ $45.00 = $90.00",
+    subtotal: "90.00",
+    discount_code: "SAVE10",
+    discount_amount: "9.00",
+    shipping: "10.00",
+    total: "91.00",
+    payment_method: "Zelle",
+    customer_name: "Research Customer",
+    customer_email: "researcher@example.com",
+    customer_phone: "555-555-1212",
+    ship_address: "123 Lab Road",
+    ship_city: "Phoenix",
+    ship_state: "AZ",
+    ship_zip: "85001",
+    ...overrides,
+  };
+}
+
+test("customer receipt rendering escapes input and handles discount sections", () => {
+  const template = "{{customerName}}|{{orderItems}}|{{#discountCode}}{{discountCode}}:{{discountAmount}}{{/discountCode}}";
+  const rendered = renderOrderReceipt(sampleOrder({
+    customer_name: "<script>alert(1)</script>",
+    items_text: "Line one\n<img src=x onerror=alert(1)>",
+  }), template);
+  assert.doesNotMatch(rendered, /<script>|<img/);
+  assert.match(rendered, /&lt;script&gt;alert\(1\)&lt;\/script&gt;/);
+  assert.match(rendered, /Line one<br>&lt;img src=x onerror=alert\(1\)&gt;/);
+  assert.match(rendered, /SAVE10:-\$9\.00/);
+
+  const withoutDiscount = renderOrderReceipt(sampleOrder({
+    discount_code: null,
+    discount_amount: 0,
+  }), template);
+  assert.equal(withoutDiscount.endsWith("|"), true);
+  assert.doesNotMatch(withoutDiscount, /SAVE10|\{\{#discountCode\}\}/);
+});
+
+test("order creation preserves the staff alert with a stable Resend idempotency key", async () => {
+  const calls = [];
+  const result = await sendStaffOrderCreatedEmail(sampleOrder(), {
+    apiKey: "test-resend-key",
+    fetchImpl: async (url, options) => {
+      calls.push({ url, options, body: JSON.parse(options.body) });
+      return new Response(JSON.stringify({ id: "email-id" }), { status: 200 });
+    },
+  });
+
+  assert.equal(result, true);
+  assert.equal(calls.length, 1);
+  assert.ok(calls.every(call => call.url === "https://api.resend.com/emails"));
+  const staff = calls.find(call => call.body.to[0] === "sales@tierone.bio");
+  assert.ok(staff);
+  assert.equal(staff.options.headers["Idempotency-Key"], "order-staff-notification-v1/11111111-1111-4111-8111-111111111111");
+  assert.equal(staff.body.reply_to, "researcher@example.com");
+  assert.match(staff.body.text, /Research-use acknowledgement: Confirmed/);
+  assert.match(staff.body.html, /Open Admin Orders/);
+  assert.doesNotMatch(staff.body.html, /<pre/);
+});
+
+test("staff alert is compact, mobile-friendly, and escapes customer input", () => {
+  const rendered = renderStaffOrderNotification(sampleOrder({
+    customer_name: '<img src=x onerror="alert(1)">',
+    items_text: "Line one\n<script>alert(1)</script>",
+  }));
+
+  assert.match(rendered.html, /max-width:620px/);
+  assert.match(rendered.html, /AWAITING PAYMENT/);
+  assert.match(rendered.html, /TOTAL DUE/);
+  assert.match(rendered.html, /CUSTOMER &amp; SHIPPING/);
+  assert.match(rendered.html, /https:\/\/www\.tierone\.bio\/admin\/orders/);
+  assert.match(rendered.text, /T1B-260825-123456 · \$91\.00 · Zelle/);
+  assert.match(rendered.text, /Zelle\n\nITEMS/);
+  assert.doesNotMatch(rendered.html, /<script>|<img/);
+  assert.match(rendered.html, /&lt;script&gt;alert\(1\)&lt;\/script&gt;/);
+  assert.match(rendered.html, /&lt;img src=x onerror=&quot;alert\(1\)&quot;&gt;/);
+});
+
+test("staff delivery failure is reported without affecting the durable order", async () => {
+  const previousError = console.error;
+  console.error = () => {};
+  try {
+    const result = await sendStaffOrderCreatedEmail(sampleOrder(), {
+      apiKey: "test-resend-key",
+      fetchImpl: async () => new Response("provider unavailable", { status: 503 }),
+    });
+    assert.equal(result, false);
+  } finally {
+    console.error = previousError;
+  }
+});

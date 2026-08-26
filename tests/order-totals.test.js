@@ -32,6 +32,19 @@ test("bulk tiers change at exactly the documented quantities", () => {
   assert.equal(at(25), Math.round(product.bulk * 0.90 * 100) / 100, "25 unlocks bulk -10%");
 });
 
+test("the CJC-1295 / Ipamorelin blend matches Tesamorelin's pricing structure", () => {
+  const cjcIpamorelin = PRODUCTS.find(({ id }) => id === "cjc-ipa");
+  const tesamorelin = PRODUCTS.find(({ id }) => id === "tesamorelin");
+
+  for (const qty of [1, 5, 10, 25]) {
+    assert.equal(
+      lineUnitPrice({ id: cjcIpamorelin.id, qty }),
+      lineUnitPrice({ id: tesamorelin.id, qty }),
+      `unit prices should match at ${qty} vial${qty === 1 ? "" : "s"}`
+    );
+  }
+});
+
 test("unit price never rises as quantity rises", () => {
   let previous = Infinity;
   for (let qty = 1; qty <= 30; qty++) {

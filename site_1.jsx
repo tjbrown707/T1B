@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef, useCallback, lazy, Suspense } from "react";
 import { Routes, Route, Navigate, useNavigate, useLocation, useParams, useSearchParams } from "react-router-dom";
-import emailjs from "@emailjs/browser";
 import { supabase } from "./supabaseClient";
 import { useAuth } from "./src/AuthContext.jsx";
 
@@ -38,6 +37,8 @@ import {
 } from "./src/data/pricing.js";
 import { getLabResults, isLabResultWithheld } from "./src/data/lab-integrity.js";
 import { readStoredCart, clampQuantity, MAX_CART_QUANTITY } from "./src/data/cart.js";
+import TurnstileField from "./src/TurnstileField.jsx";
+import { openCookieSettings } from "./src/cookie-settings.js";
 import {
   lineUnitPrice,
   orderTotals,
@@ -45,6 +46,7 @@ import {
   isShippingDiscountCode,
 } from "./src/data/order-totals.js";
 import {
+  CHECKOUT_PAYMENT_METHODS,
   FULFILLMENT_METHODS,
   ORDER_STATUS_OPTIONS,
   PAYMENT_RECEIVED_OPTIONS,
@@ -55,6 +57,7 @@ import {
   isLocalHandoff,
   isPrecountedOrder,
   nextFulfillmentAction,
+  checkoutPaymentMethodLabel,
 } from "./src/data/order-management.js";
 import {
   DEFAULT_PARCEL,
@@ -2273,6 +2276,23 @@ function Footer() {
           <FooterLink to="/returns">Returns</FooterLink>
           <FooterLink to="/terms">Terms of Service</FooterLink>
           <FooterLink to="/privacy">Privacy Policy</FooterLink>
+          <FooterLink to="/security">Vulnerability Disclosure</FooterLink>
+          <button
+            type="button"
+            onClick={openCookieSettings}
+            style={{
+              ...FOOTER_LINK_STYLE,
+              background: "none",
+              border: 0,
+              padding: "4px 0",
+              textAlign: "left",
+              width: "100%",
+            }}
+            onMouseEnter={e => { e.target.style.color = "var(--red-primary)"; }}
+            onMouseLeave={e => { e.target.style.color = "var(--text-secondary)"; }}
+          >
+            Cookie Settings
+          </button>
         </div>
       </div>
 
@@ -2735,6 +2755,12 @@ function ContactPage() {
 // them from environment variables. Codes are never included in the client
 // bundle. See netlify/functions/validate-discount.js.
 
+const CHECKOUT_PAYMENT_OPTIONS = Object.freeze([
+  { value: "cashapp", label: CHECKOUT_PAYMENT_METHODS.cashapp, color: "#00D632", background: "rgba(0,214,50,0.1)" },
+  { value: "venmo", label: CHECKOUT_PAYMENT_METHODS.venmo, color: "#008CFF", background: "rgba(0,143,227,0.1)" },
+  { value: "zelle", label: CHECKOUT_PAYMENT_METHODS.zelle, color: "#8A45D6", background: "rgba(138,69,214,0.12)" },
+]);
+
 function CartPage({ cart, setCart }) {
   useRouteMeta("/cart");
   const navigate = useNavigate();
@@ -2747,7 +2773,8 @@ function CartPage({ cart, setCart }) {
 
   const [orderNumber, setOrderNumber] = useState("");
   const [isMobile, setIsMobile] = useState(window.innerWidth < 700);
-  const [paymentMethod, setPaymentMethod] = useState("cashapp"); // cashapp | venmo
+  const [paymentMethod, setPaymentMethod] = useState("cashapp"); // cashapp | venmo | zelle
+  const [confirmedTotal, setConfirmedTotal] = useState(null);
   const [discountInput, setDiscountInput] = useState("");
   const [appliedDiscount, setAppliedDiscount] = useState(null); // { code, type, value, label } — order discount slot
   const [appliedShipping, setAppliedShipping] = useState(null); // { code, type, value, label } — free-shipping slot
@@ -2756,16 +2783,18 @@ function CartPage({ cart, setCart }) {
   const [researchAcknowledged, setResearchAcknowledged] = useState(false);
   const [orderSubmitting, setOrderSubmitting] = useState(false);
   const [orderSubmitError, setOrderSubmitError] = useState("");
+  const [orderReferenceError, setOrderReferenceError] = useState("");
   const [receiptSent, setReceiptSent] = useState(true);
-  // Which durable writes have already landed for this order number. Confirming
-  // twice — a double click, or a retry after a partial failure — must not
-  // create a second order row or a second notification.
-  const submissionRef = useRef({ orderNumber: null, supabase: false, netlify: false });
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const [turnstileReset, setTurnstileReset] = useState(0);
   // Re-entry guard. This has to be a ref, not the orderSubmitting state: React
   // batches state updates, so on a fast double-click both handlers would read
   // orderSubmitting as false and both would insert an order. A ref flips
   // synchronously, before the second click can get past it.
   const submittingRef = useRef(false);
+  const selectedPayment = CHECKOUT_PAYMENT_OPTIONS.find(option => option.value === paymentMethod)
+    || CHECKOUT_PAYMENT_OPTIONS[0];
+  const paymentMethodLabel = checkoutPaymentMethodLabel(paymentMethod);
 
   function startCustomerInfo() {
     // Prefill when the form opens. This preserves anything already typed if
@@ -2892,17 +2921,15 @@ function CartPage({ cart, setCart }) {
     const y = date.getFullYear().toString().slice(-2);
     const m = String(date.getMonth() + 1).padStart(2, "0");
     const d = String(date.getDate()).padStart(2, "0");
-    // 6 crypto-random digits rather than 4 from Math.random(): with only 9,000
-    // possible values a same-day collision became likely at modest volume,
-    // which would mean two different orders sharing one reference number.
-    let rand;
-    if (typeof crypto !== "undefined" && crypto.getRandomValues) {
-      const buf = new Uint32Array(1);
-      crypto.getRandomValues(buf);
-      rand = 100000 + (buf[0] % 900000);
-    } else {
-      rand = Math.floor(100000 + Math.random() * 900000);
+    // Six cryptographically random digits replace the old four-digit fallback:
+    // with only 9,000 possible values, a same-day collision became likely at
+    // modest volume and could make two orders share one reference number.
+    if (!globalThis.crypto?.getRandomValues) {
+      throw new Error("Secure random-number generation is unavailable.");
     }
+    const buf = new Uint32Array(1);
+    globalThis.crypto.getRandomValues(buf);
+    const rand = 100000 + (buf[0] % 900000);
     return `T1B-${y}${m}${d}-${rand}`;
   }
 
@@ -2911,59 +2938,41 @@ function CartPage({ cart, setCart }) {
     const { name, email, phone, address, city, state, zip } = customerInfo;
     if (!name || !email || !phone || !address || !city || !state || !zip) return;
 
-    const num = generateOrderNumber();
+    let num;
+    try {
+      num = generateOrderNumber();
+    } catch (error) {
+      console.error("Order reference generation failed:", error);
+      setOrderReferenceError(
+        `This browser cannot create a secure order reference. Reload the page or use a current browser; if it continues, email ${CONTACT_EMAIL}.`,
+      );
+      return;
+    }
+    setOrderReferenceError("");
     setOrderNumber(num);
     setStep("payment");
   }
 
-  // Opening a payment app must not happen until the order actually
-  // reached somewhere durable. The previous version fired the Supabase insert,
-  // the Netlify Forms post and the EmailJS send without awaiting any of them,
-  // then cleared the cart unconditionally — so a customer on a flaky connection
-  // saw "order received", lost their cart, and left no record behind.
-  //
-  // The order of operations now is: save durably, and only then do the things
-  // that can be redone by hand (redeem the code, send the receipt). The cart is
-  // the customer's only copy of the order, so it is cleared last of all.
+  // Opening a payment app must not happen until the order reaches somewhere
+  // durable. create-order saves and prices the order, reserves inventory, then
+  // sends both emails from that trusted row. The cart is cleared only after the
+  // server confirms that the durable order exists.
   async function handlePlaceOrderAndPay() {
     if (submittingRef.current) return;
     if (!orderNumber || cart.length === 0) {
       setOrderSubmitError("Your order details are incomplete. Go back to the cart and try again.");
       return;
     }
+    if (!turnstileToken) {
+      setOrderSubmitError("Complete the verification check before placing the order.");
+      return;
+    }
     submittingRef.current = true;
     setOrderSubmitting(true);
     setOrderSubmitError("");
 
-    // Reset the idempotency record if this is a different order number.
-    if (submissionRef.current.orderNumber !== orderNumber) {
-      submissionRef.current = { orderNumber, supabase: false, netlify: false };
-    }
-    const submission = submissionRef.current;
-
     const { name, email, phone, address, city, state, zip } = customerInfo;
-
-    // Build order items text
     const discountCodes = [appliedDiscount?.code, appliedShipping?.code].filter(Boolean);
-
-    // Submit to Netlify Forms
-    const formData = new URLSearchParams();
-    formData.append("form-name", "order");
-    formData.append("bot-field", "");
-    formData.append("orderNumber", orderNumber);
-    formData.append("customerName", name);
-    formData.append("customerEmail", email);
-    formData.append("customerPhone", phone);
-    formData.append("shippingAddress", address);
-    formData.append("shippingCity", city);
-    formData.append("shippingState", state);
-    formData.append("shippingZip", zip);
-    formData.append("paymentMethod", paymentMethod === "venmo" ? "Venmo" : "Cash App");
-    // Recorded so there is evidence the acknowledgement was given for this order.
-    formData.append("researchUseAcknowledged", researchAcknowledged ? "yes" : "no");
-    // The money fields are appended after the server has priced the order, so
-    // that the notification the owner fulfils from carries the server's figures
-    // rather than the browser's.
 
     // ── The order is created and priced by the server. ────────────────────
     // Only product ids and quantities are sent: every figure below comes back
@@ -2989,6 +2998,7 @@ function CartPage({ cart, setCart }) {
           paymentMethod,
           discountCodes,
           researchAcknowledged,
+          turnstileToken,
         }),
       });
 
@@ -2997,80 +3007,39 @@ function CartPage({ cart, setCart }) {
         throw new Error(payload?.error || `order service: HTTP ${res.status}`);
       }
       confirmed = payload;
-      submission.supabase = true;
     } catch (err) {
       console.error("Order save error:", err);
       setOrderSubmitError(
         (err?.message && !/HTTP \d+/.test(err.message) ? `${err.message} ` : "") +
-        `We could not save your order, so we have not cleared your cart or opened the payment app. Nothing has been lost — ` +
+        `We could not save your order, so we have not cleared your cart or opened the payment instructions. Nothing has been lost — ` +
         `press the payment button again to retry. If it keeps failing, email ${CONTACT_EMAIL} quoting ${orderNumber} ` +
         `and we will finish it by hand.`
       );
       submittingRef.current = false;
       setOrderSubmitting(false);
+      // Turnstile tokens expire after five minutes and are single-use. Any
+      // retry must obtain a fresh token, including when the order service
+      // committed but its response was lost.
+      setTurnstileToken("");
+      setTurnstileReset(value => value + 1);
       return;
     }
 
     // The order now exists with these figures. Everything downstream quotes
     // the server's numbers, not the browser's.
-    const itemsText = confirmed.itemsText;
     const serverTotals = confirmed.totals;
-
-    formData.append("orderStatus", confirmed.status);
-    formData.append("orderItems", itemsText);
-    formData.append("orderSubtotal", `$${serverTotals.subtotal.toFixed(2)}`);
-    formData.append("discountCode", confirmed.discountCode);
-    formData.append("discountAmount", serverTotals.discountAmount > 0 ? `-$${serverTotals.discountAmount.toFixed(2)}` : "");
-    formData.append("shipping", serverTotals.shipping === 0 ? "FREE" : `$${serverTotals.shipping.toFixed(2)}`);
-    formData.append("orderTotal", `$${serverTotals.total.toFixed(2)}`);
-
-    // Notifies the owner for fulfilment. The order is already saved, so a
-    // failure here is reported without discarding it.
-    if (!submission.netlify) {
-      try {
-        const res = await fetch("/", {
-          method: "POST",
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: formData.toString(),
-        });
-        submission.netlify = res.ok;
-        if (!res.ok) console.error("Order notification failed:", res.status);
-      } catch (err) {
-        console.error("Order notification error:", err);
-      }
-    }
-
-    // Send confirmation email to customer via EmailJS. If this fails the
-    // confirmation screen says so, instead of promising an email that is
-    // never going to arrive.
-    try {
-      await emailjs.send("service_r3r7crs", "template_i9k8u2a", {
-        customerName: name,
-        customerEmail: email,
-        customerPhone: phone,
-        orderNumber: orderNumber,
-        orderItems: itemsText,
-        orderSubtotal: `$${serverTotals.subtotal.toFixed(2)}`,
-        discountCode: confirmed.discountCode,
-        discountAmount: serverTotals.discountAmount > 0 ? `-$${serverTotals.discountAmount.toFixed(2)}` : "",
-        shipping: serverTotals.shipping === 0 ? "FREE" : `$${serverTotals.shipping.toFixed(2)}`,
-        paymentMethod: paymentMethod === "venmo" ? "Venmo" : "Cash App",
-        orderTotal: `$${serverTotals.total.toFixed(2)}`,
-        shippingAddress: address,
-        shippingCity: city,
-        shippingState: state,
-        shippingZip: zip,
-      }, "E2QQt-tqFcuyhtZOD");
-      setReceiptSent(true);
-    } catch (err) {
-      console.error("Email error:", err);
-      setReceiptSent(false);
-    }
+    setReceiptSent(confirmed.receiptSent === true);
 
     submittingRef.current = false;
     setOrderSubmitting(false);
+    setConfirmedTotal(serverTotals.total);
     setStep("confirmed");
     setCart([]);
+
+    // Zelle does not provide a dependable web payment link. Keep the customer
+    // on the confirmation screen, where the official business QR code and the
+    // same-device recipient name are shown after the order is safely stored.
+    if (paymentMethod === "zelle") return;
 
     // Leave for the payment app only after the server has created the order,
     // reserved inventory, and returned its trusted total. The customer no
@@ -3121,7 +3090,7 @@ function CartPage({ cart, setCart }) {
         <div style={{
           border: "1px solid rgba(34,197,94,0.3)",
           background: "rgba(34,197,94,0.03)",
-          padding: "48px 32px",
+          padding: isMobile ? "32px 12px" : "48px 32px",
           marginBottom: 24,
         }}>
           <div style={{
@@ -3149,6 +3118,50 @@ function CartPage({ cart, setCart }) {
             Your order has been received. Please allow up to 24 hours for payment confirmation
             and order processing.
           </p>
+          {paymentMethod === "zelle" && (
+            <div style={{
+              margin: "0 auto 28px",
+              padding: isMobile ? "20px 10px" : "24px 20px",
+              maxWidth: 470,
+              border: "1px solid rgba(138,69,214,0.5)",
+              background: "rgba(138,69,214,0.08)",
+              textAlign: "left",
+            }}>
+              <div style={{
+                fontFamily: "'Orbitron', sans-serif",
+                fontSize: 12,
+                fontWeight: 700,
+                letterSpacing: "0.12em",
+                color: "#b985f4",
+                textAlign: "center",
+                marginBottom: 12,
+              }}>COMPLETE YOUR ZELLE PAYMENT</div>
+              <p style={{ margin: "0 0 16px", color: "var(--text-secondary)", fontFamily: "'Rajdhani', sans-serif", fontSize: 16, lineHeight: 1.6, textAlign: "center" }}>
+                Send <strong style={{ color: "var(--text-primary)" }}>${Number(confirmedTotal || 0).toFixed(2)}</strong> to <strong style={{ color: "#b985f4" }}>TIER ONE BIO LLC</strong> and include <strong style={{ color: "var(--text-primary)" }}>{orderNumber}</strong> in the memo.
+              </p>
+              <div style={{
+                width: "min(100%, 360px)",
+                aspectRatio: "1 / 1",
+                overflow: "hidden",
+                position: "relative",
+                margin: "0 auto 16px",
+                background: "#fff",
+                border: "8px solid #fff",
+                boxSizing: "border-box",
+              }}>
+                <img
+                  src="/zelle-tier-one-bio-qr.jpg"
+                  alt="Zelle QR code for TIER ONE BIO LLC"
+                  width="1035"
+                  height="1280"
+                  style={{ position: "absolute", display: "block", width: "153.33%", maxWidth: "none", height: "auto", left: "-26.67%", top: "-44.44%" }}
+                />
+              </div>
+              <p style={{ margin: 0, color: "var(--text-dim)", fontFamily: "'Rajdhani', sans-serif", fontSize: 14, lineHeight: 1.55, textAlign: "center" }}>
+                Scan this code from your bank&apos;s Zelle section. If you are paying on this same phone, search for <strong style={{ color: "var(--text-secondary)" }}>TierOneBio</strong> and verify the recipient is <strong style={{ color: "var(--text-secondary)" }}>TIER ONE BIO LLC</strong> before sending.
+              </p>
+            </div>
+          )}
           <div style={{
             padding: "16px 24px",
             border: "1px solid var(--border)",
@@ -3377,39 +3390,31 @@ function CartPage({ cart, setCart }) {
             <p style={{ margin: "0 0 12px", fontWeight: 600, color: "var(--text-primary)", fontSize: 17 }}>Step 2: Choose payment method</p>
 
             {/* Payment method tabs */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 20 }}>
-              <button
-                onClick={() => setPaymentMethod("cashapp")}
-                style={{
-                  padding: "12px 0",
-                  background: paymentMethod === "cashapp" ? "rgba(0,214,50,0.1)" : "transparent",
-                  border: paymentMethod === "cashapp" ? "1px solid #00D632" : "1px solid var(--border)",
-                  color: paymentMethod === "cashapp" ? "#00D632" : "var(--text-secondary)",
-                  fontFamily: "'Orbitron', sans-serif",
-                  fontWeight: 700,
-                  fontSize: 12,
-                  letterSpacing: "0.15em",
-                  textTransform: "uppercase",
-                  cursor: "pointer",
-                  transition: "all 0.2s",
-                }}
-              >Cash App</button>
-              <button
-                onClick={() => setPaymentMethod("venmo")}
-                style={{
-                  padding: "12px 0",
-                  background: paymentMethod === "venmo" ? "rgba(0,143,227,0.1)" : "transparent",
-                  border: paymentMethod === "venmo" ? "1px solid #008CFF" : "1px solid var(--border)",
-                  color: paymentMethod === "venmo" ? "#008CFF" : "var(--text-secondary)",
-                  fontFamily: "'Orbitron', sans-serif",
-                  fontWeight: 700,
-                  fontSize: 12,
-                  letterSpacing: "0.15em",
-                  textTransform: "uppercase",
-                  cursor: "pointer",
-                  transition: "all 0.2s",
-                }}
-              >Venmo</button>
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, 1fr)", gap: 8, marginBottom: 20 }}>
+              {CHECKOUT_PAYMENT_OPTIONS.map(option => {
+                const active = paymentMethod === option.value;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setPaymentMethod(option.value)}
+                    aria-pressed={active}
+                    style={{
+                      padding: "12px 8px",
+                      background: active ? option.background : "transparent",
+                      border: active ? `1px solid ${option.color}` : "1px solid var(--border)",
+                      color: active ? option.color : "var(--text-secondary)",
+                      fontFamily: "'Orbitron', sans-serif",
+                      fontWeight: 700,
+                      fontSize: 12,
+                      letterSpacing: "0.12em",
+                      textTransform: "uppercase",
+                      cursor: "pointer",
+                      transition: "all 0.2s",
+                    }}
+                  >{option.label}</button>
+                );
+              })}
             </div>
 
             {paymentMethod === "cashapp" ? (
@@ -3417,10 +3422,15 @@ function CartPage({ cart, setCart }) {
                 <p style={{ margin: "0 0 8px" }}>Send <strong style={{ color: "var(--text-primary)" }}>${total.toFixed(2)}</strong> to <strong style={{ color: "#00D632" }}>$TierOneBio</strong></p>
                 <p style={{ margin: 0, color: "var(--text-dim)", fontSize: 14 }}>Paste the order number in the Cash App note so we can match your payment.</p>
               </>
-            ) : (
+            ) : paymentMethod === "venmo" ? (
               <>
                 <p style={{ margin: "0 0 8px" }}>Send <strong style={{ color: "var(--text-primary)" }}>${total.toFixed(2)}</strong> to <strong style={{ color: "#008CFF" }}>@TierOneBio</strong></p>
                 <p style={{ margin: 0, color: "var(--text-dim)", fontSize: 14 }}>Your order number will be included in the Venmo note automatically.</p>
+              </>
+            ) : (
+              <>
+                <p style={{ margin: "0 0 8px" }}>Send <strong style={{ color: "var(--text-primary)" }}>${total.toFixed(2)}</strong> via Zelle to <strong style={{ color: "#b985f4" }}>TIER ONE BIO LLC</strong></p>
+                <p style={{ margin: 0, color: "var(--text-dim)", fontSize: 14 }}>Place the order first. The official business QR code and same-device recipient name will appear on the next screen.</p>
               </>
             )}
 
@@ -3435,7 +3445,7 @@ function CartPage({ cart, setCart }) {
             }}>
               <span aria-hidden="true" style={{ fontSize: 18, lineHeight: 1.3 }}>✓</span>
               <span style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 15, color: "var(--text-secondary)", lineHeight: 1.5 }}>
-                <strong style={{ color: "#22c55e" }}>No need to come back.</strong> The button below saves your order first, then opens {paymentMethod === "venmo" ? "Venmo" : "Cash App"}. After you send payment, you are finished. We verify every payment ourselves.
+                <strong style={{ color: "#22c55e" }}>Your order is saved first.</strong> The button below {paymentMethod === "zelle" ? "then shows the official Zelle QR code" : `then opens ${paymentMethodLabel}`}. After you send payment, you are finished. We verify every payment ourselves.
               </span>
             </div>
           </div>
@@ -3454,30 +3464,35 @@ function CartPage({ cart, setCart }) {
           }}>{orderSubmitError}</div>
         )}
 
+        <TurnstileField onToken={setTurnstileToken} resetKey={turnstileReset} />
+
         <button
           type="button"
           onClick={handlePlaceOrderAndPay}
-          disabled={orderSubmitting}
+          disabled={orderSubmitting || !turnstileToken}
           aria-busy={orderSubmitting}
           style={{
             width: "100%",
             padding: "16px 0",
-            background: orderSubmitting ? "var(--bg-card-hover)" : paymentMethod === "venmo" ? "#008CFF" : "#00D632",
-            border: `1px solid ${paymentMethod === "venmo" ? "#008CFF" : "#00D632"}`,
+            background: orderSubmitting ? "var(--bg-card-hover)" : selectedPayment.color,
+            border: `1px solid ${selectedPayment.color}`,
             color: orderSubmitting ? "var(--text-secondary)" : "#fff",
             fontFamily: "'Orbitron', sans-serif",
             fontWeight: 700,
             fontSize: 14,
             letterSpacing: "0.13em",
             textTransform: "uppercase",
-            cursor: orderSubmitting ? "wait" : "pointer",
+            cursor: orderSubmitting ? "wait" : turnstileToken ? "pointer" : "not-allowed",
+            opacity: !orderSubmitting && !turnstileToken ? 0.65 : 1,
             transition: "all 0.2s",
             marginBottom: 16,
           }}
         >
           {orderSubmitting
             ? "SAVING YOUR ORDER…"
-            : `${orderSubmitError ? "RETRY & OPEN" : "PLACE ORDER & OPEN"} ${paymentMethod === "venmo" ? "VENMO" : "CASH APP"}`}
+            : paymentMethod === "zelle"
+              ? `${orderSubmitError ? "RETRY & SHOW" : "PLACE ORDER & SHOW"} ZELLE QR`
+              : `${orderSubmitError ? "RETRY & OPEN" : "PLACE ORDER & OPEN"} ${paymentMethodLabel.toUpperCase()}`}
         </button>
 
         <div style={{
@@ -3528,8 +3543,6 @@ function CartPage({ cart, setCart }) {
           flexDirection: "column",
           gap: 20,
         }}>
-          <input type="hidden" name="form-name" value="order" />
-
           <div>
             <label style={labelStyle}>Full Name *</label>
             <input
@@ -3751,6 +3764,18 @@ function CartPage({ cart, setCart }) {
               <a href="/terms" target="_blank" rel="noopener noreferrer" style={{ color: "var(--red-primary)" }}>Terms of Service</a>.
             </span>
           </label>
+
+          {orderReferenceError && (
+            <div role="alert" style={{
+              padding: "14px 16px",
+              border: "1px solid var(--red-primary)",
+              background: "rgba(196,30,42,0.08)",
+              fontFamily: "'Rajdhani', sans-serif",
+              fontSize: 15,
+              color: "var(--text-primary)",
+              lineHeight: 1.6,
+            }}>{orderReferenceError}</div>
+          )}
 
           <div style={{ display: "flex", gap: 16, marginTop: 8 }}>
             <button type="button" onClick={() => setStep("cart")} style={{
@@ -5139,7 +5164,7 @@ function AdminOrdersPage() {
           : isPrecountedOrder(payload.order)
             ? `${payload.order.order_number} is paid. Its inventory was already accounted before the August 10 cutoff, so stock was not changed.`
             : isLocalHandoff(payload.order)
-              ? `${payload.order.order_number} is paid and reserved for local handoff. Inventory was deducted once; print the packing slip through PrintNode before handoff. Shipping labels and postage stay disabled.`
+              ? `${payload.order.order_number} is paid and reserved for local handoff. Inventory was deducted once; print the packing slip through PrintNode before handoff. Carrier postage stays disabled; a free 4×6 pickup label is available in the order details.`
               : `${payload.order.order_number} is paid and ready to pick. Inventory was deducted once.`,
         cancel_unpaid: `${payload.order.order_number} was cancelled and its reserved stock was released.`,
         mark_picked: `${payload.order.order_number} is marked picked.`,
@@ -5203,6 +5228,53 @@ function AdminOrdersPage() {
       });
     } catch (error) {
       setNotice({ type: "error", text: error.message || "The packing slip could not be printed." });
+    } finally {
+      setActionKey("");
+    }
+  }
+
+  async function openLocalHandoffLabel(order) {
+    if (!isLocalHandoff(order) || order.payment_status !== "PAID" || !session?.access_token) return;
+    const key = `${order.id}:pickup-label-pdf`;
+    setActionKey(key);
+    setNotice({ type: "", text: "" });
+    const preview = window.open("", "_blank", "noopener,noreferrer");
+    try {
+      const res = await fetch(`/.netlify/functions/admin-local-handoff-label?orderId=${encodeURIComponent(order.id)}`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({}));
+        throw new Error(payload.error || `Label service returned HTTP ${res.status}`);
+      }
+      const url = URL.createObjectURL(await res.blob());
+      if (preview) preview.location.href = url;
+      else window.open(url, "_blank", "noopener,noreferrer");
+      window.setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch (error) {
+      preview?.close();
+      setNotice({ type: "error", text: error.message || "The pickup label could not be opened." });
+    } finally {
+      setActionKey("");
+    }
+  }
+
+  async function printLocalHandoffLabel(order) {
+    if (!isLocalHandoff(order) || order.payment_status !== "PAID" || !session?.access_token) return;
+    const key = `${order.id}:pickup-label-print`;
+    setActionKey(key);
+    setNotice({ type: "", text: "" });
+    try {
+      const res = await fetch("/.netlify/functions/admin-print", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ orderId: order.id, document: "local_handoff_label" }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload.error || `Print service returned HTTP ${res.status}`);
+      setNotice({ type: "success", text: `${order.order_number}'s free 4×6 pickup label was sent to the label printer.` });
+    } catch (error) {
+      setNotice({ type: "error", text: error.message || "The pickup label could not be printed." });
     } finally {
       setActionKey("");
     }
@@ -5396,7 +5468,15 @@ function AdminOrdersPage() {
                   )}
                   {order.payment_status === "PAID" && isLocalHandoff(order) && (
                     <div style={{ margin: "0 18px 18px", padding: 14, border: "1px solid rgba(34,197,94,0.4)", background: "rgba(34,197,94,0.07)", color: "#22c55e", fontFamily: "'Rajdhani', sans-serif", fontSize: 15 }}>
-                      <div>{localHandoffReady ? "Local handoff — the PrintNode packing-slip job and customer email are recorded. You can now mark the order handed off." : "Local handoff — use Print Packing Slip below first. That PrintNode job queues the customer email and unlocks Mark Handed Off; Preview PDF is unavailable until then."} Shipping labels and postage stay disabled.</div>
+                      <div>{localHandoffReady ? "Local handoff — the PrintNode packing-slip job and customer email are recorded. You can now mark the order handed off." : "Local handoff — use Print Packing Slip below first. That PrintNode job queues the customer email and unlocks Mark Handed Off; Preview PDF is unavailable until then."} Carrier postage stays disabled. The free 4×6 label below is only for identifying pickup orders.</div>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
+                        <button type="button" disabled={busy} onClick={() => openLocalHandoffLabel(order)} style={adminSecondaryButton(busy)}>
+                          {actionKey === `${order.id}:pickup-label-pdf` ? "Opening…" : "Open 4×6 Label"}
+                        </button>
+                        <button type="button" disabled={busy} onClick={() => printLocalHandoffLabel(order)} style={adminSecondaryButton(busy)}>
+                          {actionKey === `${order.id}:pickup-label-print` ? "Printing…" : "Print 4×6 Label"}
+                        </button>
+                      </div>
                       {localEmailMessage && (
                         <div role={localEmailNeedsReview ? "alert" : "status"} style={{ marginTop: 9, color: localEmailNeedsReview ? "#ff6b6b" : "var(--text-secondary)", fontSize: 14 }}>
                           {localEmailMessage}
@@ -5509,7 +5589,7 @@ function OrderPaymentConfirmation({ order, busy, confirming, onConfirm }) {
                 </label>
                 <label style={{ display: "flex", alignItems: "flex-start", gap: 9, marginTop: 12, color: "var(--text-secondary)", fontFamily: "'Rajdhani', sans-serif", fontSize: 15, cursor: "pointer" }}>
                   <input type="radio" name={`fulfillment-${order.id}`} value={FULFILLMENT_METHODS.LOCAL_HANDOFF} checked={fulfillmentMethod === FULFILLMENT_METHODS.LOCAL_HANDOFF} onChange={event => setFulfillmentMethod(event.target.value)} />
-                  <span><strong style={{ color: "var(--text-primary)" }}>Hand directly to customer</strong><br />Print a packing slip and send a customer confirmation email. No shipping label or postage.</span>
+                  <span><strong style={{ color: "var(--text-primary)" }}>Hand directly to customer</strong><br />Print a packing slip, send a customer confirmation email, and optionally print a free 4×6 pickup label. No carrier postage.</span>
                 </label>
               </fieldset>
               {fulfillmentMethod === FULFILLMENT_METHODS.LOCAL_HANDOFF && (
@@ -6525,7 +6605,7 @@ function ReturnsPage() {
         <p>Contact <a href="mailto:sales@tierone.bio" style={{ color: "var(--red-primary)" }}>sales@tierone.bio</a> within 7 days of delivery with your order number, a description of the issue, and photos if applicable. We will respond within 1 business day with next steps.</p>
 
         <h2 style={policyHeadingStyle}>Refund Method</h2>
-        <p>Approved refunds are issued via the original payment method (Cash App or Venmo) within 3 business days of resolution.</p>
+        <p>Approved refunds are issued via the original payment method (Cash App, Venmo, or Zelle) within 3 business days of resolution.</p>
       </PolicyShell>
       <Footer />
     </>
@@ -6584,13 +6664,45 @@ function PrivacyPage() {
         <p>We do not sell, trade, or rent your personal information to third parties. We share information only with service providers required to fulfill your order (shipping carriers, email service, payment platforms) and only the information necessary for that purpose.</p>
 
         <h2 style={policyHeadingStyle}>Cookies & Analytics</h2>
-        <p>We use Google Analytics to understand site traffic. This service may set cookies. We use localStorage in your browser to remember your cart between visits. You can clear this at any time through your browser settings.</p>
+        <p>Google Analytics is not loaded until you accept the analytics prompt. If you decline, the tracker is not added to the page. If you accept, Google Analytics may set first-party cookies on this site, including:</p>
+        <ul style={{ paddingLeft: 24 }}>
+          <li><code>_ga</code> — distinguishes unique visitors</li>
+          <li><code>_ga_HY1FDLSRTJ</code> — keeps track of the current analytics session</li>
+        </ul>
+        <p>We use these counts to understand site traffic. Advertising cookies from DoubleClick are not used. You can change a stored choice at any time with Cookie Settings in the site footer. Rejecting analytics stops the tracker and removes the Google Analytics cookies.</p>
+        <p>We also use localStorage in your browser to remember your cart and analytics choice between visits. You can clear these at any time through your browser settings.</p>
 
         <h2 style={policyHeadingStyle}>Data Security</h2>
-        <p>Order data is transmitted over HTTPS and stored on secure third-party services (Netlify Forms, EmailJS). Payments occur outside our site through Cash App or Venmo and we never see or store payment credentials.</p>
+        <p>Order data is transmitted over HTTPS, stored in Supabase, and sent through Resend for order emails. Contact-form messages are handled by Netlify Forms. Payments occur outside our site through Cash App, Venmo, or Zelle, and we never see or store payment credentials.</p>
 
         <h2 style={policyHeadingStyle}>Contact</h2>
         <p>For privacy questions or data deletion requests, contact <a href="mailto:sales@tierone.bio" style={{ color: "var(--red-primary)" }}>sales@tierone.bio</a>.</p>
+      </PolicyShell>
+      <Footer />
+    </>
+  );
+}
+
+function SecurityPage() {
+  useRouteMeta("/security");
+  return (
+    <>
+      <PolicyShell kicker="SECURITY" title="Vulnerability Disclosure">
+        <p>Tier One BioSystems welcomes good-faith reports of security issues in www.tierone.bio, its checkout, and related services. This page is the policy linked from <code>/.well-known/security.txt</code>.</p>
+
+        <h2 style={policyHeadingStyle}>How to report</h2>
+        <p>Email <a href="mailto:sales@tierone.bio" style={{ color: "var(--red-primary)" }}>sales@tierone.bio</a> with a clear description of the issue, the affected URL or function, and the steps needed to reproduce it. Do not include customer personal data, payment credentials, or exploit code that modifies live data.</p>
+
+        <h2 style={policyHeadingStyle}>What we ask</h2>
+        <ul style={{ paddingLeft: 24 }}>
+          <li>Give us a reasonable chance to investigate and fix the issue before public disclosure.</li>
+          <li>Do not access, change, or delete another customer&apos;s data.</li>
+          <li>Do not disrupt checkout, inventory, fulfillment, or email delivery to demonstrate impact.</li>
+          <li>Social engineering, physical attacks, and denial-of-service testing are out of scope.</li>
+        </ul>
+
+        <h2 style={policyHeadingStyle}>What you can expect</h2>
+        <p>We will acknowledge a valid report when we can and let you know when the issue is resolved. There is no bug-bounty program. Safe harbor applies only to good-faith research that stays within this policy.</p>
       </PolicyShell>
       <Footer />
     </>
@@ -6632,8 +6744,8 @@ function FAQPage() {
     { q: "How do I view a Certificate of Analysis (COA)?", a: "Every product page has a green VIEW CERTIFICATE OF ANALYSIS button. Clicking it opens that product's most recent lot data with all test results, methods, specifications, and pass/fail status." },
     { q: "How long does shipping take?", a: "Orders paid before 2:00 PM Arizona time ship the same business day from Phoenix, AZ via UPS or FedEx. Standard ground delivery within the continental US is typically 2–5 business days." },
     { q: "Do you offer free shipping?", a: "Yes. Orders of $200 or more (after any discounts applied) ship free. Orders under $200 are charged a flat $10 shipping fee." },
-    { q: "What payment methods do you accept?", a: "Currently Cash App ($TierOneBio) and Venmo (@TierOneBio). At checkout you'll select your preferred method and follow the on-screen instructions to complete payment." },
-    { q: "Why don't you accept credit cards?", a: "Most major card processors restrict research peptide sales due to category-level policy. Cash App and Venmo allow us to keep the catalog accessible and prices low without surprise account terminations or held funds." },
+    { q: "What payment methods do you accept?", a: "We accept Cash App ($TierOneBio), Venmo (@TierOneBio), and Zelle (TierOneBio / TIER ONE BIO LLC). At checkout you'll select your preferred method and follow the on-screen instructions to complete payment." },
+    { q: "Why don't you accept credit cards?", a: "Most major card processors restrict research peptide sales due to category-level policy. Cash App, Venmo, and Zelle allow us to keep the catalog accessible and prices low without surprise account terminations or held funds." },
     { q: "How should I store the products?", a: "Lyophilized vials should be stored in a laboratory freezer (0°F / -18°C) for long-term storage. Once reconstituted with bacteriostatic water, store refrigerated (35–46°F / 2–8°C) and use within the storage window listed on the product page." },
     { q: "Do you offer bulk discounts?", a: "Yes. Each product has a discounted per-vial price when you order 5 or more of the same compound and dose. The bulk price is shown on every product card and product page." },
     { q: "Do you ship internationally?", a: "Not at this time. We currently ship to the United States only." },
@@ -7652,6 +7764,7 @@ export default function App() {
         <Route path="/returns" element={<ReturnsPage />} />
         <Route path="/terms" element={<TermsPage />} />
         <Route path="/privacy" element={<PrivacyPage />} />
+        <Route path="/security" element={<SecurityPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
       </div>

@@ -1,7 +1,111 @@
 # Handoff — pick up here
 
-Written 2026-08-07, updated 2026-08-14. Read this before starting work; it
+Written 2026-08-07, updated 2026-08-26. Read this before starting work; it
 records state that is not obvious from the code or the git log.
+
+---
+
+## Remaining security hygiene — 2026-08-26 follow-up
+
+PR #8 merged the receipt outbox, Turnstile, consent controls, and security
+disclosure pages; PR #9 subsequently redesigned the staff order alert. Do not
+merge the old PR #6 branch over those releases. PR #5 is separate research-copy
+work and is deliberately unchanged by this security follow-up.
+
+The remaining cleanup removes the HSTS `preload` opt-in and keeps the one-year
+`includeSubDomains` policy. `netlify.toml` handles static files; the narrowly
+scoped `netlify/edge-functions/transport-security.js` adds the identical header
+to function responses and the `/checkout` redirect without consuming bodies,
+changing status codes, or changing redirect destinations. Netlify-generated
+responses before the edge handler (for example firewall/rate-limit blocks) are
+still controlled by the platform, not by this code. No preload submission, DNS,
+secret, database, or payment-flow change is required.
+
+`/admin`, `/admin/orders`, and `/admin/inventory` now build as empty application
+shells with `noindex, nofollow`, a generic title, and no public page snapshot or
+social metadata. The app still loads normally and existing server authorization
+is unchanged. The build guard checks these shells and the smoke suite now
+checks signed-out navigation through all three staff URLs.
+
+Local verification: 163 tests, all 14 smoke routes, build, secret scan, and site
+integrity passed. Lint passed with the unrelated untracked `.codex-worktrees/`
+and `outputs/` archives excluded. Verify the public response headers and all
+three admin shells after production deploy before closing PR #6 as superseded.
+
+**Deployment workflow has changed:** GitHub's active `Protect main` ruleset
+requires a pull request and an up-to-date successful `verify` check, with no
+bypass. Use a `codex/` branch and merge only after those checks pass. This
+supersedes the older direct-push instructions and outstanding branch-protection
+note below.
+
+---
+
+## Checkout security hardening — LIVE IN PRODUCTION
+
+Customer receipts and staff new-order alerts now originate inside
+`create-order.js` through the existing server-only Netlify `RESEND_API_KEY`.
+The browser EmailJS dependency, public service/template/key values, Netlify
+order form post, hidden order form, and EmailJS CSP allowance are gone. The
+contact form deliberately remains on Netlify Forms. `email-template.html` is
+now bundled as the runtime checkout-receipt template rather than pasted into
+EmailJS. Resend idempotency keys are tied to the immutable database order ID.
+
+New orders receive a durable `reservation_expires_at` deadline 24 hours after
+creation. An hourly Netlify scheduled function calls the existing atomic
+`cancel_unpaid_order` workflow after that deadline. Existing unpaid orders are
+grandfathered with a null deadline, so deploying this change cannot cancel the
+current backlog without review. Profile UPDATE is now granted only for
+`full_name`, `phone`, `address`, `city`, `state`, and `zip`. Order-number
+generation fails closed if secure browser randomness is unavailable.
+
+Migrations: `20260825151157_restrict_profile_updates.sql` and
+`20260825151207_add_unpaid_reservation_expiry.sql`.
+
+Both migrations were applied to production before commit `e27e602` was pushed
+to `main`. Release verification is green: 138 tests, all route smoke tests,
+production build, secret scan, site-integrity scan, and lint on the real project
+tree. The live asset is `index-DNbFTPd2.js`; it contains the new receipt-result
+and secure-random handling and contains none of the former EmailJS identifiers.
+The live CSP and prerendered HTML also contain no EmailJS API allowance or
+hidden order form.
+
+---
+
+## Zelle checkout — LIVE IN PRODUCTION
+
+Added 2026-08-24. Zelle is a third customer checkout option beside Cash App
+and Venmo. The durable order and inventory reservation are created first; the
+confirmation screen then shows the owner's exact business QR image, amount,
+order-number memo, and same-device lookup instructions for `TierOneBio` /
+`TIER ONE BIO LLC`. The unmodified bank image lives at
+`public/zelle-tier-one-bio-qr.jpg`; CSS crops the surrounding screenshot so the
+QR stays large without altering its encoded pixels.
+
+Staff can select Zelle in **Confirm Payment**, and the server and database use
+the same explicit payment vocabulary. Migration
+`20260824200440_add_zelle_payment_method.sql` is already applied to production.
+Live verification found Zelle in both the check constraint and payment RPC,
+`service_role` execute access true, and `anon`/`authenticated` execute access
+false. The post-change security advisor has only the existing intentional INFO
+notices for server-only RLS tables.
+
+Release verification is green: 132 tests, all route smoke tests, production
+build, secret scan, site-integrity scan, and lint on the actual project tree.
+The checkout and QR confirmation screens were visually inspected at desktop
+and 390-pixel mobile widths. Repo-wide `npm run verify` itself sees archived
+untracked `.codex-worktrees/` and lints their built bundles; the equivalent
+release commands passed with that local archive excluded.
+
+The owner updated EmailJS template `template_i9k8u2a` from
+`email-template.html`, and commit `062c10c` was pushed to `main` on 2026-08-24.
+Netlify deployed it successfully. Live verification found the Zelle checkout
+code in production asset `index-BMJNkA_j.js`, and the public QR image returned
+HTTP 200 as `image/jpeg`.
+
+The stale tracked edits that were present before this work were safely shelved
+as `stash@{0}: pre-zelle tracked local edits 2026-08-24` before fast-forwarding
+to production. Their feature content was already represented in newer deployed
+commits; the shelf was deliberately retained as a recoverable backup.
 
 ---
 
@@ -250,7 +354,8 @@ the deploy rather than shipping it. Verified in both directions.
 - Order payloads have size, field, email, payment, item and code validation;
   public endpoints use Netlify's durable rate limits.
 - Replayed order numbers return data only when every immutable field matches.
-- Netlify Forms and EmailJS now use the server-confirmed totals and item text.
+- At that release, Netlify Forms and EmailJS used server-confirmed totals; the
+  2026-08-25 hardening above supersedes both browser-side sends.
 - RLS policies use explicit authenticated roles and one-time `auth.uid()`
   evaluation; the public `rls_auto_enable()` execution grant was removed.
 - Staff queue indexes, validated accounting constraints and a status constraint
@@ -318,12 +423,10 @@ are covered. Only the `--all` sweep was ever region-scoped, and that is fixed.
 - **Branch protection on `main`** — block direct pushes, tick "do not allow
   bypassing". Without it the agent can skip every gate above.
 - **Fine-grained PAT** scoped to this repo only, Contents: write.
-- **Paste 5 dashboard templates.** 4 Supabase auth emails + the EmailJS order
-  confirmation (`template_i9k8u2a`). The repo is ahead of what is live: wide logo,
-  Gmail dark-mode fix, `sales@`/`admin@` addresses, and the discount-code row on
-  the receipt. `welcome-discount.html` needs no pasting — the function reads it.
-- **Netlify form notifications** to `sales@tierone.bio`, so orders arrive by email
-  instead of requiring a dashboard login.
+- **Paste 4 dashboard templates.** These are the Supabase auth emails only.
+  Checkout receipts and staff alerts are now read and sent by Netlify code;
+  nothing needs pasting into EmailJS and no Netlify order-form notification is
+  required. `welcome-discount.html` also needs no pasting.
 - **Set Supabase email OTP expiry to 1800 seconds.** Dashboard → Authentication
   → Providers → Email → OTP expiry → `1800` → Save. This is the
   one remaining security-advisor item that cannot be changed from the repo.
