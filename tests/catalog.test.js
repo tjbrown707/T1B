@@ -145,7 +145,7 @@ test("required research-library titles use pathway language", () => {
     "nad-plus-supplementation-research": "NAD+ in Cellular Models: Mechanisms and Current Research",
     "selank-semax-russian-nootropic-peptides": "Selank and Semax: BDNF and Cytokine Modulation Research",
     "mots-c-mitochondrial-peptide-research": "MOTS-c: Mitochondrial Peptide and AMPK Signaling Research",
-    "tissue-repair-peptide-blends-research": "Combined Peptide Studies: BPC-157, GHK-Cu, and TB-500",
+    "tissue-repair-peptide-blends-research": "Combined Peptide Research Rationale: BPC-157, GHK-Cu, and TB-500",
     "bpc-157-vs-tb-500-tissue-repair": "BPC-157 vs TB-500: Angiogenesis and Actin-Regulation Research",
     "cjc-1295-ipamorelin-growth-hormone-stack": "CJC-1295 and Ipamorelin: Dual-Receptor GHRH and Ghrelin-Mimetic Research",
     "retatrutide-vs-tirzepatide-vs-semaglutide": "Retatrutide vs Tirzepatide vs Semaglutide: A Research Comparison",
@@ -154,6 +154,15 @@ test("required research-library titles use pathway language", () => {
   for (const [slug, title] of Object.entries(expected)) {
     assert.equal(bySlug[slug]?.title, title, `${slug} title drifted`);
   }
+
+  const blendListing = [
+    bySlug["tissue-repair-peptide-blends-research"]?.title,
+    bySlug["tissue-repair-peptide-blends-research"]?.excerpt,
+    bySlug["tissue-repair-peptide-blends-research"]?.metaDescription,
+  ].join(" ");
+  assert.match(blendListing, /research rationale/i);
+  assert.match(blendListing, /absence of blend trials/i);
+  assert.doesNotMatch(blendListing, /\bcombination studies\b/i);
 });
 
 test("related product ids on articles all exist", () => {
