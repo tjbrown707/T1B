@@ -104,7 +104,23 @@ if (/emailjs\.send|@emailjs\/browser/.test(source)) {
 if (hasDist) {
   for (const route of allRoutes(today)) {
     const file = route.path === "/" ? "index.html" : `${route.path.replace(/^\//, "")}.html`;
-    if (!existsSync(join(DIST, file))) fail(`Prerendered page missing: dist/${file}`);
+    const target = join(DIST, file);
+    if (!existsSync(target)) {
+      fail(`Prerendered page missing: dist/${file}`);
+      continue;
+    }
+    if (route.staffOnly) {
+      const html = readFileSync(target, "utf8");
+      if (!route.noindex || !html.includes('<meta name="robots" content="noindex, nofollow" />')) {
+        fail(`dist/${file} must not be indexed.`);
+      }
+      if (!html.includes('<div id="root"></div>') || /prerender-fallback|<h1\b|<nav\b|<meta (?:property="og:|name="twitter:)|application\/ld\+json/.test(html)) {
+        fail(`dist/${file} must be an empty staff application shell, not a public page snapshot.`);
+      }
+      if (!/<script\b[^>]*\bsrc="\/assets\//.test(html)) {
+        fail(`dist/${file} is missing the application script.`);
+      }
+    }
   }
   if (!existsSync(join(DIST, "404.html"))) fail("dist/404.html is missing — unknown URLs would not return a 404.");
 

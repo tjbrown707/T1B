@@ -248,6 +248,13 @@ function structuredData(route, articles) {
 // ─── Head assembly ───────────────────────────────────────────────────────────
 
 function headFor(route, articles) {
+  if (route.staffOnly) {
+    return [
+      `<title>${esc(SITE_NAME)}</title>`,
+      `<meta name="robots" content="noindex, nofollow" />`,
+      `<style>html { background: #0a0a0a; }</style>`,
+    ].join("\n    ");
+  }
   const fullTitle = route.title ? `${route.title}${TITLE_SUFFIX}` : DEFAULT_TITLE;
   const canonical = canonicalUrl(route.path);
   const image = absolute(route.image);
@@ -321,7 +328,10 @@ function write(route, body, filePath) {
 }
 
 for (const route of routes) {
-  const body = chrome(
+  // Staff routes need a real file for direct navigation, but no public page
+  // snapshot, navigation, or search/social metadata. React still mounts the
+  // normal authenticated application into the empty root.
+  const body = route.staffOnly ? "" : chrome(
     route.product ? productBody(route)
       : route.article ? articleBody(route)
         : staticBody(route, articles)
