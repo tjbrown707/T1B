@@ -43,6 +43,8 @@ const ROUTES = [
   // Signed out, so this asserts the protected staff route reaches the normal
   // sign-in screen rather than throwing or leaking an order list.
   { path: "/admin/orders", expect: "Sign" },
+  { path: "/admin/inventory", expect: "Sign" },
+  { path: "/admin", expect: "Sign" },
   { path: "/no-such-page", expect: "PAGE NOT FOUND" },
 ];
 let failures = 0;

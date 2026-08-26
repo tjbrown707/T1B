@@ -1,7 +1,42 @@
 # Handoff — pick up here
 
-Written 2026-08-07, updated 2026-08-25. Read this before starting work; it
+Written 2026-08-07, updated 2026-08-26. Read this before starting work; it
 records state that is not obvious from the code or the git log.
+
+---
+
+## Remaining security hygiene — 2026-08-26 follow-up
+
+PR #8 merged the receipt outbox, Turnstile, consent controls, and security
+disclosure pages; PR #9 subsequently redesigned the staff order alert. Do not
+merge the old PR #6 branch over those releases. PR #5 is separate research-copy
+work and is deliberately unchanged by this security follow-up.
+
+The remaining cleanup removes the HSTS `preload` opt-in and keeps the one-year
+`includeSubDomains` policy. `netlify.toml` handles static files; the narrowly
+scoped `netlify/edge-functions/transport-security.js` adds the identical header
+to function responses and the `/checkout` redirect without consuming bodies,
+changing status codes, or changing redirect destinations. Netlify-generated
+responses before the edge handler (for example firewall/rate-limit blocks) are
+still controlled by the platform, not by this code. No preload submission, DNS,
+secret, database, or payment-flow change is required.
+
+`/admin`, `/admin/orders`, and `/admin/inventory` now build as empty application
+shells with `noindex, nofollow`, a generic title, and no public page snapshot or
+social metadata. The app still loads normally and existing server authorization
+is unchanged. The build guard checks these shells and the smoke suite now
+checks signed-out navigation through all three staff URLs.
+
+Local verification: 163 tests, all 14 smoke routes, build, secret scan, and site
+integrity passed. Lint passed with the unrelated untracked `.codex-worktrees/`
+and `outputs/` archives excluded. Verify the public response headers and all
+three admin shells after production deploy before closing PR #6 as superseded.
+
+**Deployment workflow has changed:** GitHub's active `Protect main` ruleset
+requires a pull request and an up-to-date successful `verify` check, with no
+bypass. Use a `codex/` branch and merge only after those checks pass. This
+supersedes the older direct-push instructions and outstanding branch-protection
+note below.
 
 ---
 

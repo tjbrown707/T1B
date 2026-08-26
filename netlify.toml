@@ -28,8 +28,10 @@
     Referrer-Policy = "strict-origin-when-cross-origin"
     # Explicitly disable device APIs the site never uses.
     Permissions-Policy = "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
-    # Force HTTPS for a year, including subdomains.
-    Strict-Transport-Security = "max-age=31536000; includeSubDomains; preload"
+    # Force HTTPS for a year, including subdomains. Preload enrollment is a
+    # separate owner decision; do not opt in implicitly. Keep this value in
+    # sync with netlify/edge-functions/transport-security.js (tested).
+    Strict-Transport-Security = "max-age=31536000; includeSubDomains"
     # script-src has no 'unsafe-inline': the one inline script (the Google
     # Analytics bootstrap) moved into the bundle, so the policy can refuse
     # injected inline scripts outright. 'unsafe-inline' stays on style-src for
