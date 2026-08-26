@@ -6,6 +6,7 @@ const RESEND_ENDPOINT = "https://api.resend.com/emails";
 const RESEND_TIMEOUT_MS = 8000;
 const STAFF_NOTIFICATION_EMAIL = "sales@tierone.bio";
 const SENDER = "Tier One BioSystems <noreply@tierone.bio>";
+const STAFF_ADMIN_URL = "https://www.tierone.bio/admin/orders";
 
 let cachedReceiptTemplate = null;
 
@@ -116,34 +117,135 @@ export function customerReceiptText(order) {
   return customerReceiptTextValues(orderEmailValues(order));
 }
 
-function staffNotification(order) {
+export function renderStaffOrderNotification(order) {
   const values = orderEmailValues(order);
   const lines = [
-    `Order: ${values.orderNumber}`,
-    "Status: Awaiting payment",
-    `Payment method: ${values.paymentMethod}`,
-    "Research-use acknowledgement: Yes (required and checked server-side)",
-    "",
-    "CUSTOMER",
-    values.customerName,
-    values.customerEmail,
-    values.customerPhone,
-    "",
-    "SHIPPING ADDRESS",
-    values.shippingAddress,
-    `${values.shippingCity}, ${values.shippingState} ${values.shippingZip}`,
+    "NEW ORDER — AWAITING PAYMENT",
+    `${values.orderNumber} · ${values.orderTotal} · ${values.paymentMethod}`,
     "",
     "ITEMS",
     values.orderItems,
     "",
+    "TOTALS",
     `Subtotal: ${values.orderSubtotal}`,
-    values.discountCode ? `Discount code: ${values.discountCode}` : "",
-    values.discountAmount ? `Discount: ${values.discountAmount}` : "",
+    ...(values.discountCode ? [`Discount (${values.discountCode}): ${values.discountAmount}`] : []),
     `Shipping: ${values.shipping}`,
-    `Total: ${values.orderTotal}`,
-  ].filter(Boolean);
+    `Total due: ${values.orderTotal}`,
+    "",
+    "CUSTOMER & SHIPPING",
+    values.customerName,
+    values.customerEmail,
+    values.customerPhone,
+    values.shippingAddress,
+    `${values.shippingCity}, ${values.shippingState} ${values.shippingZip}`,
+    "",
+    `Payment method: ${values.paymentMethod}`,
+    "Research-use acknowledgement: Confirmed",
+    "",
+    `Open Admin Orders: ${STAFF_ADMIN_URL}`,
+    "Reply to this email to contact the customer.",
+  ];
   const text = lines.join("\n");
-  const html = `<!doctype html><html><body style="font-family:Arial,sans-serif;color:#111;line-height:1.5"><h1 style="font-size:20px">New order ${escapeHtml(values.orderNumber)}</h1><pre style="font-family:Arial,sans-serif;white-space:pre-wrap">${escapeHtml(text)}</pre></body></html>`;
+  const safe = Object.fromEntries(
+    Object.entries(values).map(([key, value]) => [key, escapeHtml(value)]),
+  );
+  const itemLines = safe.orderItems.replace(/\r?\n/g, "<br>");
+  const discountRow = values.discountCode ? `
+    <tr>
+      <td style="padding:5px 0;color:#8f949c;font-size:14px;">Discount (${safe.discountCode})</td>
+      <td align="right" style="padding:5px 0;color:#69b34c;font-size:14px;font-weight:700;">${safe.discountAmount}</td>
+    </tr>` : "";
+  const html = `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>New order ${safe.orderNumber}</title>
+</head>
+<body style="margin:0;padding:0;background:#f1f3f5;color:#17191c;font-family:Arial,Helvetica,sans-serif;">
+  <div style="display:none;max-height:0;overflow:hidden;opacity:0;">${safe.orderTotal} ${safe.paymentMethod} order awaiting payment.</div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;background:#f1f3f5;">
+    <tr>
+      <td align="center" style="padding:24px 12px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;max-width:620px;background:#ffffff;border:1px solid #dfe3e7;border-radius:10px;overflow:hidden;">
+          <tr>
+            <td style="padding:22px 24px 18px;background:#0c0d0f;border-bottom:3px solid #c62b36;">
+              <div style="margin:0 0 14px;color:#ffffff;font-size:14px;font-weight:700;letter-spacing:1.8px;">TIER ONE BIOSYSTEMS</div>
+              <div style="display:inline-block;padding:6px 10px;border-radius:999px;background:#fff2cc;color:#745100;font-size:11px;font-weight:800;letter-spacing:.8px;">AWAITING PAYMENT</div>
+              <h1 style="margin:14px 0 4px;color:#ffffff;font-size:24px;line-height:1.2;">New order ${safe.orderNumber}</h1>
+              <p style="margin:0;color:#b9bec5;font-size:14px;">${safe.paymentMethod} · Research use confirmed</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:22px 24px 4px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;background:#f7f8f9;border:1px solid #e4e7ea;border-radius:8px;">
+                <tr>
+                  <td style="padding:18px 20px;color:#60656d;font-size:12px;font-weight:700;letter-spacing:1px;">TOTAL DUE</td>
+                  <td align="right" style="padding:18px 20px;color:#17191c;font-size:26px;font-weight:800;">${safe.orderTotal}</td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:18px 24px 2px;">
+              <h2 style="margin:0 0 10px;color:#60656d;font-size:12px;letter-spacing:1.2px;">ITEMS</h2>
+              <div style="padding:14px 16px;background:#ffffff;border:1px solid #e4e7ea;border-radius:8px;color:#17191c;font-size:15px;line-height:1.55;word-break:break-word;">${itemLines}</div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:18px 24px 2px;">
+              <h2 style="margin:0 0 8px;color:#60656d;font-size:12px;letter-spacing:1.2px;">ORDER TOTALS</h2>
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;">
+                <tr>
+                  <td style="padding:5px 0;color:#8f949c;font-size:14px;">Subtotal</td>
+                  <td align="right" style="padding:5px 0;color:#17191c;font-size:14px;">${safe.orderSubtotal}</td>
+                </tr>${discountRow}
+                <tr>
+                  <td style="padding:5px 0;color:#8f949c;font-size:14px;">Shipping</td>
+                  <td align="right" style="padding:5px 0;color:#17191c;font-size:14px;">${safe.shipping}</td>
+                </tr>
+                <tr>
+                  <td style="padding:10px 0 5px;border-top:1px solid #e4e7ea;color:#17191c;font-size:15px;font-weight:700;">Total due</td>
+                  <td align="right" style="padding:10px 0 5px;border-top:1px solid #e4e7ea;color:#17191c;font-size:17px;font-weight:800;">${safe.orderTotal}</td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:18px 24px 4px;">
+              <h2 style="margin:0 0 8px;color:#60656d;font-size:12px;letter-spacing:1.2px;">CUSTOMER &amp; SHIPPING</h2>
+              <p style="margin:0;color:#17191c;font-size:15px;font-weight:700;line-height:1.55;">${safe.customerName}</p>
+              <p style="margin:2px 0 0;color:#60656d;font-size:14px;line-height:1.55;word-break:break-word;">
+                <a href="mailto:${safe.customerEmail}" style="color:#b82430;text-decoration:none;">${safe.customerEmail}</a><br>
+                <a href="tel:${safe.customerPhone}" style="color:#60656d;text-decoration:none;">${safe.customerPhone}</a><br>
+                ${safe.shippingAddress}<br>
+                ${safe.shippingCity}, ${safe.shippingState} ${safe.shippingZip}
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:20px 24px 24px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;margin:0 0 16px;background:#eef7ea;border:1px solid #cce4c2;border-radius:8px;">
+                <tr>
+                  <td style="padding:12px 14px;color:#316b20;font-size:13px;font-weight:700;">✓ Research-use acknowledgement confirmed server-side</td>
+                </tr>
+              </table>
+              <table role="presentation" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td style="border-radius:6px;background:#c62b36;">
+                    <a href="${STAFF_ADMIN_URL}" style="display:inline-block;padding:12px 18px;color:#ffffff;font-size:14px;font-weight:700;text-decoration:none;">Open Admin Orders</a>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin:14px 0 0;color:#8f949c;font-size:12px;line-height:1.5;">Reply to this email to contact the customer directly.</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
   return { html, text };
 }
 
@@ -177,7 +279,7 @@ export async function sendStaffOrderCreatedEmail(order, {
     return false;
   }
 
-  const staff = staffNotification(order);
+  const staff = renderStaffOrderNotification(order);
   const staffMessage = {
     label: "staff order notification",
     idempotencyKey: `order-staff-notification-v1/${order.id}`,
