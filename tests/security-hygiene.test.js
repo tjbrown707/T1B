@@ -206,13 +206,30 @@ test("invalid Turnstile and cross-origin checkout requests never reach Supabase"
   }
 });
 
-test("CSP permits Turnstile but does not permit DoubleClick analytics", () => {
+test("CSP permits only the required analytics, Turnstile, and image sources", () => {
   const toml = readFileSync("netlify.toml", "utf8");
   const csp = toml.match(/Content-Security-Policy = "([^"]+)"/)?.[1] || "";
   assert.match(csp, /script-src 'self'[^;]*challenges\.cloudflare\.com/);
   assert.match(csp, /frame-src https:\/\/challenges\.cloudflare\.com/);
   assert.doesNotMatch(csp, /stats\.g\.doubleclick\.net/);
   assert.doesNotMatch(csp, /script-src[^;]*'unsafe-inline'/);
+
+  const imageDirectives = csp
+    .split(";")
+    .map(directive => directive.trim().split(/\s+/))
+    .filter(([name]) => name === "img-src");
+  assert.equal(imageDirectives.length, 1, "CSP must have exactly one img-src directive");
+  const imageSources = imageDirectives[0].slice(1);
+  const expectedImageSources = [
+    "'self'",
+    "data:",
+    "https://*.google-analytics.com",
+    "https://www.googletagmanager.com",
+  ];
+  assert.deepEqual(imageSources.toSorted(), expectedImageSources.toSorted());
+  assert.equal(new Set(imageSources).size, imageSources.length, "img-src must not repeat a source");
+  assert.ok(!imageSources.includes("https:"), "img-src must not allow every HTTPS host");
+  assert.ok(!imageSources.includes("*"), "img-src must not contain a wildcard source");
 
   const live = new Request("https://www.tierone.bio/.netlify/functions/create-order", {
     headers: { Origin: "https://www.tierone.bio" },
