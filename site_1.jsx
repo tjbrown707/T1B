@@ -11,7 +11,7 @@ import { useAuth } from "./src/AuthContext.jsx";
 import { PRODUCTS } from "./src/data/catalog.js";
 import { LAB_RESULTS } from "./src/data/lab-results.js";
 import { ARTICLE_META } from "./src/data/articles.js";
-import { SITE_DOMAIN, CONTACT_EMAIL, DEFAULT_TITLE, TITLE_SUFFIX } from "./src/data/site.js";
+import { SITE_DOMAIN, SITE_NAME, CONTACT_EMAIL, DEFAULT_TITLE, TITLE_SUFFIX } from "./src/data/site.js";
 import {
   routeMeta,
   productMeta,
@@ -514,10 +514,17 @@ function usePageMeta(title, description, options = {}) {
     imageHeight,
     type = "website",
     noindex = false,
+    staffOnly = false,
+    revealStaffTitle = false,
   } = options;
   useEffect(() => {
     const suffix = TITLE_SUFFIX;
-    const fullTitle = title ? title + suffix : DEFAULT_TITLE;
+    // A staff route begins as an anonymous application shell while Supabase
+    // resolves the session. Keep that public state generic; reveal the useful
+    // tab title only after the user's staff role has been established.
+    const fullTitle = staffOnly && !revealStaffTitle
+      ? SITE_NAME
+      : title ? title + suffix : DEFAULT_TITLE;
     document.title = fullTitle;
 
     // Find-or-create. The previous version only wrote to tags that already
@@ -542,43 +549,50 @@ function usePageMeta(title, description, options = {}) {
     // Google "I am a duplicate of /" — an instruction to drop the article from
     // the index in the homepage's favour. Query strings and trailing slashes
     // are stripped so ?ref=... variants collapse onto one canonical address.
-    const canonical = canonicalUrl(window.location.pathname);
+    const canonical = staffOnly ? "" : canonicalUrl(window.location.pathname);
     let link = document.head.querySelector('link[rel="canonical"]');
-    if (!link) {
+    if (!canonical) {
+      link?.remove();
+    } else if (!link) {
       link = document.createElement("link");
       link.setAttribute("rel", "canonical");
       document.head.appendChild(link);
     }
-    link.setAttribute("href", canonical);
+    if (canonical) link.setAttribute("href", canonical);
 
-    const absoluteImage = image
+    const absoluteImage = staffOnly ? "" : image
       ? (image.startsWith("http") ? image : `${SITE_DOMAIN}${image}`)
       : `${SITE_DOMAIN}/logo-wide.png`;
     const resolvedImageAlt = imageAlt || (image ? fullTitle : "Tier One BioSystems logo");
+    const publicDescription = staffOnly ? "" : description;
 
-    syncMeta("name", "description", description);
-    syncMeta("property", "og:title", fullTitle);
-    syncMeta("property", "og:description", description);
+    syncMeta("name", "description", publicDescription);
+    syncMeta("property", "og:title", staffOnly ? "" : fullTitle);
+    syncMeta("property", "og:description", publicDescription);
     syncMeta("property", "og:url", canonical);
-    syncMeta("property", "og:type", type);
+    syncMeta("property", "og:type", staffOnly ? "" : type);
     syncMeta("property", "og:image", absoluteImage);
-    syncMeta("property", "og:image:alt", resolvedImageAlt);
-    syncMeta("property", "og:image:width", imageWidth);
-    syncMeta("property", "og:image:height", imageHeight);
-    syncMeta("name", "twitter:title", fullTitle);
-    syncMeta("name", "twitter:description", description);
+    syncMeta("property", "og:image:alt", staffOnly ? "" : resolvedImageAlt);
+    syncMeta("property", "og:image:width", staffOnly ? "" : imageWidth);
+    syncMeta("property", "og:image:height", staffOnly ? "" : imageHeight);
+    syncMeta("property", "og:site_name", staffOnly ? "" : SITE_NAME);
+    syncMeta("name", "twitter:card", staffOnly ? "" : "summary_large_image");
+    syncMeta("name", "twitter:title", staffOnly ? "" : fullTitle);
+    syncMeta("name", "twitter:description", publicDescription);
     syncMeta("name", "twitter:image", absoluteImage);
-    syncMeta("name", "twitter:image:alt", resolvedImageAlt);
+    syncMeta("name", "twitter:image:alt", staffOnly ? "" : resolvedImageAlt);
 
     // Cart, login, signup and account pages are useless as search results and
     // dilute the pages that matter, so they are served but never indexed. The
     // prerendered HTML carries the same directive — see scripts/prerender.js.
-    syncMeta("name", "robots", noindex ? "noindex, follow" : "index, follow");
+    syncMeta("name", "robots", staffOnly
+      ? "noindex, nofollow"
+      : noindex ? "noindex, follow" : "index, follow");
 
     return () => {
       document.title = DEFAULT_TITLE;
     };
-  }, [title, description, image, imageAlt, imageWidth, imageHeight, type, noindex]);
+  }, [title, description, image, imageAlt, imageWidth, imageHeight, type, noindex, staffOnly, revealStaffTitle]);
 }
 
 // Replaces the route-level JSON-LD in the document head.
@@ -599,10 +613,12 @@ function applyRouteJsonLd(graph) {
 
 // Static pages take their title and description from the shared route table so
 // the prerendered HTML and the client-rendered page cannot drift apart.
-function useRouteMeta(path) {
+function useRouteMeta(path, { revealStaffTitle = false } = {}) {
   const meta = routeMeta(path);
   usePageMeta(meta.title, meta.description, {
     noindex: meta.noindex,
+    staffOnly: meta.staffOnly,
+    revealStaffTitle,
     image: meta.image,
     imageAlt: meta.imageAlt,
     imageWidth: meta.imageWidth,
@@ -5042,7 +5058,8 @@ function ResetPasswordPage() {
 function AdminOrdersPage() {
   const navigate = useNavigate();
   const { user, session, isLoggedIn, loading: authLoading } = useAuth();
-  useRouteMeta("/admin/orders");
+  const canManageOrders = hasOrderManagerRole(user);
+  useRouteMeta("/admin/orders", { revealStaffTitle: !authLoading && canManageOrders });
 
   const [orders, setOrders] = useState([]);
   const [statusFilter, setStatusFilter] = useState("");
@@ -5056,8 +5073,6 @@ function AdminOrdersPage() {
   const [actionKey, setActionKey] = useState("");
   const [notice, setNotice] = useState({ type: "", text: "" });
   const requestIdRef = useRef(0);
-
-  const canManageOrders = hasOrderManagerRole(user);
 
   useEffect(() => {
     if (!authLoading && !isLoggedIn) {
@@ -5673,14 +5688,13 @@ function formatPaymentDifference(order) {
 function AdminInventoryPage() {
   const navigate = useNavigate();
   const { user, session, isLoggedIn, loading: authLoading } = useAuth();
-  useRouteMeta("/admin/inventory");
+  const canManageOrders = hasOrderManagerRole(user);
+  useRouteMeta("/admin/inventory", { revealStaffTitle: !authLoading && canManageOrders });
   const [products, setProducts] = useState([]);
   const [movements, setMovements] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState({ type: "", text: "" });
-  const canManageOrders = hasOrderManagerRole(user);
-
   useEffect(() => {
     if (!authLoading && !isLoggedIn) navigate("/login?redirect=/admin/inventory", { replace: true });
   }, [authLoading, isLoggedIn, navigate]);

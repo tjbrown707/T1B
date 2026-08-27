@@ -5,6 +5,7 @@ import { build } from "vite";
 import react from "@vitejs/plugin-react";
 import { JSDOM, VirtualConsole } from "jsdom";
 import { readFileSync } from "node:fs";
+import { SITE_NAME } from "../src/data/site.js";
 
 // Inside node_modules so the throwaway bundle is never committed and never
 // collides with the real dist/.
@@ -42,15 +43,43 @@ const ROUTES = [
   { path: "/login", expect: "Sign" },
   // Signed out, so this asserts the protected staff route reaches the normal
   // sign-in screen rather than throwing or leaking an order list.
-  { path: "/admin/orders", expect: "Sign" },
-  { path: "/admin/inventory", expect: "Sign" },
-  { path: "/admin", expect: "Sign" },
+  {
+    path: "/admin/orders",
+    expect: "Sign",
+    expectHeadTitle: SITE_NAME,
+    expectHeadRobots: "noindex, nofollow",
+    forbidHead: ["Order Management", "Staff order management"],
+  },
+  {
+    path: "/admin/inventory",
+    expect: "Sign",
+    expectHeadTitle: SITE_NAME,
+    expectHeadRobots: "noindex, nofollow",
+    forbidHead: ["Inventory Management", "Staff lot-level inventory management"],
+  },
+  {
+    path: "/admin",
+    expect: "Sign",
+    expectHeadTitle: SITE_NAME,
+    expectHeadRobots: "noindex, nofollow",
+    forbidHead: ["Order Management", "Staff order management"],
+  },
   { path: "/no-such-page", expect: "PAGE NOT FOUND" },
 ];
 let failures = 0;
 
-for (const { path: route, expect } of ROUTES) {
+for (const {
+  path: route,
+  expect,
+  expectHeadTitle = "",
+  expectHeadRobots = "",
+  forbidHead = [],
+} of ROUTES) {
   const errors = [];
+  const forbiddenHeadHits = new Set();
+  const titleHistory = new Set();
+  const robotsHistory = new Set();
+  const adminRobotsHistory = new Set();
   const virtualConsole = new VirtualConsole();
   virtualConsole.on("jsdomError", (e) => errors.push(`jsdomError: ${e.message}`));
   virtualConsole.on("error", (...args) => errors.push(`console.error: ${args.join(" ")}`));
@@ -60,6 +89,60 @@ for (const { path: route, expect } of ROUTES) {
     { url: `https://www.tierone.bio${route}`, runScripts: "outside-only", pretendToBeVisual: true, virtualConsole }
   );
   const { window } = dom;
+
+  const recordForbiddenHeadValue = value => {
+    forbidHead.filter(term => String(value).includes(term)).forEach(term => forbiddenHeadHits.add(term));
+  };
+
+  // MutationObserver reports the state at callback time, so two synchronous
+  // assignments could otherwise collapse into one observation. Intercept the
+  // setters as well to capture every title and metadata value exactly when the
+  // application writes it.
+  const titleDescriptor = Object.getOwnPropertyDescriptor(window.Document.prototype, "title");
+  if (!titleDescriptor?.get || !titleDescriptor?.set) {
+    errors.push("document.title accessors are unavailable");
+  } else {
+    Object.defineProperty(window.document, "title", {
+      configurable: true,
+      get() { return titleDescriptor.get.call(this); },
+      set(value) {
+        titleHistory.add(String(value));
+        recordForbiddenHeadValue(value);
+        titleDescriptor.set.call(this, value);
+      },
+    });
+  }
+
+  const setAttribute = window.Element.prototype.setAttribute;
+  window.Element.prototype.setAttribute = function setAttributeAndRecord(name, value) {
+    if (this.tagName === "META" && name === "content") {
+      const key = this.getAttribute("name") || this.getAttribute("property");
+      if (key === "robots") {
+        robotsHistory.add(String(value));
+        if (/^\/admin(?:\/|$)/.test(window.location.pathname)) adminRobotsHistory.add(String(value));
+      }
+      recordForbiddenHeadValue(value);
+    }
+    return setAttribute.call(this, name, value);
+  };
+
+  // Staff routes start as generic empty shells. Also watch structural changes
+  // across the whole mount and anonymous-user redirect.
+  const inspectHead = () => {
+    titleHistory.add(window.document.title);
+    const robots = window.document.head.querySelector('meta[name="robots"]')?.getAttribute("content");
+    if (robots) robotsHistory.add(robots);
+    const head = `${window.document.title}\n${window.document.head.innerHTML}`;
+    recordForbiddenHeadValue(head);
+  };
+  const headObserver = new window.MutationObserver(inspectHead);
+  headObserver.observe(window.document.head, {
+    subtree: true,
+    childList: true,
+    attributes: true,
+    characterData: true,
+  });
+  inspectHead();
 
   // Browser APIs jsdom does not implement that this app touches.
   window.scrollTo = () => {};
@@ -117,16 +200,28 @@ for (const { path: route, expect } of ROUTES) {
 
 
   const dismissed = afterDismiss.length > 0 && !afterDismiss.includes("AGE VERIFICATION");
-  const ok = hasContent && gateShowing && dismissed && heroFillsDesktop && errors.length === 0;
+  inspectHead();
+  headObserver.disconnect();
+  const privateHeadClean = forbiddenHeadHits.size === 0;
+  const expectedHeadSeen = !expectHeadTitle || titleHistory.has(expectHeadTitle);
+  const expectedRobotsSeen = !expectHeadRobots || robotsHistory.has(expectHeadRobots);
+  const privateRobotsClean = !expectHeadRobots
+    || [...adminRobotsHistory].every(value => value === expectHeadRobots);
+  const ok = hasContent && gateShowing && dismissed && heroFillsDesktop && privateHeadClean && expectedHeadSeen && expectedRobotsSeen && privateRobotsClean && errors.length === 0;
   if (!ok) failures++;
 
   console.log(
     `${ok ? "PASS" : "FAIL"}  ${route.padEnd(38)} ` +
     `content:${hasContent ? "y" : "N"} gate:${gateShowing ? "y" : "N"} dismissed:${dismissed ? "y" : "N"} ` +
+    `head:${privateHeadClean && expectedHeadSeen && expectedRobotsSeen && privateRobotsClean ? "y" : "N"} ` +
     `${text.length}→${afterDismiss.length} chars`
   );
   if (!hasContent) console.log(`      ! expected to find "${expect}"`);
   if (!heroFillsDesktop) console.log("      ! hero background no longer fills the desktop viewport");
+  if (!privateHeadClean) console.log(`      ! private head metadata appeared: ${[...forbiddenHeadHits].join(", ")}`);
+  if (!expectedHeadSeen) console.log(`      ! expected the title history to include "${expectHeadTitle}"`);
+  if (!expectedRobotsSeen) console.log(`      ! expected the robots history to include "${expectHeadRobots}"`);
+  if (!privateRobotsClean) console.log(`      ! staff route exposed other robots values: ${[...adminRobotsHistory].join(", ")}`);
   for (const e of errors.slice(0, 4)) console.log(`      ! ${e.slice(0, 300)}`);
   dom.window.close();
 }
