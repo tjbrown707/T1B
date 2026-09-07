@@ -13,6 +13,7 @@ import {
   isPublished,
   publishedArticleMeta,
   RESEARCH_LIBRARY_ENABLED,
+  PRODUCT_REFERENCES_ENABLED,
 } from "../src/data/routes.js";
 import { productGraph, articleGraph } from "../src/data/structured-data.js";
 
@@ -66,19 +67,23 @@ test("the sitemap contains every indexable route and every product", () => {
   }
 });
 
-test("the research-library flag controls routes and search indexing without deleting content", () => {
+test("the research library stays hidden without deleting its source content", () => {
   assert.ok(ARTICLE_META.length > 0, "article content should remain available for a future re-enable");
-  assert.equal(routeMeta("/research").hidden, !RESEARCH_LIBRARY_ENABLED);
+  assert.equal(RESEARCH_LIBRARY_ENABLED, false,
+    "re-enabling the research library requires explicit owner approval and test updates");
+  assert.equal(routeMeta("/research").hidden, true);
   const routed = allRoutes().filter(route => /^\/research(?:\/|$)/.test(route.path));
   const indexed = sitemapRoutes().filter(route => /^\/research(?:\/|$)/.test(route.path));
-  if (RESEARCH_LIBRARY_ENABLED) {
-    assert.ok(routed.some(route => route.path === "/research"));
-    assert.ok(routed.some(route => route.path.startsWith("/research/")));
-    assert.deepEqual(indexed.map(route => route.path), routed.map(route => route.path));
-  } else {
-    assert.deepEqual(routed, []);
-    assert.deepEqual(indexed, []);
-  }
+  assert.deepEqual(routed, []);
+  assert.deepEqual(indexed, []);
+});
+
+test("peer-reviewed references stay off every product page", () => {
+  assert.equal(PRODUCT_REFERENCES_ENABLED, false);
+  const source = readFileSync("site_1.jsx", "utf8");
+  assert.match(source, /PRODUCT_REFERENCES_ENABLED\s*&&\s*getReferences\(product\.name\)/);
+  assert.match(source, /const REFERENCES = \{/,
+    "vetted product references should remain available for an owner-directed re-enable");
 });
 
 test("the sitemap generator never invents a modification date", () => {
@@ -157,10 +162,6 @@ test("no Wikipedia entry is presented to customers as a citation", () => {
     !/\{article\.references\.map/.test(source),
     "article references are rendered unfiltered"
   );
-  assert.ok(
-    !/const refs = getReferences\(product\.name\);/.test(source),
-    "product references are rendered unfiltered"
-  );
 });
 
 test("canonical URLs are absolute and have no trailing slash except the root", () => {
@@ -183,17 +184,23 @@ test("every route the app renders is registered in the route table", () => {
   }
 });
 
-test("product schema describes one product and claims no stock it cannot back up", () => {
-  const graph = productGraph(PRODUCTS[0])["@graph"];
-  const products = graph.filter(node => node["@type"] === "Product");
-  assert.equal(products.length, 1);
-  assert.equal(products[0].image[0]["@type"], "ImageObject");
-  assert.match(products[0].image[0].caption, /research vial$/);
-  assert.equal(products[0].image[0].width, 1254);
-  assert.equal(products[0].image[0].height, 1254);
-  assert.equal(products[0].offers.availability, undefined, "must not assert InStock");
-  assert.equal(products[0].offers.priceValidUntil, undefined, "must not assert a validity date");
-  assert.ok(graph.some(node => node["@type"] === "BreadcrumbList"));
+test("every product schema excludes research citations and unsupported stock claims", () => {
+  for (const product of PRODUCTS) {
+    const graph = productGraph(product)["@graph"];
+    const products = graph.filter(node => node["@type"] === "Product");
+    assert.equal(products.length, 1, product.id);
+    assert.equal(products[0].image[0]["@type"], "ImageObject");
+    assert.match(products[0].image[0].caption, /research vial$/);
+    assert.equal(products[0].image[0].width, 1254);
+    assert.equal(products[0].image[0].height, 1254);
+    assert.equal(products[0].offers.availability, undefined, "must not assert InStock");
+    assert.equal(products[0].offers.priceValidUntil, undefined, "must not assert a validity date");
+    assert.ok(graph.some(node => node["@type"] === "BreadcrumbList"));
+    assert.ok(!graph.some(node => ["Article", "ScholarlyArticle"].includes(node["@type"])),
+      `${product.id} schema must not publish research articles`);
+    assert.doesNotMatch(JSON.stringify(graph), /"(?:citation|isBasedOn|subjectOf)":/,
+      `${product.id} schema must not publish citation relationships`);
+  }
 });
 
 test("article schema carries a headline, a date and a breadcrumb trail", () => {

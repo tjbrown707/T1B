@@ -21,6 +21,7 @@ import {
   canonicalUrl,
   publishedArticleMeta,
   RESEARCH_LIBRARY_ENABLED,
+  PRODUCT_REFERENCES_ENABLED,
   todayISO,
 } from "../src/data/routes.js";
 import { ARTICLE_META } from "../src/data/articles.js";
@@ -31,6 +32,13 @@ const fail = (message) => failures.push(message);
 
 const DIST = "dist";
 const hasDist = existsSync(join(DIST, "index.html"));
+
+if (RESEARCH_LIBRARY_ENABLED) {
+  fail("The owner-directed research-library pause has been lifted. Update the release checks only with explicit approval.");
+}
+if (PRODUCT_REFERENCES_ENABLED) {
+  fail("The owner-directed product-reference pause has been lifted. Update the release checks only with explicit approval.");
+}
 
 // ── 1. Every route the app can render must be in the route table ────────────
 const source = readFileSync("site_1.jsx", "utf8");
@@ -123,6 +131,16 @@ if (hasDist) {
       .map(file => readFileSync(join(assetDirectory, file), "utf8"))
       .join("\n")
     : "";
+  const builtJavascript = existsSync(assetDirectory)
+    ? readdirSync(assetDirectory)
+      .filter(file => file.endsWith(".js"))
+      .map(file => readFileSync(join(assetDirectory, file), "utf8"))
+      .join("\n")
+    : "";
+  if (!PRODUCT_REFERENCES_ENABLED
+      && /Sources & References|Research on individual components|View Source ↗/.test(builtJavascript)) {
+    fail("The client bundle still contains the disabled product-reference panel.");
+  }
   const fontFaces = [...builtCss.matchAll(/@font-face\{([^}]*)\}/g)].map(match => match[1]);
   const requiredFontWeights = {
     Rajdhani: [300, 400, 500, 600, 700],
@@ -173,6 +191,9 @@ if (hasDist) {
       continue;
     }
     const html = readFileSync(target, "utf8");
+    if (route.product && /Peer-reviewed research|Research on individual components|Sources (?:&|&amp;) References|View Source/i.test(html)) {
+      fail(`dist/${file} exposes the product-page research references.`);
+    }
     if (!RESEARCH_LIBRARY_ENABLED && /href=["']\/research(?:[/"'#?]|$)/i.test(html)) {
       fail(`dist/${file} links to the hidden research library.`);
     }

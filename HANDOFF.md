@@ -29,13 +29,16 @@ The required packing-slip job completed and the customer handoff confirmation
 email was sent.
 
 The public research library is intentionally paused through
-`RESEARCH_LIBRARY_ENABLED = false`. Research navigation and footer links,
-client routes, prerendered pages, and sitemap entries are absent; direct
-research URLs return a genuine 404 with `noindex`. Article source is retained
-for possible future use, while product research profiles and required
-research-use-only language remain. Existing indexed URLs will disappear as
-search engines recrawl them. Do not re-enable the library or resume research
-automation unless the owner explicitly asks.
+`RESEARCH_LIBRARY_ENABLED = false`, and product-page citation panels are paused
+through `PRODUCT_REFERENCES_ENABLED = false`. Research navigation and footer
+links, client routes, prerendered pages, sitemap entries, and every product's
+"Peer-reviewed research" / "Sources & References" panel are absent. Direct
+research URLs return a genuine 404 with `noindex`. Article and vetted citation
+source data are retained for possible future use; product descriptions,
+molecular specifications, COAs, and required research-use-only language remain.
+Existing indexed research URLs will disappear as search engines recrawl them.
+Do not re-enable either research surface or resume research automation unless
+the owner explicitly asks.
 
 The font swap was caused by Google Fonts timing out, not by a typography edit.
 Rajdhani weights 300–700 and Orbitron weights 400–900 are now pinned through

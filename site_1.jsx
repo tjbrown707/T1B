@@ -22,6 +22,7 @@ import {
   PRODUCT_IMAGE_WIDTH,
   PRODUCT_IMAGE_HEIGHT,
   RESEARCH_LIBRARY_ENABLED,
+  PRODUCT_REFERENCES_ENABLED,
 } from "./src/data/routes.js";
 import { productGraph, articleGraph } from "./src/data/structured-data.js";
 
@@ -7747,8 +7748,8 @@ function ProductPage({ onAddToCart }) {
         </div>
       )}
 
-      {/* Sources & References */}
-      {getReferences(product.name) && (
+      {/* Product citations stay reversible but are intentionally not public. */}
+      {PRODUCT_REFERENCES_ENABLED && getReferences(product.name) && (
         <div style={{
           border: "1px solid var(--border)",
           background: "var(--bg-card)",

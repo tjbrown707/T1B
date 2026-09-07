@@ -20,6 +20,11 @@ import { SITE_DOMAIN, SITE_NAME } from "./site.js";
 // safety disclosures are separate from this editorial library and stay live.
 export const RESEARCH_LIBRARY_ENABLED = false;
 
+// Keep product-page citations off the storefront while retaining the vetted
+// source data for a future owner-directed re-enable. Product descriptions,
+// molecular specifications, COAs, and research-use disclosures stay live.
+export const PRODUCT_REFERENCES_ENABLED = false;
+
 // ─── Article publication gating ──────────────────────────────────────────────
 // Dates are ISO (YYYY-MM-DD), so a string comparison is a date comparison.
 // An article with no date at all is treated as published rather than hidden
