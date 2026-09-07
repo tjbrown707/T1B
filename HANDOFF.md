@@ -37,9 +37,11 @@ research-use-only language remain. Existing indexed URLs will disappear as
 search engines recrawl them. Do not re-enable the library or resume research
 automation unless the owner explicitly asks.
 
-The website's font configuration and CSP did not change. Rajdhani and Orbitron
-still come from Google Fonts; the observed font swap occurred when those
-external font requests timed out and the browser used its system fallback.
+The font swap was caused by Google Fonts timing out, not by a typography edit.
+Rajdhani weights 300–700 and Orbitron weights 400–900 are now pinned through
+Fontsource and bundled by Vite as same-origin assets. The application no longer
+injects a Google Fonts stylesheet, and CSP no longer allows either Google font
+host. Do not restore the external dependency.
 
 PR #12 passed `npm run verify` with 174 tests, route smoke checks, lint,
 production build, secret scan, and site-integrity checks before merge.

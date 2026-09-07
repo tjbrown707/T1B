@@ -10,7 +10,7 @@
 // unmatched URLs now return a real 404, a route missing from the table would be
 // a page that 404s in production while working perfectly in development.
 
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { PRODUCTS } from "../src/data/catalog.js";
 import { withheldLabResults, getLabResults } from "../src/data/lab-integrity.js";
@@ -116,6 +116,50 @@ if (!RESEARCH_LIBRARY_ENABLED) {
 
 // ── 4. Prerender output must exist for every route ──────────────────────────
 if (hasDist) {
+  const assetDirectory = join(DIST, "assets");
+  const builtCss = existsSync(assetDirectory)
+    ? readdirSync(assetDirectory)
+      .filter(file => file.endsWith(".css"))
+      .map(file => readFileSync(join(assetDirectory, file), "utf8"))
+      .join("\n")
+    : "";
+  const fontFaces = [...builtCss.matchAll(/@font-face\{([^}]*)\}/g)].map(match => match[1]);
+  const requiredFontWeights = {
+    Rajdhani: [300, 400, 500, 600, 700],
+    Orbitron: [400, 500, 600, 700, 800, 900],
+  };
+  for (const [family, weights] of Object.entries(requiredFontWeights)) {
+    for (const weight of weights) {
+      const face = fontFaces.find(rule => (
+        new RegExp(`font-family:["']?${family}["']?(?:;|$)`).test(rule)
+        && new RegExp(`font-weight:${weight}(?:;|$)`).test(rule)
+      ));
+      if (!face) {
+        fail(`Built CSS is missing the local ${family} ${weight} font face.`);
+      } else if (!/font-display:swap(?:;|$)/.test(face)) {
+        fail(`Built ${family} ${weight} font face must use font-display: swap.`);
+      }
+    }
+  }
+  if (/fonts\.(?:googleapis|gstatic)\.com/.test(builtCss)) {
+    fail("Built CSS still depends on Google Fonts.");
+  }
+  const emittedWoff2 = new Set(
+    [...builtCss.matchAll(/url\(["']?(\/assets\/[^)"']+\.woff2)["']?\)/g)]
+      .map(match => match[1]),
+  );
+  if (emittedWoff2.size < 11) {
+    fail(`Built CSS references only ${emittedWoff2.size} WOFF2 fonts; expected all 11 required weights.`);
+  }
+  for (const fontUrl of emittedWoff2) {
+    if (!existsSync(join(DIST, fontUrl.replace(/^\//, "")))) {
+      fail(`Built CSS references missing font asset ${fontUrl}.`);
+    }
+  }
+  if (!existsSync(join(DIST, "font-licenses", "OFL-1.1.txt"))) {
+    fail("The bundled font license notice is missing from dist/font-licenses/.");
+  }
+
   if (!RESEARCH_LIBRARY_ENABLED) {
     if (existsSync(join(DIST, "research.html")) || existsSync(join(DIST, "research"))) {
       fail("Hidden research pages were still prerendered into dist/.");

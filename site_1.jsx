@@ -632,12 +632,6 @@ function useRouteMeta(path, { revealStaffTitle = false } = {}) {
   return meta;
 }
 
-// ─── Fonts via CDN ───────────────────────────────────────────────────────────
-const fontLink = document.createElement("link");
-fontLink.href = "https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Orbitron:wght@400;500;600;700;800;900&display=swap";
-fontLink.rel = "stylesheet";
-document.head.appendChild(fontLink);
-
 // ─── Styles ──────────────────────────────────────────────────────────────────
 const style = document.createElement("style");
 style.textContent = `
@@ -667,6 +661,8 @@ style.textContent = `
     text-rendering: optimizeLegibility;
     overflow-x: hidden;
   }
+
+  button, input, select, textarea { font-family: inherit; }
 
   #root { min-height: 100vh; }
 
