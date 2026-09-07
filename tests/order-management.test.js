@@ -7,6 +7,7 @@ import {
   PAYMENT_RECEIVED_OPTIONS,
   canCompleteLocalHandoff,
   canDeleteOrder,
+  canReopenCancelledOrder,
   hasOrderManagerRole,
   isLocalHandoff,
   isPrecountedOrder,
@@ -44,6 +45,19 @@ test("order-manager authorization trusts app metadata, never customer metadata",
 test("orders remain permanent audit records even after cancellation", () => {
   for (const status of ORDER_STATUS_VALUES) assert.equal(canDeleteOrder(status), false);
   assert.equal(canDeleteOrder("cancelled"), false);
+});
+
+test("only a fully cancelled order can be reopened", () => {
+  const cancelled = {
+    status: "CANCELLED",
+    payment_status: "CANCELLED",
+    fulfillment_status: "CANCELLED",
+  };
+  assert.equal(canReopenCancelledOrder(cancelled), true);
+  assert.equal(canReopenCancelledOrder({ ...cancelled, payment_status: "PAID" }), false);
+  assert.equal(canReopenCancelledOrder({ ...cancelled, fulfillment_status: "ON_HOLD" }), false);
+  assert.equal(canReopenCancelledOrder({ ...cancelled, status: "REFUNDED" }), false);
+  assert.equal(canReopenCancelledOrder(null), false);
 });
 
 test("local handoff completion unlocks only after the durable print and email records", () => {

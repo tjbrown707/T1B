@@ -82,6 +82,12 @@ export function canCancelUnpaidOrder(order) {
   return order?.payment_status === "AWAITING_PAYMENT";
 }
 
+export function canReopenCancelledOrder(order) {
+  return order?.status === "CANCELLED"
+    && order?.payment_status === "CANCELLED"
+    && order?.fulfillment_status === "CANCELLED";
+}
+
 export function canCompleteLocalHandoff(order) {
   return order?.fulfillment_method === FULFILLMENT_METHODS.LOCAL_HANDOFF
     && order?.packingSlipPrintRecorded === true

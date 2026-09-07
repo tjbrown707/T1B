@@ -15,7 +15,11 @@ import {
 } from "../src/data/inventory.js";
 import { validateInventoryOperation } from "../netlify/functions/admin-inventory.js";
 import { sanitiseRates, validateParcel } from "../netlify/functions/admin-shipping.js";
-import { parsePaymentAmount, workflowRpc } from "../netlify/functions/admin-orders.js";
+import {
+  parsePaymentAmount,
+  workflowError,
+  workflowRpc,
+} from "../netlify/functions/admin-orders.js";
 
 const migration = readFileSync(
   "supabase/migrations/20260811120000_inventory_fulfillment_foundation.sql",
@@ -193,9 +197,67 @@ test("staff workflow exposes only explicit state transitions", () => {
   assert.equal(correction.args.p_expected_payment_amount, 25.5);
   assert.equal(correction.args.p_payment_amount_received, 20);
   assert.equal(workflowRpc("cancel_unpaid", { ...ids, expectedPaymentStatus: "PAID" }), null);
+  assert.deepEqual(workflowRpc("reopen_cancelled", {
+    ...ids,
+    expectedPaymentStatus: "CANCELLED",
+  }), {
+    name: "reopen_cancelled_order",
+    args: {
+      p_order_id: ids.orderId,
+      p_expected_payment_status: "CANCELLED",
+      p_actor_user_id: ids.actorUserId,
+    },
+  });
+  assert.equal(workflowRpc("reopen_cancelled", {
+    ...ids,
+    expectedPaymentStatus: "AWAITING_PAYMENT",
+  }), null);
   assert.equal(workflowRpc("mark_packed", { ...ids, expectedFulfillmentStatus: "PICKED" }).args.p_target_fulfillment_status, "PACKED");
   assert.equal(workflowRpc("mark_handed_off", { ...ids, expectedFulfillmentStatus: "READY_TO_PICK" }).args.p_target_fulfillment_status, "DELIVERED");
   assert.equal(workflowRpc("delete", ids), null);
+});
+
+test("reopen workflow errors are safe and actionable", async () => {
+  assert.match(adminOrdersSource, /"inventory_accounting_mode", "reservation_expires_at"/);
+
+  const stockConflict = workflowError(
+    { message: "insufficient_inventory:tesamorelin", details: "internal details" },
+    "reopen_cancelled",
+  );
+  assert.equal(stockConflict.status, 409);
+  assert.deepEqual(await stockConflict.json(), {
+    error: "One or more originally allocated lots do not have enough available inventory to reopen this order.",
+  });
+
+  const missingActor = workflowError({ message: "actor_required" }, "reopen_cancelled");
+  assert.equal(missingActor.status, 403);
+  assert.deepEqual(await missingActor.json(), {
+    error: "A signed-in staff account is required to update this order.",
+  });
+
+  const staleState = workflowError({ message: "order_reopen_status_conflict" }, "reopen_cancelled");
+  assert.equal(staleState.status, 409);
+  assert.deepEqual(await staleState.json(), {
+    error: "Someone else updated this order. Refresh it before trying again.",
+  });
+
+  const inconsistentState = workflowError(
+    { message: "order_reopen_state_mismatch" },
+    "reopen_cancelled",
+  );
+  assert.equal(inconsistentState.status, 409);
+  assert.deepEqual(await inconsistentState.json(), {
+    error: "This order is not in a fully cancelled state. Refresh it before trying again.",
+  });
+
+  const integrityConflict = workflowError(
+    { message: "precounted_order_has_reservations" },
+    "reopen_cancelled",
+  );
+  assert.equal(integrityConflict.status, 409);
+  assert.deepEqual(await integrityConflict.json(), {
+    error: "Inventory needs review before this order can move forward.",
+  });
 });
 
 test("payment amounts accept exact cents and reject malformed values", () => {

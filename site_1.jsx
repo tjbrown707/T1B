@@ -53,6 +53,7 @@ import {
   canCancelUnpaidOrder,
   canCompleteLocalHandoff,
   canConfirmPayment,
+  canReopenCancelledOrder,
   hasOrderManagerRole,
   isLocalHandoff,
   isPrecountedOrder,
@@ -5182,6 +5183,9 @@ function AdminOrdersPage() {
               ? `${payload.order.order_number} is paid and reserved for local handoff. Inventory was deducted once; print the packing slip through PrintNode before handoff. Carrier postage stays disabled; a free 4×6 pickup label is available in the order details.`
               : `${payload.order.order_number} is paid and ready to pick. Inventory was deducted once.`,
         cancel_unpaid: `${payload.order.order_number} was cancelled and its reserved stock was released.`,
+        reopen_cancelled: isPrecountedOrder(payload.order)
+          ? `${payload.order.order_number} was reopened with a fresh 24-hour payment window. This pre-counted order does not create a new inventory reservation.`
+          : `${payload.order.order_number} was reopened. Its original products are reserved again for 24 hours; confirm payment before the new hold ends.`,
         mark_picked: `${payload.order.order_number} is marked picked.`,
         mark_packed: `${payload.order.order_number} is marked packed.`,
         mark_handed_off: `${payload.order.order_number} is marked handed off to the customer.`,
@@ -5190,7 +5194,9 @@ function AdminOrdersPage() {
       setNotice({ type: "success", text: messages[action] || `${payload.order.order_number} was updated.` });
       return true;
     } catch (error) {
-      setNotice({ type: "error", text: error.message || "The order could not be updated." });
+      const errorText = formatOrderActionError(action, error.message);
+      if (typeof options.onError === "function") options.onError(errorText);
+      else setNotice({ type: "error", text: errorText });
       return false;
     } finally {
       setActionKey("");
@@ -5353,7 +5359,7 @@ function AdminOrdersPage() {
       </div>
 
       {notice.text && (
-        <div role="status" style={{ padding: "12px 15px", marginBottom: 16, border: `1px solid ${notice.type === "success" ? "rgba(34,197,94,0.45)" : "rgba(196,30,42,0.55)"}`, background: notice.type === "success" ? "rgba(34,197,94,0.08)" : "rgba(196,30,42,0.08)", color: notice.type === "success" ? "#22c55e" : "#ff6b6b", fontFamily: "'Rajdhani', sans-serif", fontSize: 15, fontWeight: 600 }}>{notice.text}</div>
+        <div role={notice.type === "success" ? "status" : "alert"} style={{ padding: "12px 15px", marginBottom: 16, border: `1px solid ${notice.type === "success" ? "rgba(34,197,94,0.45)" : "rgba(196,30,42,0.55)"}`, background: notice.type === "success" ? "rgba(34,197,94,0.08)" : "rgba(196,30,42,0.08)", color: notice.type === "success" ? "#22c55e" : "#ff6b6b", fontFamily: "'Rajdhani', sans-serif", fontSize: 15, fontWeight: 600 }}>{notice.text}</div>
       )}
       {loadError && (
         <div role="alert" style={{ padding: "16px", marginBottom: 16, border: "1px solid rgba(196,30,42,0.55)", background: "rgba(196,30,42,0.08)", color: "#ff6b6b", fontFamily: "'Rajdhani', sans-serif", fontSize: 15 }}>
@@ -5384,6 +5390,11 @@ function AdminOrdersPage() {
                   <div>
                     <div style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 14, fontWeight: 800, color: "var(--red-primary)", letterSpacing: "0.04em" }}>{order.order_number}</div>
                     <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 13, color: "var(--text-dim)", marginTop: 4 }}>{formatAdminOrderDate(order.created_at)}</div>
+                    {formatReservationHold(order) && (
+                      <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 12, color: order.payment_status === "AWAITING_PAYMENT" ? "#fbbf24" : "var(--text-dim)", marginTop: 3 }}>
+                        {formatReservationHold(order)}
+                      </div>
+                    )}
                   </div>
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 16, fontWeight: 700, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{order.customer_name || "Guest customer"}</div>
@@ -5402,12 +5413,20 @@ function AdminOrdersPage() {
                         onConfirm={performOrderAction}
                       />
                     )}
+                    {canReopenCancelledOrder(order) && (
+                      <OrderReopenConfirmation
+                        order={order}
+                        busy={busy}
+                        reopening={actionKey === `${order.id}:reopen_cancelled`}
+                        onConfirm={performOrderAction}
+                      />
+                    )}
                     {fulfillmentAction && (
                       <button type="button" disabled={busy} onClick={() => performOrderAction(order, fulfillmentAction.action)} style={adminPrimaryButton(busy)}>
                         {actionKey === `${order.id}:${fulfillmentAction.action}` ? "Saving…" : fulfillmentAction.label}
                       </button>
                     )}
-                    {!canConfirmPayment(order) && !fulfillmentAction && (
+                    {!canConfirmPayment(order) && !canReopenCancelledOrder(order) && !fulfillmentAction && (
                       <div style={{ fontFamily: "'Rajdhani', sans-serif", color: "var(--text-dim)", fontSize: 13 }}>
                         {formatWorkflowStatus(order)}
                       </div>
@@ -5446,6 +5465,7 @@ function AdminOrdersPage() {
                       <AdminDetailLine label="Address" value={[order.ship_address, order.ship_city, order.ship_state, order.ship_zip].filter(Boolean).join(", ")} />
                       <AdminDetailLine label="Fulfillment" value={isLocalHandoff(order) ? "Local handoff" : "Ship to customer"} />
                       <AdminDetailLine label="Inventory accounting" value={isPrecountedOrder(order) ? "Already accounted — no deduction" : "Tracked automatically"} />
+                      {formatReservationHold(order) && <AdminDetailLine label="Inventory hold" value={formatReservationHold(order)} />}
                     </div>
                     <div>
                       <AdminDetailHeading>Payment & totals</AdminDetailHeading>
@@ -5552,6 +5572,98 @@ function AdminOrdersPage() {
         </div>
       )}
     </main>
+    </>
+  );
+}
+
+function OrderReopenConfirmation({ order, busy, reopening, onConfirm }) {
+  const [open, setOpen] = useState(false);
+  const [error, setError] = useState("");
+  const triggerRef = useRef(null);
+  const dialogRef = useRef(null);
+  const titleId = `reopen-order-${order.id}`;
+  const descriptionId = `reopen-order-description-${order.id}`;
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const trigger = triggerRef.current;
+    const dialog = dialogRef.current;
+    const focusableSelector = "button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])";
+    const firstFocusable = dialog?.querySelector(focusableSelector);
+    if (firstFocusable) firstFocusable.focus();
+    else dialog?.focus();
+    return () => trigger?.focus();
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const dialog = dialogRef.current;
+    const focusableSelector = "button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])";
+    const focusableElements = () => Array.from(dialog?.querySelectorAll(focusableSelector) || []);
+    function handleDialogKeyDown(event) {
+      if (event.key === "Escape" && !busy) {
+        event.preventDefault();
+        setOpen(false);
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const focusable = focusableElements();
+      if (focusable.length === 0) {
+        event.preventDefault();
+        dialog?.focus();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && (document.activeElement === first || !dialog?.contains(document.activeElement))) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && (document.activeElement === last || !dialog?.contains(document.activeElement))) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+    document.addEventListener("keydown", handleDialogKeyDown);
+    return () => document.removeEventListener("keydown", handleDialogKeyDown);
+  }, [busy, open]);
+
+  function showDialog() {
+    setError("");
+    setOpen(true);
+  }
+
+  async function confirmReopen() {
+    setError("");
+    const reopened = await onConfirm(order, "reopen_cancelled", { onError: setError });
+    if (reopened) setOpen(false);
+  }
+
+  return (
+    <>
+      <button ref={triggerRef} type="button" aria-haspopup="dialog" disabled={busy} onClick={showDialog} style={adminPrimaryButton(busy)}>
+        {reopening ? "Reopening…" : "Uncancel Order"}
+      </button>
+      {open && (
+        <div ref={dialogRef} role="dialog" aria-modal="true" aria-busy={busy} aria-labelledby={titleId} aria-describedby={descriptionId} tabIndex={-1} style={{ position: "fixed", inset: 0, zIndex: 1000, display: "grid", placeItems: "center", padding: 20, background: "rgba(0,0,0,0.78)" }}>
+          <div style={{ width: "min(540px, 100%)", padding: 24, border: "1px solid var(--border)", background: "#111", boxShadow: "0 24px 80px rgba(0,0,0,0.55)" }}>
+            <div style={{ color: "var(--red-primary)", fontFamily: "'Orbitron', sans-serif", fontSize: 9, fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 8 }}>Uncancel order</div>
+            <h2 id={titleId} style={{ color: "var(--text-primary)", fontFamily: "'Orbitron', sans-serif", fontSize: 19, margin: "0 0 14px" }}>{order.order_number}</h2>
+            <div id={descriptionId} style={{ color: "var(--text-secondary)", fontFamily: "'Rajdhani', sans-serif", fontSize: 16, lineHeight: 1.55 }}>
+              {isPrecountedOrder(order) ? (
+                <p style={{ margin: 0 }}>This older pre-counted order has no live inventory reservation to restore. Reopening it returns the order to Awaiting Payment for a fresh 24-hour window without changing inventory.</p>
+              ) : (
+                <p style={{ margin: 0 }}>Reopening will reserve the order&apos;s original products and quantities again. If an original lot no longer has enough available stock, nothing will change.</p>
+              )}
+              <p style={{ margin: "12px 0 0", color: "#fbbf24" }}>A fresh 24-hour inventory hold begins when this succeeds. The order will not be marked paid.</p>
+            </div>
+            {error && <div role="alert" style={{ marginTop: 16, padding: 11, border: "1px solid rgba(196,30,42,0.55)", background: "rgba(196,30,42,0.08)", color: "#ff6b6b", fontFamily: "'Rajdhani', sans-serif", fontSize: 14 }}>{error}</div>}
+            <div style={{ display: "flex", justifyContent: "flex-end", flexWrap: "wrap", gap: 9, marginTop: 20 }}>
+              <button type="button" disabled={busy} onClick={() => setOpen(false)} style={adminSecondaryButton(busy)}>Keep Cancelled</button>
+              <button type="button" disabled={busy} onClick={confirmReopen} style={adminPrimaryButton(busy)}>{reopening ? "Reopening…" : isPrecountedOrder(order) ? "Uncancel Order" : "Uncancel & Re-reserve"}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
@@ -6191,6 +6303,21 @@ function formatWorkflowStatus(order) {
   return `${payment} · ${isLocalHandoff(order) ? "local handoff · " : ""}${fulfillment}`;
 }
 
+function formatOrderActionError(action, message) {
+  if (action !== "reopen_cancelled") return message || "The order could not be updated.";
+  const normalized = String(message || "").toLowerCase();
+  if (normalized.includes("insufficient_inventory") || normalized.includes("originally allocated lots") || normalized.includes("not enough available inventory") || normalized.includes("not enough stock")) {
+    return "This order cannot be reopened because one or more originally allocated lots no longer have enough stock. Make those exact lots available again in Inventory, then try again.";
+  }
+  if (normalized.includes("inventory_reservation_mismatch") || normalized.includes("precounted_order_has_reservations") || normalized.includes("inventory records need review") || normalized.includes("inventory needs review")) {
+    return "This order's reservation history needs review before it can be reopened. Check its allocated lots and current inventory, then try again.";
+  }
+  if (normalized.includes("order_reopen_status_conflict") || normalized.includes("order_reopen_state_mismatch") || normalized.includes("someone else updated") || normalized.includes("fully cancelled state")) {
+    return "This order changed before it could be reopened. Refresh the order list and make sure it is still cancelled, then try again.";
+  }
+  return "The order could not be reopened. Refresh the order list and try again; if it still fails, review its allocated lots in Inventory.";
+}
+
 function AdminDetailHeading({ children }) {
   return <div style={{ marginBottom: 7, color: "var(--text-primary)", fontFamily: "'Orbitron', sans-serif", fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase" }}>{children}</div>;
 }
@@ -6210,6 +6337,15 @@ function formatAdminOrderDate(iso) {
   } catch {
     return "";
   }
+}
+
+function formatReservationHold(order) {
+  if (!order?.reservation_expires_at) return "";
+  const deadline = formatAdminOrderDate(order.reservation_expires_at);
+  if (!deadline) return "";
+  if (order.payment_status === "AWAITING_PAYMENT") return `Reserved until ${deadline}`;
+  if (order.payment_status === "CANCELLED") return `Original hold deadline: ${deadline}`;
+  return "";
 }
 
 function formatStatusLabel(status) {
