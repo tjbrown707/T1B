@@ -21,13 +21,16 @@ import {
   productImageAlt,
   PRODUCT_IMAGE_WIDTH,
   PRODUCT_IMAGE_HEIGHT,
+  RESEARCH_LIBRARY_ENABLED,
 } from "./src/data/routes.js";
 import { productGraph, articleGraph } from "./src/data/structured-data.js";
 
 // The thirteen article bodies are about a fifth of the application by weight
 // and are only ever needed on /research/:slug. Loading them lazily keeps them
 // out of the bundle that the homepage, the catalog and the checkout download.
-const ArticleBody = lazy(() => import("./src/ArticleBody.jsx"));
+const ArticleBody = RESEARCH_LIBRARY_ENABLED
+  ? lazy(() => import("./src/ArticleBody.jsx"))
+  : null;
 import {
   SITEWIDE_SALE,
   isSaleActive,
@@ -1073,6 +1076,14 @@ function CartPopup({ cart, visible, onClose }) {
   );
 }
 
+const PRIMARY_NAV_ITEMS = [
+  "Products",
+  ...(RESEARCH_LIBRARY_ENABLED ? ["Research"] : []),
+  "Lab Results",
+  "Calculator",
+  "Contact",
+];
+
 function Header({ cartCount = 0 }) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -1173,7 +1184,7 @@ function Header({ cartCount = 0 }) {
 
         <nav style={{ display: "flex", gap: isMobile ? 16 : 32, alignItems: "center" }}>
           {/* Desktop nav */}
-          {!isMobile && ["Products", "Research", "Lab Results", "Calculator", "Contact"].map(item => (
+          {!isMobile && PRIMARY_NAV_ITEMS.map(item => (
             <span
               key={item}
               onClick={() => handleNav(item)}
@@ -1303,7 +1314,7 @@ function Header({ cartCount = 0 }) {
           padding: "12px 0",
           animation: "fadeIn 0.2s ease-out",
         }}>
-          {["Products", "Research", "Lab Results", "Calculator", "Contact", "Cart", accountLabel].map(item => (
+          {[...PRIMARY_NAV_ITEMS, "Cart", accountLabel].map(item => (
             <div
               key={item}
               onClick={() => handleNav(item)}
@@ -2274,7 +2285,7 @@ function Footer() {
         <div>
           <div style={headingStyle}>Shop</div>
           <FooterLink to="/products">All Products</FooterLink>
-          <FooterLink to="/research">Research</FooterLink>
+          {RESEARCH_LIBRARY_ENABLED && <FooterLink to="/research">Research</FooterLink>}
           <FooterLink to="/lab-results">Lab Results</FooterLink>
           <FooterLink to="/calculator">Reconstitution Calculator</FooterLink>
         </div>
@@ -7894,8 +7905,8 @@ export default function App() {
         <Route path="/products" element={<ProductsPage searchQuery={searchQuery} setSearchQuery={setSearchQuery} onAddToCart={addToCart} onSelectProduct={setSelectedProduct} />} />
         <Route path="/product/:id" element={<ProductPage onAddToCart={addToCart} />} />
         <Route path="/calculator" element={<PeptideCalculator />} />
-        <Route path="/research" element={<ResearchPage />} />
-        <Route path="/research/:slug" element={<ArticlePage />} />
+        {RESEARCH_LIBRARY_ENABLED && <Route path="/research" element={<ResearchPage />} />}
+        {RESEARCH_LIBRARY_ENABLED && <Route path="/research/:slug" element={<ArticlePage />} />}
         <Route path="/contact" element={<ContactPage />} />
         <Route path="/lab-results" element={<LabResultsPage />} />
         <Route path="/cart" element={<CartPage cart={cart} setCart={setCart} />} />

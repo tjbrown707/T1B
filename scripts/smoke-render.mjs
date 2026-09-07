@@ -6,6 +6,7 @@ import react from "@vitejs/plugin-react";
 import { JSDOM, VirtualConsole } from "jsdom";
 import { readFileSync } from "node:fs";
 import { SITE_NAME } from "../src/data/site.js";
+import { RESEARCH_LIBRARY_ENABLED } from "../src/data/routes.js";
 
 // Inside node_modules so the throwaway bundle is never committed and never
 // collides with the real dist/.
@@ -35,8 +36,18 @@ const ROUTES = [
   { path: "/products", expect: "BPC-157" },
   { path: "/product/bpc157-10", expect: "BPC-157" },
   { path: "/product/tesamorelin", expect: "CERTIFICATE OF ANALYSIS" }, // summary now reconciles
-  { path: "/research", expect: "BPC-157: Mechanism of Action" }, // a real article, not the heading
-  { path: "/research/bpc-157-mechanism-of-action", expect: "BPC-157" },
+  {
+    path: "/research",
+    expect: RESEARCH_LIBRARY_ENABLED ? "BPC-157: Mechanism of Action" : "PAGE NOT FOUND",
+    expectHeadRobots: RESEARCH_LIBRARY_ENABLED ? "" : "noindex, follow",
+    forbidHead: RESEARCH_LIBRARY_ENABLED ? [] : ["Peer-reviewed research summaries"],
+  },
+  {
+    path: "/research/bpc-157-mechanism-of-action",
+    expect: RESEARCH_LIBRARY_ENABLED ? "BPC-157" : "PAGE NOT FOUND",
+    expectHeadRobots: RESEARCH_LIBRARY_ENABLED ? "" : "noindex, follow",
+    forbidHead: RESEARCH_LIBRARY_ENABLED ? [] : ["BPC-157: Mechanism of Action"],
+  },
   { path: "/lab-results", expect: "CERTIFICATES OF ANALYSIS" },
   { path: "/cart", expect: "Your cart is empty" },
   { path: "/calculator", expect: "Aliquot" },                 // relabelled calculator

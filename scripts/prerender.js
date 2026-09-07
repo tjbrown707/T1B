@@ -35,6 +35,7 @@ import {
   articleRoutes,
   allRoutes,
   canonicalUrl,
+  RESEARCH_LIBRARY_ENABLED,
 } from "../src/data/routes.js";
 import {
   ORGANISATION,
@@ -67,13 +68,14 @@ const absolute = (path) =>
 
 // ─── Shared page furniture ───────────────────────────────────────────────────
 // Present on every prerendered page so that no page is an orphan: a crawler
-// landing anywhere can reach the catalog, every policy page and the research
-// library through real links.
+// landing anywhere can reach the catalog and every public policy page through
+// real links. The editorial research library is omitted while its feature flag
+// is off, including from non-JavaScript snapshots.
 
 const NAV = [
   ["/products", "Products"],
   ["/lab-results", "Lab results"],
-  ["/research", "Research"],
+  ...(RESEARCH_LIBRARY_ENABLED ? [["/research", "Research"]] : []),
   ["/calculator", "Reconstitution calculator"],
   ["/testing-standards", "Testing standards"],
   ["/about", "About"],
@@ -200,7 +202,10 @@ ${related.length ? `<h2>Related compounds</h2>${linkList(related.map(p => [`/pro
 function staticBody(route, articles) {
   const head = `<h1>${esc(route.h1 || route.title || SITE_NAME)}</h1><p>${esc(route.description)}</p>`;
   if (route.path === "/") {
-    return `${head}<h2>Research compounds</h2>${productListing()}<h2>Research library</h2>${articleListing(articles)}`;
+    const library = RESEARCH_LIBRARY_ENABLED
+      ? `<h2>Research library</h2>${articleListing(articles)}`
+      : "";
+    return `${head}<h2>Research compounds</h2>${productListing()}${library}`;
   }
   if (route.path === "/products") return `${head}${productListing()}`;
   if (route.path === "/research") return `${head}${articleListing(articles)}`;
@@ -356,7 +361,9 @@ write(
     noindex: true,
     h1: "Page not found",
   },
-  chrome(`<h1>Page not found</h1><p>That URL does not exist. Try the <a href="/products">catalog</a> or the <a href="/research">research library</a>.</p>`),
+  chrome(RESEARCH_LIBRARY_ENABLED
+    ? '<h1>Page not found</h1><p>That URL does not exist. Try the <a href="/products">catalog</a> or the <a href="/research">research library</a>.</p>'
+    : '<h1>Page not found</h1><p>That URL does not exist. Try the <a href="/products">catalog</a>.</p>'),
   "404.html"
 );
 
