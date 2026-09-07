@@ -1,7 +1,52 @@
 # Handoff — pick up here
 
-Written 2026-08-07, updated 2026-08-26. Read this before starting work; it
+Written 2026-08-07, updated 2026-09-07. Read this before starting work; it
 records state that is not obvious from the code or the git log.
+
+---
+
+## Cancelled-order reopening + research-library pause — DATABASE AND WEBSITE LIVE
+
+Migration `20260907161104_reopen_cancelled_orders.sql` was applied to production
+on 2026-09-07. `/admin/orders` now offers **Uncancel Order** for fully cancelled,
+unpaid orders. The service-role-only `reopen_cancelled_order` RPC atomically
+restores a tracked order's exact released lot reservations after validating the
+order, line items, saved reservations, immutable ledger, lot counters, and
+current availability. Any mismatch or shortage fails without a partial change.
+A successful reopen writes immutable audit records and creates a fresh 24-hour
+reservation deadline. Pre-counted legacy orders reopen without touching
+inventory, and repeated cancel/reopen cycles use distinct idempotency keys.
+
+Joshua Taylor's order `T1B-260902-227087`
+(`9c0bfb15-dd17-405d-8ec5-fd0b274ed5ee`) had been automatically cancelled after
+its unpaid 24-hour reservation expired. The payment had actually arrived and
+the order had already been hand-delivered. On 2026-09-07 it was reopened, its
+original six lot allocations were re-reserved, and the full `$2,233.12` payment
+was recorded via Zelle with `LOCAL_HANDOFF` fulfillment before it was marked
+delivered. Final database state is `DELIVERED` / `PAID` / `DELIVERED`; payment
+confirmation committed the reservations and deducted inventory exactly once.
+The required packing-slip job completed and the customer handoff confirmation
+email was sent.
+
+The public research library is intentionally paused through
+`RESEARCH_LIBRARY_ENABLED = false`. Research navigation and footer links,
+client routes, prerendered pages, and sitemap entries are absent; direct
+research URLs return a genuine 404 with `noindex`. Article source is retained
+for possible future use, while product research profiles and required
+research-use-only language remain. Existing indexed URLs will disappear as
+search engines recrawl them. Do not re-enable the library or resume research
+automation unless the owner explicitly asks.
+
+The website's font configuration and CSP did not change. Rajdhani and Orbitron
+still come from Google Fonts; the observed font swap occurred when those
+external font requests timed out and the browser used its system fallback.
+
+PR #12 passed `npm run verify` with 174 tests, route smoke checks, lint,
+production build, secret scan, and site-integrity checks before merge.
+Production verification confirmed the uncancel workflow, research 404/noindex
+behavior, research-free 40-URL sitemap, and Joshua's final order and inventory
+state. Supabase's post-migration security and performance advisors report zero
+errors and zero warnings.
 
 ---
 
@@ -371,11 +416,15 @@ homepage** — an instruction to drop it from the index. Fixed in `7534b7d`, alo
 with `og:image`, which had never appeared anywhere because the old helper only
 wrote to tags already present in the HTML.
 
-### Scheduled article publishing — DONE
+### Scheduled article publishing — DISABLED / HISTORICAL
 
 An article with a future `date` ships in the bundle but stays hidden until that
 date, checked in the browser on each visit. No deploy, no build, no cron. Queued
 articles 404 rather than render, since slugs are guessable.
+
+This implementation is currently unreachable while
+`RESEARCH_LIBRARY_ENABLED = false`; do not resume it unless the owner explicitly
+reopens the public research-library work.
 
 Note: hidden means hidden from the UI, **not secret** — the text is in the JS
 bundle. Fine for articles; do not queue anything commercially sensitive.
@@ -405,24 +454,12 @@ are covered. Only the `--all` sweep was ever region-scoped, and that is fixed.
 
 ## Outstanding work
 
-1. **Claims lint** — gate 3. Fail on explicit medical claims ("cures", "treats
-   X disease", "FDA approved") in the article region. Keep patterns
-   high-precision; a gate with false positives gets ignored.
-2. **GitHub Actions workflow** — run all gates plus build/lint on `research/*`
-   PRs, auto-merge on green so no human approval is needed in the happy path.
-3. **The scheduled agent itself** — writes an article every 3 days, dated ~9 days
-   out so the publish queue doubles as a review window.
-4. **Consider checking journal and year, not just title,** in gate 2. Every
-   mis-labelled masthead found this round passed the existing check. Europe PMC
-   returns both fields in the same response the gate already makes, so the cost
-   is small — the work is picking a comparison lenient enough not to fail on
-   `NAT REV MOL CELL BIOL` vs `Nature reviews. Molecular cell biology`.
+Research automation is intentionally paused. Do not build the claims lint,
+research CI/auto-merge workflow, or scheduled article agent unless the owner
+explicitly reopens this work.
 
 ### Needs the owner, cannot be done from code
 
-- **Branch protection on `main`** — block direct pushes, tick "do not allow
-  bypassing". Without it the agent can skip every gate above.
-- **Fine-grained PAT** scoped to this repo only, Contents: write.
 - **Paste 4 dashboard templates.** These are the Supabase auth emails only.
   Checkout receipts and staff alerts are now read and sent by Netlify code;
   nothing needs pasting into EmailJS and no Netlify order-form notification is
@@ -452,7 +489,7 @@ are covered. Only the `--all` sweep was ever region-scoped, and that is fixed.
 ## Verifying before you push
 
 ```
-npm run verify         # lint + 84 tests + 12-route smoke + full production build
+npm run verify         # lint + 174 tests + route smoke + full production build
 node scripts/check-citations.js --all
 ```
 
