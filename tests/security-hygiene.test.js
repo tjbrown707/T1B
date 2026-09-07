@@ -231,6 +231,23 @@ test("CSP permits only the required analytics, Turnstile, and image sources", ()
   assert.ok(!imageSources.includes("https:"), "img-src must not allow every HTTPS host");
   assert.ok(!imageSources.includes("*"), "img-src must not contain a wildcard source");
 
+  const directiveSources = name => csp
+    .split(";")
+    .map(directive => directive.trim().split(/\s+/))
+    .find(([directiveName]) => directiveName === name)
+    ?.slice(1) || [];
+  assert.deepEqual(
+    directiveSources("style-src").toSorted(),
+    ["'self'", "'unsafe-inline'"].toSorted(),
+    "styles must be same-origin except for the inline component styles",
+  );
+  assert.deepEqual(
+    directiveSources("font-src"),
+    ["'self'"],
+    "fonts must be served by Tier One rather than an external CDN",
+  );
+  assert.doesNotMatch(csp, /fonts\.(?:googleapis|gstatic)\.com/);
+
   const live = new Request("https://www.tierone.bio/.netlify/functions/create-order", {
     headers: { Origin: "https://www.tierone.bio" },
   });
