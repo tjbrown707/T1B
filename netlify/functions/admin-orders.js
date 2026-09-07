@@ -19,7 +19,7 @@ const ORDER_FIELDS = [
   "ship_city", "ship_state", "ship_zip", "created_at", "updated_at",
   "payment_status", "fulfillment_status", "fulfillment_method",
   "payment_received_via", "payment_amount_received", "payment_confirmed_at",
-  "inventory_accounting_mode",
+  "inventory_accounting_mode", "reservation_expires_at",
 ].join(",");
 
 export default async function handler(request) {
@@ -289,6 +289,16 @@ export function workflowRpc(action, input) {
       },
     };
   }
+  if (action === "reopen_cancelled" && input.expectedPaymentStatus === "CANCELLED") {
+    return {
+      name: "reopen_cancelled_order",
+      args: {
+        p_order_id: input.orderId,
+        p_expected_payment_status: input.expectedPaymentStatus,
+        p_actor_user_id: input.actorUserId,
+      },
+    };
+  }
   const targets = { mark_picked: "PICKED", mark_packed: "PACKED", mark_handed_off: "DELIVERED" };
   if (targets[action] && /^[A-Z_]{3,30}$/.test(input.expectedFulfillmentStatus)) {
     return {
@@ -304,13 +314,27 @@ export function workflowRpc(action, input) {
   return null;
 }
 
-function workflowError(error, action) {
+export function workflowError(error, action) {
   const message = String(error?.message || "");
   if (message.includes("insufficient_inventory:")) {
+    if (action === "reopen_cancelled") {
+      return fail(409, "One or more originally allocated lots do not have enough available inventory to reopen this order.");
+    }
     return fail(409, "There is not enough available inventory to confirm this payment.");
   }
-  if (message.includes("status_conflict") || message.includes("order_payment_status_conflict")) {
+  if (message.includes("actor_required")) {
+    return fail(403, "A signed-in staff account is required to update this order.");
+  }
+  if (message.includes("status_conflict")
+      || message.includes("order_payment_status_conflict")
+      || message.includes("order_not_cancelled")) {
     return fail(409, "Someone else updated this order. Refresh it before trying again.");
+  }
+  if (message.includes("order_reopen_state_mismatch")) {
+    return fail(409, "This order is not in a fully cancelled state. Refresh it before trying again.");
+  }
+  if (message.includes("order_not_found")) {
+    return fail(404, "Order not found.");
   }
   if (message.includes("payment_amount_conflict")) {
     return fail(409, "The recorded payment amount changed. Refresh the order before correcting it.");
@@ -327,7 +351,10 @@ function workflowError(error, action) {
       || message.includes("invalid_fulfillment_transition")) {
     return fail(400, "Choose a valid payment amount, payment method, and fulfillment option.");
   }
-  if (message.includes("inventory_counter_mismatch") || message.includes("inventory_reservation_mismatch")) {
+  if (message.includes("inventory_counter_mismatch")
+      || message.includes("inventory_reservation_mismatch")
+      || message.includes("reservation_state_conflict")
+      || message.includes("precounted_order_has_reservations")) {
     console.error(`admin-orders: inventory integrity error during ${action}:`, error);
     return fail(409, "Inventory needs review before this order can move forward.");
   }

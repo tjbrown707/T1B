@@ -12,6 +12,7 @@ import {
   canonicalUrl,
   isPublished,
   publishedArticleMeta,
+  RESEARCH_LIBRARY_ENABLED,
 } from "../src/data/routes.js";
 import { productGraph, articleGraph } from "../src/data/structured-data.js";
 
@@ -62,6 +63,21 @@ test("the sitemap contains every indexable route and every product", () => {
   assert.ok(listed.has("/"));
   for (const product of PRODUCTS) {
     assert.ok(listed.has(`/product/${product.id}`), `${product.id} missing from the sitemap`);
+  }
+});
+
+test("the research-library flag controls routes and search indexing without deleting content", () => {
+  assert.ok(ARTICLE_META.length > 0, "article content should remain available for a future re-enable");
+  assert.equal(routeMeta("/research").hidden, !RESEARCH_LIBRARY_ENABLED);
+  const routed = allRoutes().filter(route => /^\/research(?:\/|$)/.test(route.path));
+  const indexed = sitemapRoutes().filter(route => /^\/research(?:\/|$)/.test(route.path));
+  if (RESEARCH_LIBRARY_ENABLED) {
+    assert.ok(routed.some(route => route.path === "/research"));
+    assert.ok(routed.some(route => route.path.startsWith("/research/")));
+    assert.deepEqual(indexed.map(route => route.path), routed.map(route => route.path));
+  } else {
+    assert.deepEqual(routed, []);
+    assert.deepEqual(indexed, []);
   }
 });
 

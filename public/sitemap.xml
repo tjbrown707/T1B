@@ -18,11 +18,6 @@
     <priority>0.9</priority>
   </url>
   <url>
-    <loc>https://www.tierone.bio/research</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>
-  <url>
     <loc>https://www.tierone.bio/calculator</loc>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
@@ -286,114 +281,6 @@
     <priority>0.8</priority>
     <image:image>
       <image:loc>https://www.tierone.bio/kpv-10mg.jpg</image:loc>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://www.tierone.bio/research/bpc-157-mechanism-of-action</loc>
-    <lastmod>2026-06-27</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.8</priority>
-    <image:image>
-      <image:loc>https://www.tierone.bio/bpc-157-10mg.jpg</image:loc>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://www.tierone.bio/research/retatrutide-vs-tirzepatide-vs-semaglutide</loc>
-    <lastmod>2026-06-28</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.8</priority>
-    <image:image>
-      <image:loc>https://www.tierone.bio/glp-3rt-10mg.jpg</image:loc>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://www.tierone.bio/research/ghk-cu-copper-peptide-research</loc>
-    <lastmod>2026-06-28</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.8</priority>
-    <image:image>
-      <image:loc>https://www.tierone.bio/ghk-cu-100mg.jpg</image:loc>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://www.tierone.bio/research/tesamorelin-growth-hormone-research</loc>
-    <lastmod>2026-06-28</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.8</priority>
-    <image:image>
-      <image:loc>https://www.tierone.bio/tesamorelin-10mg.jpg</image:loc>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://www.tierone.bio/research/thymosin-alpha-1-immune-research</loc>
-    <lastmod>2026-06-28</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.8</priority>
-    <image:image>
-      <image:loc>https://www.tierone.bio/thymosin-alpha-1-10mg.jpg</image:loc>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://www.tierone.bio/research/nad-plus-supplementation-research</loc>
-    <lastmod>2026-06-28</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.8</priority>
-    <image:image>
-      <image:loc>https://www.tierone.bio/nad-plus-500mg.jpg</image:loc>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://www.tierone.bio/research/selank-semax-russian-nootropic-peptides</loc>
-    <lastmod>2026-06-28</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.8</priority>
-    <image:image>
-      <image:loc>https://www.tierone.bio/semax-10mg.jpg</image:loc>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://www.tierone.bio/research/mots-c-mitochondrial-peptide-research</loc>
-    <lastmod>2026-06-28</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.8</priority>
-    <image:image>
-      <image:loc>https://www.tierone.bio/mots-c-10mg.jpg</image:loc>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://www.tierone.bio/research/tissue-repair-peptide-blends-research</loc>
-    <lastmod>2026-06-28</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.8</priority>
-    <image:image>
-      <image:loc>https://www.tierone.bio/glow-70mg.jpg</image:loc>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://www.tierone.bio/research/bpc-157-vs-tb-500-tissue-repair</loc>
-    <lastmod>2026-07-10</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.8</priority>
-    <image:image>
-      <image:loc>https://www.tierone.bio/tb-500-10mg.jpg</image:loc>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://www.tierone.bio/research/cjc-1295-ipamorelin-growth-hormone-stack</loc>
-    <lastmod>2026-07-10</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.8</priority>
-    <image:image>
-      <image:loc>https://www.tierone.bio/cjc-1295-ipamorelin-5mg-5mg.jpg</image:loc>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://www.tierone.bio/research/epitalon-telomerase-pineal-peptide-research</loc>
-    <lastmod>2026-07-27</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.8</priority>
-    <image:image>
-      <image:loc>https://www.tierone.bio/epitalon-10mg.jpg</image:loc>
     </image:image>
   </url>
 </urlset>

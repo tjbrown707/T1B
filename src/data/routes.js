@@ -15,6 +15,11 @@ import { PRODUCTS } from "./catalog.js";
 import { ARTICLE_META } from "./articles.js";
 import { SITE_DOMAIN, SITE_NAME } from "./site.js";
 
+// Keep the research library reversible without leaving stale article URLs in
+// the sitemap or prerender output. Product research-use language and required
+// safety disclosures are separate from this editorial library and stay live.
+export const RESEARCH_LIBRARY_ENABLED = false;
+
 // ─── Article publication gating ──────────────────────────────────────────────
 // Dates are ISO (YYYY-MM-DD), so a string comparison is a date comparison.
 // An article with no date at all is treated as published rather than hidden
@@ -118,6 +123,7 @@ export const STATIC_ROUTES = [
     description: "Peer-reviewed research summaries, peptide mechanism explainers, and educational articles from Tier One BioSystems — evidence-based content for qualified researchers.",
     h1: "Research library",
     priority: "0.9", changefreq: "weekly",
+    hidden: !RESEARCH_LIBRARY_ENABLED,
   },
   {
     path: "/calculator",
@@ -279,6 +285,7 @@ export function productRoutes() {
 }
 
 export function articleRoutes(today = todayISO()) {
+  if (!RESEARCH_LIBRARY_ENABLED) return [];
   return publishedArticleMeta(today).map(article => ({
     path: `/research/${article.slug}`,
     ...articleMeta(article),
@@ -291,7 +298,11 @@ export function articleRoutes(today = todayISO()) {
 }
 
 export function allRoutes(today = todayISO()) {
-  return [...STATIC_ROUTES, ...productRoutes(), ...articleRoutes(today)];
+  return [
+    ...STATIC_ROUTES.filter(route => !route.hidden),
+    ...productRoutes(),
+    ...articleRoutes(today),
+  ];
 }
 
 // Only these belong in the sitemap: indexable, canonical, public.

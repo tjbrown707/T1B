@@ -20,6 +20,7 @@ import {
   sitemapRoutes,
   canonicalUrl,
   publishedArticleMeta,
+  RESEARCH_LIBRARY_ENABLED,
   todayISO,
 } from "../src/data/routes.js";
 import { ARTICLE_META } from "../src/data/articles.js";
@@ -94,14 +95,32 @@ if (sitemap) {
     }
   }
   if (listed.has(canonicalUrl("/cart"))) fail("Sitemap must not contain /cart.");
+  if (!RESEARCH_LIBRARY_ENABLED) {
+    for (const url of listed) {
+      if (/\/research(?:\/|$)/.test(new URL(url).pathname)) {
+        fail(`Sitemap lists hidden research URL ${url}. Run \`npm run sitemap\`.`);
+      }
+    }
+  }
 }
 
 if (/emailjs\.send|@emailjs\/browser/.test(source)) {
   fail("site_1.jsx must not call EmailJS from the browser.");
 }
+if (!RESEARCH_LIBRARY_ENABLED) {
+  const welcomeEmail = readFileSync("email-templates/welcome-discount.html", "utf8");
+  if (/href="[^"]*(?:#research|\/research(?:[/?#"]|$))/i.test(welcomeEmail)) {
+    fail("The welcome email still links to the hidden research library.");
+  }
+}
 
 // ── 4. Prerender output must exist for every route ──────────────────────────
 if (hasDist) {
+  if (!RESEARCH_LIBRARY_ENABLED) {
+    if (existsSync(join(DIST, "research.html")) || existsSync(join(DIST, "research"))) {
+      fail("Hidden research pages were still prerendered into dist/.");
+    }
+  }
   for (const route of allRoutes(today)) {
     const file = route.path === "/" ? "index.html" : `${route.path.replace(/^\//, "")}.html`;
     const target = join(DIST, file);
@@ -109,8 +128,11 @@ if (hasDist) {
       fail(`Prerendered page missing: dist/${file}`);
       continue;
     }
+    const html = readFileSync(target, "utf8");
+    if (!RESEARCH_LIBRARY_ENABLED && /href=["']\/research(?:[/"'#?]|$)/i.test(html)) {
+      fail(`dist/${file} links to the hidden research library.`);
+    }
     if (route.staffOnly) {
-      const html = readFileSync(target, "utf8");
       if (!route.noindex || !html.includes('<meta name="robots" content="noindex, nofollow" />')) {
         fail(`dist/${file} must not be indexed.`);
       }
@@ -122,7 +144,13 @@ if (hasDist) {
       }
     }
   }
-  if (!existsSync(join(DIST, "404.html"))) fail("dist/404.html is missing — unknown URLs would not return a 404.");
+  const notFoundPage = join(DIST, "404.html");
+  if (!existsSync(notFoundPage)) {
+    fail("dist/404.html is missing — unknown URLs would not return a 404.");
+  } else if (!RESEARCH_LIBRARY_ENABLED
+      && /href=["']\/research(?:[/"'#?]|$)/i.test(readFileSync(notFoundPage, "utf8"))) {
+    fail("dist/404.html links to the hidden research library.");
+  }
 
   const securityTxt = join(DIST, ".well-known", "security.txt");
   if (!existsSync(securityTxt)) {
