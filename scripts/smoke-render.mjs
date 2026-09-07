@@ -6,7 +6,7 @@ import react from "@vitejs/plugin-react";
 import { JSDOM, VirtualConsole } from "jsdom";
 import { readFileSync } from "node:fs";
 import { SITE_NAME } from "../src/data/site.js";
-import { RESEARCH_LIBRARY_ENABLED } from "../src/data/routes.js";
+import { PRODUCTS } from "../src/data/catalog.js";
 
 // Inside node_modules so the throwaway bundle is never committed and never
 // collides with the real dist/.
@@ -31,22 +31,33 @@ const code = readFileSync(`${OUT}/app.js`, "utf8");
 
 // Each route names something that must appear in the rendered output. A route
 // that renders only the age gate, or throws and leaves an empty div, fails.
+const PRODUCT_REFERENCE_LABELS = [
+  "Peer-reviewed research",
+  "Research on individual components",
+  "Sources & References",
+  "View Source ↗",
+];
+
 const ROUTES = [
   { path: "/", expect: "Tier One" },
   { path: "/products", expect: "BPC-157" },
-  { path: "/product/bpc157-10", expect: "BPC-157" },
-  { path: "/product/tesamorelin", expect: "CERTIFICATE OF ANALYSIS" }, // summary now reconciles
+  ...PRODUCTS.map(product => ({
+    path: `/product/${product.id}`,
+    expect: product.name,
+    requireBody: ["RESEARCH PROFILE"],
+    forbidBody: PRODUCT_REFERENCE_LABELS,
+  })),
   {
     path: "/research",
-    expect: RESEARCH_LIBRARY_ENABLED ? "BPC-157: Mechanism of Action" : "PAGE NOT FOUND",
-    expectHeadRobots: RESEARCH_LIBRARY_ENABLED ? "" : "noindex, follow",
-    forbidHead: RESEARCH_LIBRARY_ENABLED ? [] : ["Peer-reviewed research summaries"],
+    expect: "PAGE NOT FOUND",
+    expectHeadRobots: "noindex, follow",
+    forbidHead: ["Peer-reviewed research summaries"],
   },
   {
     path: "/research/bpc-157-mechanism-of-action",
-    expect: RESEARCH_LIBRARY_ENABLED ? "BPC-157" : "PAGE NOT FOUND",
-    expectHeadRobots: RESEARCH_LIBRARY_ENABLED ? "" : "noindex, follow",
-    forbidHead: RESEARCH_LIBRARY_ENABLED ? [] : ["BPC-157: Mechanism of Action"],
+    expect: "PAGE NOT FOUND",
+    expectHeadRobots: "noindex, follow",
+    forbidHead: ["BPC-157: Mechanism of Action"],
   },
   { path: "/lab-results", expect: "CERTIFICATES OF ANALYSIS" },
   { path: "/cart", expect: "Your cart is empty" },
@@ -85,6 +96,8 @@ for (const {
   expectHeadTitle = "",
   expectHeadRobots = "",
   forbidHead = [],
+  forbidBody = [],
+  requireBody = [],
 } of ROUTES) {
   const errors = [];
   const forbiddenHeadHits = new Set();
@@ -211,6 +224,8 @@ for (const {
 
 
   const dismissed = afterDismiss.length > 0 && !afterDismiss.includes("AGE VERIFICATION");
+  const forbiddenBodyHits = forbidBody.filter(term => text.includes(term) || afterDismiss.includes(term));
+  const missingBodyTerms = requireBody.filter(term => !afterDismiss.includes(term));
   inspectHead();
   headObserver.disconnect();
   const privateHeadClean = forbiddenHeadHits.size === 0;
@@ -218,7 +233,8 @@ for (const {
   const expectedRobotsSeen = !expectHeadRobots || robotsHistory.has(expectHeadRobots);
   const privateRobotsClean = !expectHeadRobots
     || [...adminRobotsHistory].every(value => value === expectHeadRobots);
-  const ok = hasContent && gateShowing && dismissed && heroFillsDesktop && privateHeadClean && expectedHeadSeen && expectedRobotsSeen && privateRobotsClean && errors.length === 0;
+  const publicBodyClean = forbiddenBodyHits.length === 0 && missingBodyTerms.length === 0;
+  const ok = hasContent && gateShowing && dismissed && heroFillsDesktop && privateHeadClean && publicBodyClean && expectedHeadSeen && expectedRobotsSeen && privateRobotsClean && errors.length === 0;
   if (!ok) failures++;
 
   console.log(
@@ -230,6 +246,8 @@ for (const {
   if (!hasContent) console.log(`      ! expected to find "${expect}"`);
   if (!heroFillsDesktop) console.log("      ! hero background no longer fills the desktop viewport");
   if (!privateHeadClean) console.log(`      ! private head metadata appeared: ${[...forbiddenHeadHits].join(", ")}`);
+  if (forbiddenBodyHits.length) console.log(`      ! hidden product references appeared: ${forbiddenBodyHits.join(", ")}`);
+  if (missingBodyTerms.length) console.log(`      ! expected product details disappeared: ${missingBodyTerms.join(", ")}`);
   if (!expectedHeadSeen) console.log(`      ! expected the title history to include "${expectHeadTitle}"`);
   if (!expectedRobotsSeen) console.log(`      ! expected the robots history to include "${expectHeadRobots}"`);
   if (!privateRobotsClean) console.log(`      ! staff route exposed other robots values: ${[...adminRobotsHistory].join(", ")}`);
