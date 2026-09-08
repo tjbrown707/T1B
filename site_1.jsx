@@ -5064,10 +5064,53 @@ function ResetPasswordPage() {
 
 // ─── Staff Order Management ───────────────────────────────────────────────────
 
+function packingPrinterUiStatus(readiness, canOpenPdf) {
+  const browserFallback = canOpenPdf
+    ? " Use Open PDF to print through the browser instead."
+    : " Reconnect it before trying Print Packing Slip again.";
+  if (!readiness) {
+    return {
+      unavailable: false,
+      color: "var(--text-dim)",
+      text: "Checking the packing-slip printer…",
+    };
+  }
+  if (readiness.available === true) {
+    return {
+      unavailable: false,
+      color: "#22c55e",
+      text: "The packing-slip printer and its PrintNode computer are online.",
+    };
+  }
+  if (readiness.available === null) {
+    return {
+      unavailable: false,
+      color: "#f59e0b",
+      text: `The packing-slip printer status could not be checked. Print Packing Slip is still available.${canOpenPdf ? " If it fails, use Open PDF to print through the browser." : ""}`,
+    };
+  }
+
+  const message = readiness.reason === "computer_disconnected"
+    ? "The PrintNode computer for packing slips is disconnected. Open PrintNode on that computer and wait for it to reconnect."
+    : readiness.reason === "printer_offline"
+      ? "The packing-slip printer is offline. Turn it on and wait for it to show online in PrintNode."
+      : readiness.reason === "printer_missing"
+        ? "PrintNode cannot find the configured packing-slip printer. Check the fulfillment printer setting."
+        : readiness.reason === "authentication_failed"
+          ? "The saved PrintNode connection needs attention. Check its API key in Netlify."
+          : "The packing-slip printer is not configured in PrintNode.";
+  return {
+    unavailable: true,
+    color: "#ff6b6b",
+    text: `${message}${browserFallback} Use Refresh above to check it again.`,
+  };
+}
+
 function AdminOrdersPage() {
   const navigate = useNavigate();
   const { user, session, isLoggedIn, loading: authLoading } = useAuth();
   const canManageOrders = hasOrderManagerRole(user);
+  const accessToken = session?.access_token || "";
   useRouteMeta("/admin/orders", { revealStaffTitle: !authLoading && canManageOrders });
 
   const [orders, setOrders] = useState([]);
@@ -5081,6 +5124,7 @@ function AdminOrdersPage() {
   const [loadError, setLoadError] = useState("");
   const [actionKey, setActionKey] = useState("");
   const [notice, setNotice] = useState({ type: "", text: "" });
+  const [printNodeReadiness, setPrintNodeReadiness] = useState(null);
   const requestIdRef = useRef(0);
 
   useEffect(() => {
@@ -5122,11 +5166,53 @@ function AdminOrdersPage() {
     }
   }, [searchQuery, session, statusFilter]);
 
+  const fetchPrinterReadiness = useCallback(async ({ signal } = {}) => {
+    if (!canManageOrders || !accessToken) return;
+    try {
+      const res = await fetch("/.netlify/functions/admin-print", {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        signal,
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload.error || `Printer status returned HTTP ${res.status}`);
+      if (!payload?.packing
+          || typeof payload.packing.configured !== "boolean"
+          || (payload.packing.available !== null && typeof payload.packing.available !== "boolean")) {
+        throw new Error("Printer status returned an invalid response.");
+      }
+      setPrintNodeReadiness({ packing: payload.packing, label: payload.label || null });
+    } catch (error) {
+      if (error?.name === "AbortError") return;
+      setPrintNodeReadiness({
+        packing: {
+          configured: null,
+          printerAvailable: null,
+          computerAvailable: null,
+          available: null,
+          reason: "lookup_failed",
+        },
+        label: null,
+      });
+    }
+  }, [accessToken, canManageOrders]);
+
   useEffect(() => {
     if (!canManageOrders || !session?.access_token) return undefined;
     const timer = window.setTimeout(fetchOrders, 0);
     return () => window.clearTimeout(timer);
   }, [canManageOrders, fetchOrders, session?.access_token]);
+
+  useEffect(() => {
+    if (!canManageOrders || !accessToken) return undefined;
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      fetchPrinterReadiness({ signal: controller.signal });
+    }, 0);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [accessToken, canManageOrders, fetchPrinterReadiness]);
 
   function applySearch(event) {
     event.preventDefault();
@@ -5150,6 +5236,7 @@ function AdminOrdersPage() {
     setNotice({ type: "", text: "" });
     setLoading(true);
     fetchOrders();
+    fetchPrinterReadiness();
   }
 
   async function performOrderAction(order, action, options = {}) {
@@ -5238,7 +5325,9 @@ function AdminOrdersPage() {
   }
 
   async function printFulfillment(order) {
-    if (!canPrintFulfillment(order) || !session?.access_token) return;
+    if (!canPrintFulfillment(order)
+        || !session?.access_token
+        || printNodeReadiness?.packing?.available === false) return;
     const key = `${order.id}:print`;
     setActionKey(key);
     setNotice({ type: "", text: "" });
@@ -5253,7 +5342,7 @@ function AdminOrdersPage() {
       await fetchOrders();
       setNotice({
         type: orderEmailNoticeType(payload.notification),
-        text: `${order.order_number}'s packing slip was sent to the printer.${orderEmailNotice(payload.notification)}`,
+        text: `${order.order_number}'s packing slip was queued in PrintNode.${orderEmailNotice(payload.notification)}`,
       });
     } catch (error) {
       setNotice({ type: "error", text: error.message || "The packing slip could not be printed." });
@@ -5388,6 +5477,8 @@ function AdminOrdersPage() {
             const printReady = canPrintFulfillment(order);
             const localHandoffReady = canCompleteLocalHandoff(order);
             const pdfReady = printReady && (!isLocalHandoff(order) || localHandoffReady);
+            const packingPrinterStatus = packingPrinterUiStatus(printNodeReadiness?.packing, pdfReady);
+            const packingPrintReady = printReady && !packingPrinterStatus.unavailable;
             const localEmailMessage = isLocalHandoff(order)
               ? orderEmailStatusMessage(order.trackingEmail)
               : "";
@@ -5545,12 +5636,20 @@ function AdminOrdersPage() {
                               ? "Replace provisional lot IDs in Inventory before printing."
                               : "Confirm payment before printing."}
                       </div>
+                      {printReady && (
+                        <div
+                          role={packingPrinterStatus.unavailable ? "alert" : "status"}
+                          style={{ color: packingPrinterStatus.color, fontFamily: "'Rajdhani', sans-serif", fontSize: 14, marginTop: 5 }}
+                        >
+                          {packingPrinterStatus.text}
+                        </div>
+                      )}
                     </div>
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                       <button type="button" disabled={busy || !pdfReady} onClick={() => openFulfillmentPdf(order)} style={adminSecondaryButton(busy || !pdfReady)}>
                         {actionKey === `${order.id}:pdf` ? "Opening…" : isLocalHandoff(order) ? "Preview PDF" : "Open PDF"}
                       </button>
-                      <button type="button" disabled={busy || !printReady} onClick={() => printFulfillment(order)} style={adminSecondaryButton(busy || !printReady)}>
+                      <button type="button" disabled={busy || !packingPrintReady} onClick={() => printFulfillment(order)} style={adminSecondaryButton(busy || !packingPrintReady)}>
                         {actionKey === `${order.id}:print` ? "Printing…" : "Print Packing Slip"}
                       </button>
                       {canCancelUnpaidOrder(order) && (
