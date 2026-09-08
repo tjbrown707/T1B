@@ -55,6 +55,34 @@ errors and zero warnings.
 
 ---
 
+## Packing-slip printer readiness — 2026-09-08
+
+The 4×6 label printer and Letter packing-slip printer are separate PrintNode
+destinations. A packing-slip incident on September 8 was downstream of the
+website: Netlify generated the PDFs, PrintNode accepted the jobs, and Windows
+spooled them, but the installed Brother HL-L2460DW WSD queue was offline and
+its saved network endpoint was unreachable. The owner asked to retain all four
+queued packing slips; do not clear that queue without a new explicit request.
+
+The admin order page now reads authenticated, redacted PrintNode readiness for
+both printer roles. A definitively missing, offline, disconnected, or
+authentication-failed packing printer disables only **Print Packing Slip** and
+shows an actionable explanation; the server repeats the readiness check after
+validating the order and before generating/submitting the PDF. Transient status
+lookup failures remain fail-open so a monitoring hiccup cannot disable a
+working printer. Successful UI copy says the job was *queued in PrintNode*, not
+physically printed—PrintNode acceptance cannot prove paper output. Printer IDs,
+names, computer details, and credentials never reach the browser.
+
+The regression suite covers the exact split-printer case, definitive offline
+blocking with no print/audit side effects, uncertain status fail-open behavior,
+credential failures, and response redaction. `npm run verify` is green with 191
+tests, all route smoke checks, the production build, bundle-secret scan, and
+site-integrity checks. NCBI verified all 29 retained citations, and both the
+production-only and full npm dependency audits report zero vulnerabilities.
+
+---
+
 ## Remaining security hygiene — 2026-08-26 follow-up
 
 PR #8 merged the receipt outbox, Turnstile, consent controls, and security

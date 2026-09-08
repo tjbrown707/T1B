@@ -7,7 +7,11 @@ import {
   buildLocalHandoffLabelPdf,
 } from "./_shared/local-handoff-label.js";
 import { recordOrderPrintSubmission } from "./_shared/order-processed-email.js";
-import { printNodeConfig, submitPrintNodeJob } from "./_shared/printnode.js";
+import {
+  getPrintNodePrinterReadiness,
+  printNodeConfig,
+  submitPrintNodeJob,
+} from "./_shared/printnode.js";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const METHODS = "GET, POST, OPTIONS";
@@ -27,9 +31,21 @@ export default async function handler(request) {
 
   const config = printNodeConfig();
   if (request.method === "GET") {
+    const [packing, label] = await Promise.all([
+      getPrintNodePrinterReadiness({
+        apiKey: config.apiKey,
+        printerId: config.fulfillmentPrinterId,
+      }),
+      getPrintNodePrinterReadiness({
+        apiKey: config.apiKey,
+        printerId: config.labelPrinterId,
+      }),
+    ]);
     return jsonResponse(200, {
-      fulfillmentConfigured: config.fulfillmentConfigured,
-      labelConfigured: config.labelConfigured,
+      fulfillmentConfigured: packing.configured,
+      labelConfigured: label.configured,
+      packing,
+      label,
     }, METHODS);
   }
 
@@ -71,6 +87,16 @@ async function printFulfillment(auth, orderId, config) {
   const blocked = assertOrderPrintable(order);
   if (blocked) return fail(409, blocked);
 
+  const printerReadiness = await getPrintNodePrinterReadiness({
+    apiKey: config.apiKey,
+    printerId: config.fulfillmentPrinterId,
+  });
+  const unavailableMessage = packingPrinterUnavailableMessage(printerReadiness);
+  if (unavailableMessage) return fail(503, unavailableMessage);
+  if (printerReadiness.available === null) {
+    console.warn(`admin-print: packing printer readiness is ${printerReadiness.reason}; continuing with the print request`);
+  }
+
   try {
     const bytes = await buildFulfillmentPdf(order);
     const jobId = await submitPrintNodeJob({
@@ -86,7 +112,7 @@ async function printFulfillment(auth, orderId, config) {
       actorUserId: auth.user.id,
       jobId,
     });
-    console.info(`admin-print: staff ${auth.user.id} printed fulfillment ${order.order_number} as job ${jobId}`);
+    console.info(`admin-print: staff ${auth.user.id} queued fulfillment ${order.order_number} as job ${jobId}`);
     return jsonResponse(200, { printed: true, jobId, notification }, METHODS);
   } catch (error) {
     console.error("admin-print: fulfillment print failed:", error);
@@ -176,4 +202,21 @@ export const config = {
 
 function fail(status, error) {
   return jsonResponse(status, { error }, METHODS);
+}
+
+export function packingPrinterUnavailableMessage(printerReadiness) {
+  if (printerReadiness.available !== false) return "";
+  if (printerReadiness.reason === "printer_missing") {
+    return "PrintNode cannot find the configured packing-slip printer. Check the fulfillment printer setting, then try again.";
+  }
+  if (printerReadiness.reason === "computer_disconnected") {
+    return "The PrintNode computer for packing slips is disconnected. Open PrintNode on that computer and wait for it to reconnect, then try again.";
+  }
+  if (printerReadiness.reason === "printer_offline") {
+    return "The packing-slip printer is offline. Turn it on and wait for it to show online in PrintNode, then try again.";
+  }
+  if (printerReadiness.reason === "authentication_failed") {
+    return "PrintNode rejected the saved API key. Update PRINTNODE_API_KEY in Netlify before trying again.";
+  }
+  return "The packing-slip printer is not configured yet.";
 }
