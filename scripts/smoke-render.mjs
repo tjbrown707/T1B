@@ -7,6 +7,7 @@ import { JSDOM, VirtualConsole } from "jsdom";
 import { readFileSync } from "node:fs";
 import { SITE_NAME } from "../src/data/site.js";
 import { PRODUCTS } from "../src/data/catalog.js";
+import { requiresLogin } from "../src/data/access.js";
 
 // Inside node_modules so the throwaway bundle is never committed and never
 // collides with the real dist/.
@@ -39,13 +40,21 @@ const PRODUCT_REFERENCE_LABELS = [
 ];
 
 const ROUTES = [
-  { path: "/", expect: "Tier One" },
-  { path: "/products", expect: "BPC-157" },
+  { path: "/", expect: "SIGN IN TO VIEW PRODUCTS", forbidBody: ["FEATURED COMPOUNDS", "ADD TO CART"] },
+  { path: "/", expect: "FEATURED COMPOUNDS", signedIn: true },
+  { path: "/products", expect: "BPC-157", signedIn: true },
   ...PRODUCTS.map(product => ({
     path: `/product/${product.id}`,
     expect: product.name,
     requireBody: ["RESEARCH PROFILE"],
     forbidBody: PRODUCT_REFERENCE_LABELS,
+    signedIn: true,
+  })),
+  ...["/products", ...PRODUCTS.map(p => `/product/${p.id}`), "/lab-results", "/cart", "/calculator", "/checkout"].map(path => ({
+    path,
+    expect: "SIGN IN",
+    exerciseLogin: path === "/product/bpc157-10",
+    forbidBody: ["RESEARCH PROFILE", "ADD TO CART", "CERTIFICATES OF ANALYSIS", "Aliquot", "Continue as guest", ...PRODUCTS.map(p => p.name)],
   })),
   {
     path: "/research",
@@ -59,9 +68,14 @@ const ROUTES = [
     expectHeadRobots: "noindex, follow",
     forbidHead: ["BPC-157: Mechanism of Action"],
   },
-  { path: "/lab-results", expect: "CERTIFICATES OF ANALYSIS" },
-  { path: "/cart", expect: "Your cart is empty" },
-  { path: "/calculator", expect: "Aliquot" },                 // relabelled calculator
+  { path: "/lab-results", expect: "CERTIFICATES OF ANALYSIS", signedIn: true },
+  { path: "/cart", expect: "Your cart is empty", signedIn: true },
+  { path: "/calculator", expect: "Aliquot", signedIn: true },
+  { path: "/signup?redirect=%2Fproducts", expect: "CREATE ACCOUNT" },
+  { path: "/reset-password", expect: "SET NEW PASSWORD" },
+  { path: "/contact", expect: "Contact Us" },
+  { path: "/privacy", expect: "Privacy" },
+  { path: "/terms", expect: "Terms" },
   { path: "/login", expect: "Sign" },
   // Signed out, so this asserts the protected staff route reaches the normal
   // sign-in screen rather than throwing or leaking an order list.
@@ -98,6 +112,8 @@ for (const {
   forbidHead = [],
   forbidBody = [],
   requireBody = [],
+  signedIn = false,
+  exerciseLogin = false,
 } of ROUTES) {
   const errors = [];
   const forbiddenHeadHits = new Set();
@@ -113,6 +129,24 @@ for (const {
     { url: `https://www.tierone.bio${route}`, runScripts: "outside-only", pretendToBeVisual: true, virtualConsole }
   );
   const { window } = dom;
+  const fixtureUser = { id: "11111111-1111-4111-8111-111111111111", email: "researcher@example.com", role: "authenticated", app_metadata: {}, user_metadata: {}, email_confirmed_at: "2026-01-01T00:00:00Z" };
+  const fixtureSession = {
+    access_token: "smoke-access-token", refresh_token: "smoke-refresh-token", token_type: "bearer",
+    expires_at: Math.floor(Date.now() / 1000) + 3600, expires_in: 3600, user: fixtureUser,
+  };
+  if (signedIn) {
+    window.localStorage.setItem("sb-nmafhetkofrekabqawgb-auth-token", JSON.stringify(fixtureSession));
+  }
+  if (exerciseLogin) window.localStorage.setItem("t1b-cart", JSON.stringify([{ id: "bpc157-10", qty: 2 }]));
+  window.fetch = async url => new Response(JSON.stringify(
+    String(url).includes("/token") ? fixtureSession : String(url).includes("/orders") ? [] : {}
+  ), { status: 200, headers: { "Content-Type": "application/json" } });
+  const transientBodyHits = new Set();
+  const bodyObserver = new window.MutationObserver(() => {
+    const bodyText = window.document.getElementById("root")?.textContent || "";
+    for (const term of forbidBody) if (bodyText.includes(term)) transientBodyHits.add(term);
+  });
+  bodyObserver.observe(window.document.body, { subtree: true, childList: true, characterData: true });
 
   const recordForbiddenHeadValue = value => {
     forbidHead.filter(term => String(value).includes(term)).forEach(term => forbiddenHeadHits.add(term));
@@ -224,7 +258,13 @@ for (const {
 
 
   const dismissed = afterDismiss.length > 0 && !afterDismiss.includes("AGE VERIFICATION");
-  const forbiddenBodyHits = forbidBody.filter(term => text.includes(term) || afterDismiss.includes(term));
+  bodyObserver.disconnect();
+  const forbiddenBodyHits = forbidBody.filter(term => text.includes(term) || afterDismiss.includes(term) || transientBodyHits.has(term));
+  if (!signedIn && requiresLogin(route) && !route.startsWith("/research")) {
+    if (window.location.pathname !== "/login" || new URLSearchParams(window.location.search).get("redirect") !== route) {
+      errors.push("Protected URL did not preserve its destination through sign-in");
+    }
+  }
   const missingBodyTerms = requireBody.filter(term => !afterDismiss.includes(term));
   inspectHead();
   headObserver.disconnect();
@@ -234,11 +274,36 @@ for (const {
   const privateRobotsClean = !expectHeadRobots
     || [...adminRobotsHistory].every(value => value === expectHeadRobots);
   const publicBodyClean = forbiddenBodyHits.length === 0 && missingBodyTerms.length === 0;
+  if (exerciseLogin) {
+    try {
+      const setInput = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
+      for (const [id, value] of [["auth-email", fixtureUser.email], ["auth-password", "mock-password-only"]]) {
+        const input = window.document.getElementById(id);
+        setInput.call(input, value);
+        input.dispatchEvent(new window.Event("input", { bubbles: true }));
+      }
+      window.document.querySelector("form").dispatchEvent(new window.Event("submit", { bubbles: true, cancelable: true }));
+      await new Promise(resolve => setTimeout(resolve, 250));
+      if (window.location.pathname !== route || !root.textContent.includes("RESEARCH PROFILE")) errors.push("Successful sign-in did not return to the requested product");
+      window.history.pushState(null, "", "/account");
+      window.dispatchEvent(new window.PopStateEvent("popstate"));
+      await new Promise(resolve => setTimeout(resolve, 120));
+      const signOut = [...window.document.querySelectorAll("button")].find(button => button.textContent === "Sign Out");
+      if (!signOut) throw new Error("Sign Out button was not available");
+      signOut.click();
+      await new Promise(resolve => setTimeout(resolve, 150));
+      window.history.pushState(null, "", route);
+      window.dispatchEvent(new window.PopStateEvent("popstate"));
+      await new Promise(resolve => setTimeout(resolve, 120));
+      if (window.location.pathname !== "/login" || root.textContent.includes("RESEARCH PROFILE")) errors.push("Signing out failed to close the product gate");
+      if (JSON.parse(window.localStorage.getItem("t1b-cart"))[0]?.qty !== 2) errors.push("Sign-in/sign-out lost the saved cart");
+    } catch (error) { errors.push(`Login journey: ${error.message}`); }
+  }
   const ok = hasContent && gateShowing && dismissed && heroFillsDesktop && privateHeadClean && publicBodyClean && expectedHeadSeen && expectedRobotsSeen && privateRobotsClean && errors.length === 0;
   if (!ok) failures++;
 
   console.log(
-    `${ok ? "PASS" : "FAIL"}  ${route.padEnd(38)} ` +
+    `${ok ? "PASS" : "FAIL"}  ${route.padEnd(38)} ${signedIn ? "signed-in " : "signed-out "}` +
     `content:${hasContent ? "y" : "N"} gate:${gateShowing ? "y" : "N"} dismissed:${dismissed ? "y" : "N"} ` +
     `head:${privateHeadClean && expectedHeadSeen && expectedRobotsSeen && privateRobotsClean ? "y" : "N"} ` +
     `${text.length}→${afterDismiss.length} chars`

@@ -50,7 +50,7 @@ test("all staff routes use empty application shells and stay out of the sitemap"
     assert.equal(routeMeta(path).noindex, true);
     assert.ok(!sitemapRoutes().some(route => route.path === path));
   }
-  assert.ok(!routeMeta("/products").staffOnly, "public catalog must keep its crawlable snapshot");
+  assert.ok(!routeMeta("/products").staffOnly, "catalog access must not require a staff role");
 });
 
 test("the sitemap contains no noindex page", () => {
@@ -59,11 +59,19 @@ test("the sitemap contains no noindex page", () => {
   }
 });
 
-test("the sitemap contains every indexable route and every product", () => {
+test("the sitemap keeps public pages and excludes gated products and resources", () => {
   const listed = new Set(sitemapRoutes().map(r => r.path));
   assert.ok(listed.has("/"));
   for (const product of PRODUCTS) {
-    assert.ok(listed.has(`/product/${product.id}`), `${product.id} missing from the sitemap`);
+    assert.ok(!listed.has(`/product/${product.id}`), `${product.id} must require sign-in`);
+  }
+  for (const path of ["/products", "/lab-results", "/calculator", "/cart", "/research"]) {
+    assert.equal(routeMeta(path).loginRequired, true);
+    assert.ok(!listed.has(path));
+  }
+  for (const route of allRoutes().filter(route => route.product)) {
+    assert.equal(route.loginRequired, true);
+    assert.equal(route.noindex, true);
   }
 });
 

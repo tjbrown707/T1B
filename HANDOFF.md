@@ -1,7 +1,42 @@
 # Handoff — pick up here
 
-Written 2026-08-07, updated 2026-09-07. Read this before starting work; it
+Written 2026-08-07, updated 2026-09-09. Read this before starting work; it
 records state that is not obvious from the code or the git log.
+
+---
+
+## Catalog login gate — implemented 2026-09-09
+
+The owner requested login before viewing products and research. `/products`,
+`/product/:id`, `/lab-results`, `/calculator`, `/cart`, and `/checkout` now
+require an existing Supabase account session. The public homepage replaces
+featured products with sign-in/create-account links. Account creation, password
+recovery, contact, company information, and policies remain available. Direct
+links preserve their destination through login/signup, and signing out closes
+the gate without deleting the saved cart. The existing age gate remains.
+
+The research library and product references remain disabled. The dormant
+research routes are also inside the login boundary if the owner later restores
+them. No research content or navigation has been re-enabled.
+
+Guest checkout is removed. `create-order` requires a server-verified Supabase
+user and refuses absent/invalid/expired/anonymous sessions before creating an
+order or sending email. No database migration, new secret, or dashboard setting
+is required. Prerendered catalog/resource pages contain only a generic noindex
+sign-in prompt, with no product metadata, prices, or structured data; the
+sitemap now contains only 10 public informational URLs.
+
+Scope: this is a storefront browsing gate plus server-enforced order login,
+not researcher qualification or a legal-compliance certification. Catalog data
+and static assets still ship in the client application and public repository;
+this change does not make that source material confidential. Truly private
+content would require a separate authenticated data/asset delivery design.
+
+Local verification passed: 194 tests, signed-in and signed-out route smoke
+checks (including the complete login/logout/cart-retention journey), production
+build, secret scan, site integrity, and lint with unrelated `.codex-worktrees/`
+and `outputs/` archives excluded. Desktop and 390-pixel mobile sign-in layouts
+were visually inspected. Deployment follows the required PR + `verify` workflow.
 
 ---
 

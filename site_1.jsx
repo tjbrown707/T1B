@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useCallback, lazy, Suspense } from "react";
-import { Routes, Route, Navigate, useNavigate, useLocation, useParams, useSearchParams } from "react-router-dom";
+import { Routes, Route, Navigate, Outlet, Link, useNavigate, useLocation, useParams, useSearchParams } from "react-router-dom";
 import { supabase } from "./supabaseClient";
 import { useAuth } from "./src/AuthContext.jsx";
+import { loginUrl, safeReturnPath, requiresLogin } from "./src/data/access.js";
 
 // ─── Data ────────────────────────────────────────────────────────────────────
 // The catalog, the lab summaries and the article metadata are plain data and
@@ -457,7 +458,7 @@ function getArticleBySlug(slug) {
 }
 
 // ─── Scroll Reveal Hook ──────────────────────────────────────────────────────
-function useScrollReveal() {
+function useScrollReveal(contentKey = null) {
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
@@ -472,7 +473,7 @@ function useScrollReveal() {
     );
     document.querySelectorAll(".scroll-reveal").forEach((el) => observer.observe(el));
     return () => observer.disconnect();
-  }, []);
+  }, [contentKey]);
 }
 
 // ─── Animated Count-Up Component ─────────────────────────────────────────────
@@ -2791,7 +2792,6 @@ function CartPage({ cart, setCart }) {
   const navigate = useNavigate();
   const { user, profile, isLoggedIn } = useAuth();
   const [step, setStep] = useState("cart"); // cart, info, payment, confirmed
-  const [guestMode, setGuestMode] = useState(false); // customer chose to skip creating an account
   const [customerInfo, setCustomerInfo] = useState({
     name: "", email: "", phone: "", address: "", city: "", state: "", zip: "",
   });
@@ -3009,6 +3009,11 @@ function CartPage({ cart, setCart }) {
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData?.session?.access_token;
+
+      if (!accessToken) {
+        navigate(loginUrl("/cart"));
+        throw new Error("Please sign in again to place your order.");
+      }
 
       const res = await fetch("/.netlify/functions/create-order", {
         method: "POST",
@@ -4193,7 +4198,7 @@ function CartPage({ cart, setCart }) {
             }}>${total.toFixed(2)}</span>
           </div>
 
-          {/* Account gate — encourage sign-in for order tracking, allow guest fallback */}
+          {/* Signed-in customer details */}
           {isLoggedIn ? (
             <div style={{
               display: "flex",
@@ -4209,79 +4214,9 @@ function CartPage({ cart, setCart }) {
                 Signed in as <strong style={{ color: "var(--text-primary)" }}>{user.email}</strong> — your shipping details are pre-filled and this order will be saved to your account.
               </span>
             </div>
-          ) : !guestMode ? (
-            <div style={{
-              padding: "20px 22px",
-              marginBottom: 16,
-              border: "1px solid rgba(196,30,42,0.3)",
-              background: "rgba(196,30,42,0.04)",
-            }}>
-              <div style={{
-                fontFamily: "'Orbitron', sans-serif",
-                fontSize: 13,
-                fontWeight: 700,
-                letterSpacing: "0.12em",
-                textTransform: "uppercase",
-                color: "var(--text-primary)",
-                marginBottom: 8,
-              }}>Track your order</div>
-              <p style={{
-                fontFamily: "'Rajdhani', sans-serif",
-                fontSize: 15,
-                color: "var(--text-secondary)",
-                lineHeight: 1.5,
-                margin: "0 0 16px",
-              }}>Sign in or create an account to save your shipping info and view your full order history. It only takes a moment.</p>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
-                <button onClick={() => navigate("/login?redirect=/cart")} style={{
-                  padding: "14px 0",
-                  background: "var(--red-primary)",
-                  border: "1px solid var(--red-primary)",
-                  color: "#fff",
-                  fontFamily: "'Orbitron', sans-serif",
-                  fontWeight: 700,
-                  fontSize: 12,
-                  letterSpacing: "0.12em",
-                  textTransform: "uppercase",
-                  cursor: "pointer",
-                  transition: "all 0.2s",
-                }}
-                  onMouseEnter={e => { e.target.style.background = "transparent"; e.target.style.color = "var(--red-primary)"; }}
-                  onMouseLeave={e => { e.target.style.background = "var(--red-primary)"; e.target.style.color = "#fff"; }}
-                >Sign In</button>
-                <button onClick={() => navigate("/signup?redirect=/cart")} style={{
-                  padding: "14px 0",
-                  background: "transparent",
-                  border: "1px solid var(--red-primary)",
-                  color: "var(--red-primary)",
-                  fontFamily: "'Orbitron', sans-serif",
-                  fontWeight: 700,
-                  fontSize: 12,
-                  letterSpacing: "0.12em",
-                  textTransform: "uppercase",
-                  cursor: "pointer",
-                  transition: "all 0.2s",
-                }}
-                  onMouseEnter={e => { e.target.style.background = "var(--red-primary)"; e.target.style.color = "#fff"; }}
-                  onMouseLeave={e => { e.target.style.background = "transparent"; e.target.style.color = "var(--red-primary)"; }}
-                >Create Account</button>
-              </div>
-              <button onClick={() => setGuestMode(true)} style={{
-                width: "100%",
-                background: "transparent",
-                border: "none",
-                color: "var(--text-dim)",
-                fontFamily: "'Rajdhani', sans-serif",
-                fontSize: 14,
-                fontWeight: 600,
-                cursor: "pointer",
-                textDecoration: "underline",
-                textUnderlineOffset: 3,
-              }}>Continue as guest →</button>
-            </div>
           ) : null}
 
-          {(isLoggedIn || guestMode) && (
+          {isLoggedIn && (
             <button onClick={startCustomerInfo} style={{
               width: "100%",
               padding: "16px 0",
@@ -4750,7 +4685,7 @@ function AuthPage() {
   // Only allow same-site paths. A value like "//evil.com" or "https://evil.com"
   // would otherwise send a just-authenticated customer off to a phishing page.
   const rawRedirect = searchParams.get("redirect") || "/account";
-  const redirectTo = /^\/(?!\/)/.test(rawRedirect) ? rawRedirect : "/account";
+  const redirectTo = safeReturnPath(rawRedirect);
   useRouteMeta(isSignup ? "/signup" : "/login");
 
   const [fullName, setFullName] = useState("");
@@ -4781,7 +4716,7 @@ function AuthPage() {
   // Already signed in → skip straight to the intended destination.
   useEffect(() => {
     if (!authLoading && isLoggedIn) navigate(redirectTo, { replace: true });
-  }, [authLoading, isLoggedIn]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [authLoading, isLoggedIn, navigate, redirectTo]);
 
   // Turn a raw auth error into something a customer can actually read.
   function cleanAuthError(err) {
@@ -4880,6 +4815,11 @@ function AuthPage() {
           fontSize: 28,
           color: "var(--text-primary)",
         }}>{isSignup ? "CREATE ACCOUNT" : "SIGN IN"}</h2>
+        {requiresLogin(redirectTo) && (
+          <p style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 17, color: "var(--text-secondary)", lineHeight: 1.6, marginTop: 16 }}>
+            Sign in or create an account to view our catalog, product details, and laboratory resources. After signing in, you’ll return to the page you requested.
+          </p>
+        )}
       </div>
 
       <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 18 }}>
@@ -4887,55 +4827,55 @@ function AuthPage() {
           <>
             {/* Mirrors the checkout shipping form so the experience stays consistent */}
             <div>
-              <label style={AUTH_LABEL_STYLE}>Full Name *</label>
-              <input type="text" required value={fullName} onChange={e => setFullName(e.target.value)} style={AUTH_INPUT_STYLE} placeholder="John Doe" autoComplete="name" />
+              <label htmlFor="auth-fullName" style={AUTH_LABEL_STYLE}>Full Name *</label>
+              <input type="text" id="auth-fullName" required value={fullName} onChange={e => setFullName(e.target.value)} style={AUTH_INPUT_STYLE} placeholder="John Doe" autoComplete="name" />
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 18 }}>
               <div>
-                <label style={AUTH_LABEL_STYLE}>Email *</label>
-                <input type="email" required value={email} onChange={e => setEmail(e.target.value)} style={AUTH_INPUT_STYLE} placeholder="john@example.com" autoComplete="email" />
+                <label htmlFor="auth-email" style={AUTH_LABEL_STYLE}>Email *</label>
+                <input type="email" id="auth-email" required value={email} onChange={e => setEmail(e.target.value)} style={AUTH_INPUT_STYLE} placeholder="john@example.com" autoComplete="email" />
               </div>
               <div>
-                <label style={AUTH_LABEL_STYLE}>Phone *</label>
-                <input type="tel" required value={phone} onChange={e => setPhone(e.target.value)} style={AUTH_INPUT_STYLE} placeholder="(555) 123-4567" autoComplete="tel" />
+                <label htmlFor="auth-phone" style={AUTH_LABEL_STYLE}>Phone *</label>
+                <input type="tel" id="auth-phone" required value={phone} onChange={e => setPhone(e.target.value)} style={AUTH_INPUT_STYLE} placeholder="(555) 123-4567" autoComplete="tel" />
               </div>
             </div>
 
             <div>
-              <label style={AUTH_LABEL_STYLE}>Password *</label>
-              <input type="password" required value={password} onChange={e => setPassword(e.target.value)} style={AUTH_INPUT_STYLE} placeholder="At least 10 characters" autoComplete="new-password" />
+              <label htmlFor="auth-password" style={AUTH_LABEL_STYLE}>Password *</label>
+              <input type="password" id="auth-password" required value={password} onChange={e => setPassword(e.target.value)} style={AUTH_INPUT_STYLE} placeholder="At least 10 characters" autoComplete="new-password" />
             </div>
 
             <div>
-              <label style={AUTH_LABEL_STYLE}>Street Address *</label>
-              <input type="text" required value={address} onChange={e => setAddress(e.target.value)} style={AUTH_INPUT_STYLE} placeholder="123 Main St, Apt 4" autoComplete="street-address" />
+              <label htmlFor="auth-address" style={AUTH_LABEL_STYLE}>Street Address *</label>
+              <input type="text" id="auth-address" required value={address} onChange={e => setAddress(e.target.value)} style={AUTH_INPUT_STYLE} placeholder="123 Main St, Apt 4" autoComplete="street-address" />
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: 18 }}>
               <div>
-                <label style={AUTH_LABEL_STYLE}>City *</label>
-                <input type="text" required value={city} onChange={e => setCity(e.target.value)} style={AUTH_INPUT_STYLE} placeholder="Austin" autoComplete="address-level2" />
+                <label htmlFor="auth-city" style={AUTH_LABEL_STYLE}>City *</label>
+                <input type="text" id="auth-city" required value={city} onChange={e => setCity(e.target.value)} style={AUTH_INPUT_STYLE} placeholder="Austin" autoComplete="address-level2" />
               </div>
               <div>
-                <label style={AUTH_LABEL_STYLE}>State *</label>
-                <input type="text" required value={stateField} onChange={e => setStateField(e.target.value)} style={AUTH_INPUT_STYLE} placeholder="TX" autoComplete="address-level1" />
+                <label htmlFor="auth-stateField" style={AUTH_LABEL_STYLE}>State *</label>
+                <input type="text" id="auth-stateField" required value={stateField} onChange={e => setStateField(e.target.value)} style={AUTH_INPUT_STYLE} placeholder="TX" autoComplete="address-level1" />
               </div>
               <div>
-                <label style={AUTH_LABEL_STYLE}>Zip Code *</label>
-                <input type="text" required value={zip} onChange={e => setZip(e.target.value)} style={AUTH_INPUT_STYLE} placeholder="78701" autoComplete="postal-code" />
+                <label htmlFor="auth-zip" style={AUTH_LABEL_STYLE}>Zip Code *</label>
+                <input type="text" id="auth-zip" required value={zip} onChange={e => setZip(e.target.value)} style={AUTH_INPUT_STYLE} placeholder="78701" autoComplete="postal-code" />
               </div>
             </div>
           </>
         ) : (
           <>
             <div>
-              <label style={AUTH_LABEL_STYLE}>Email *</label>
-              <input type="email" required value={email} onChange={e => setEmail(e.target.value)} style={AUTH_INPUT_STYLE} placeholder="john@example.com" autoComplete="email" />
+              <label htmlFor="auth-email" style={AUTH_LABEL_STYLE}>Email *</label>
+              <input type="email" id="auth-email" required value={email} onChange={e => setEmail(e.target.value)} style={AUTH_INPUT_STYLE} placeholder="john@example.com" autoComplete="email" />
             </div>
             <div>
-              <label style={AUTH_LABEL_STYLE}>Password *</label>
-              <input type="password" required value={password} onChange={e => setPassword(e.target.value)} style={AUTH_INPUT_STYLE} placeholder="Your password" autoComplete="current-password" />
+              <label htmlFor="auth-password" style={AUTH_LABEL_STYLE}>Password *</label>
+              <input type="password" id="auth-password" required value={password} onChange={e => setPassword(e.target.value)} style={AUTH_INPUT_STYLE} placeholder="Your password" autoComplete="current-password" />
               <button type="button" onClick={handlePasswordReset} disabled={resetting} style={{ background: "none", border: 0, padding: "8px 0 0", color: "var(--red-primary)", fontFamily: "'Rajdhani', sans-serif", fontSize: 14, fontWeight: 600, cursor: resetting ? "not-allowed" : "pointer", textDecoration: "underline", textUnderlineOffset: 3 }}>
                 {resetting ? "Sending reset link…" : "Forgot your password?"}
               </button>
@@ -5002,10 +4942,14 @@ function AuthPage() {
 
       <div style={{ textAlign: "center", marginTop: 24, fontFamily: "'Rajdhani', sans-serif", fontSize: 15, color: "var(--text-secondary)" }}>
         {isSignup ? "Already have an account? " : "Don't have an account? "}
-        <span onClick={() => navigate(otherPath)} style={{ color: "var(--red-primary)", cursor: "pointer", fontWeight: 600, textDecoration: "underline", textUnderlineOffset: 3 }}>
+        <Link to={otherPath} style={{ color: "var(--red-primary)", fontWeight: 600, textDecoration: "underline", textUnderlineOffset: 3 }}>
           {isSignup ? "Sign in" : "Create one"}
-        </span>
+        </Link>
       </div>
+      <p style={{ textAlign: "center", marginTop: 20, fontSize: 15, color: "var(--text-secondary)" }}>
+        <Link to="/terms" style={{ color: "inherit" }}>Terms of Service</Link>{" · "}
+        <Link to="/privacy" style={{ color: "inherit" }}>Privacy Policy</Link>
+      </p>
     </div>
   );
 }
@@ -7197,7 +7141,7 @@ function ArticlePage() {
   usePageMeta(
     meta ? meta.title : "Article Not Found",
     meta ? meta.description : "",
-    { image: meta?.image, imageAlt: meta?.imageAlt, type: "article", noindex: !article }
+    { image: meta?.image, imageAlt: meta?.imageAlt, type: "article", noindex: true }
   );
   // Same graph the prerenderer bakes into this page's HTML, plus the breadcrumb
   // trail that was missing before.
@@ -7464,14 +7408,15 @@ const FEATURED_IDS = ["glp3rt-10", "tesamorelin", "bpc157-10", "tb500", "klow", 
 
 function HomePage({ onAddToCart, onSelectProduct, ageVerified }) {
   const navigate = useNavigate();
+  const { isLoggedIn, loading } = useAuth();
   const featuredProducts = FEATURED_IDS.map(id => PRODUCTS.find(p => p.id === id)).filter(Boolean);
   useRouteMeta("/");
-  useScrollReveal();
+  useScrollReveal(isLoggedIn && !loading);
   return (<>
     <Hero statsActive={ageVerified} />
 
     {/* Featured Products */}
-    <section className="scroll-reveal" style={{ maxWidth: 1400, margin: "0 auto", padding: "44px 24px 60px" }}>
+    {isLoggedIn && !loading ? <section className="scroll-reveal" style={{ maxWidth: 1400, margin: "0 auto", padding: "44px 24px 60px" }}>
       <div style={{ textAlign: "center", marginBottom: 40 }}>
         <div style={{
           fontFamily: "'Orbitron', sans-serif",
@@ -7523,11 +7468,39 @@ function HomePage({ onAddToCart, onSelectProduct, ageVerified }) {
           onMouseLeave={e => { e.target.style.background = "transparent"; e.target.style.color = "var(--red-primary)"; }}
         >VIEW ALL PRODUCTS</button>
       </div>
-    </section>
+    </section> : <CatalogLoginPrompt />}
 
     <Footer />
   </>);
 };
+
+function CatalogLoginPrompt() {
+  return (
+    <section style={{ maxWidth: 760, margin: "0 auto", padding: "60px 24px", textAlign: "center" }}>
+      <h2 style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 24 }}>SIGN IN TO VIEW PRODUCTS</h2>
+      <p style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 18, lineHeight: 1.6, color: "var(--text-secondary)", margin: "20px 0 28px" }}>
+        Our catalog and laboratory resources are available to account holders. Products are for laboratory research use only, not for human or animal consumption.
+      </p>
+      <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 16 }}>
+        <Link to={loginUrl("/products")} style={{ background: "var(--red-primary)", color: "#fff", padding: "16px 28px", textDecoration: "none", fontFamily: "'Orbitron', sans-serif", fontSize: 13 }}>SIGN IN</Link>
+        <Link to="/signup?redirect=%2Fproducts" style={{ border: "1px solid var(--red-primary)", color: "var(--red-primary)", padding: "16px 28px", textDecoration: "none", fontFamily: "'Orbitron', sans-serif", fontSize: 13 }}>CREATE ACCOUNT</Link>
+      </div>
+    </section>
+  );
+}
+
+function LoginLoading() {
+  useRouteMeta("/login");
+  return <div role="status" style={{ padding: "140px 24px", textAlign: "center" }}>Checking your sign-in…</div>;
+}
+
+function RequireLogin() {
+  const { isLoggedIn, loading } = useAuth();
+  const location = useLocation();
+  if (loading) return <LoginLoading />;
+  if (!isLoggedIn) return <Navigate to={loginUrl(`${location.pathname}${location.search}${location.hash}`)} replace />;
+  return <Outlet />;
+}
 
 // Full Products Page
 function ProductsPage({ searchQuery, setSearchQuery, onAddToCart, onSelectProduct }) {
@@ -7629,7 +7602,7 @@ function ProductPage({ onAddToCart }) {
       imageAlt: meta?.imageAlt,
       imageWidth: meta?.imageWidth,
       imageHeight: meta?.imageHeight,
-      noindex: !product,
+      noindex: true,
     }
   );
   // Product schema for crawlers that DO run JavaScript. The prerendered HTML
@@ -7872,6 +7845,7 @@ function ProductPage({ onAddToCart }) {
 };
 
 export default function App() {
+  const { isLoggedIn, loading: authLoading } = useAuth();
   const [ageVerified, setAgeVerified] = useState(() => {
     try { return sessionStorage.getItem("ageVerified") === "true"; }
     catch { return false; }
@@ -7910,6 +7884,10 @@ export default function App() {
   }, [navigate]);
 
   function addToCart(product) {
+    if (authLoading || !isLoggedIn) {
+      navigate(loginUrl(`/product/${product.id}`));
+      return;
+    }
     setCart(prev => {
       const existing = prev.find(item => item.id === product.id);
       if (existing) {
@@ -7987,8 +7965,8 @@ export default function App() {
       )}
       <div inert={!ageVerified ? true : undefined}>
       <Header cartCount={cart.reduce((sum, i) => sum + i.qty, 0)} />
-      <CartPopup cart={cart} visible={cartPopupVisible} onClose={() => setCartPopupVisible(false)} />
-      {selectedProduct && (
+      {isLoggedIn && !authLoading && <CartPopup cart={cart} visible={cartPopupVisible} onClose={() => setCartPopupVisible(false)} />}
+      {isLoggedIn && !authLoading && selectedProduct && (
         <ProductQuickView
           product={selectedProduct}
           onClose={() => setSelectedProduct(null)}
@@ -7998,15 +7976,17 @@ export default function App() {
       )}
       <Routes>
         <Route path="/" element={<HomePage onAddToCart={addToCart} onSelectProduct={setSelectedProduct} ageVerified={ageVerified} />} />
+        <Route element={<RequireLogin />}>
         <Route path="/products" element={<ProductsPage searchQuery={searchQuery} setSearchQuery={setSearchQuery} onAddToCart={addToCart} onSelectProduct={setSelectedProduct} />} />
         <Route path="/product/:id" element={<ProductPage onAddToCart={addToCart} />} />
         <Route path="/calculator" element={<PeptideCalculator />} />
         {RESEARCH_LIBRARY_ENABLED && <Route path="/research" element={<ResearchPage />} />}
         {RESEARCH_LIBRARY_ENABLED && <Route path="/research/:slug" element={<ArticlePage />} />}
-        <Route path="/contact" element={<ContactPage />} />
         <Route path="/lab-results" element={<LabResultsPage />} />
         <Route path="/cart" element={<CartPage cart={cart} setCart={setCart} />} />
         <Route path="/checkout" element={<Navigate to="/cart" replace />} />
+        </Route>
+        <Route path="/contact" element={<ContactPage />} />
         <Route path="/login" element={<AuthPage />} />
         <Route path="/signup" element={<AuthPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />

@@ -175,12 +175,16 @@ test("verified checkout saves once, queues the receipt, and preserves the staff 
   const resendRecipients = [];
   let delivery = null;
   const supabase = {
-    auth: { getUser: async () => ({ data: { user: null }, error: null }) },
+    auth: { getUser: async (token) => {
+      assert.equal(token, "customer-token");
+      return { data: { user: { id: "customer-1" } }, error: null };
+    } },
     from() {
       throw new Error("discount lookup should not run without a code");
     },
     async rpc(name, args) {
       if (name === "create_order_transaction") {
+        assert.equal(args.order_payload.user_id, "customer-1");
         createCalls += 1;
         return {
           data: { id: orderId, ...args.order_payload },
@@ -243,7 +247,7 @@ test("verified checkout saves once, queues the receipt, and preserves the staff 
   try {
     const response = await handler(new Request("https://www.tierone.bio/.netlify/functions/create-order", {
       method: "POST",
-      headers: { "Content-Type": "application/json", Origin: "https://www.tierone.bio" },
+      headers: { "Content-Type": "application/json", Origin: "https://www.tierone.bio", Authorization: "Bearer customer-token" },
       body: JSON.stringify(validRequest({ paymentMethod: "zelle", discountCodes: [] })),
     }));
     const payload = await response.json();
@@ -253,6 +257,46 @@ test("verified checkout saves once, queues the receipt, and preserves the staff 
     assert.equal(createCalls, 1);
     assert.equal(delivery.status, "SENT");
     assert.deepEqual(resendRecipients.sort(), ["researcher@example.com", "sales@tierone.bio"]);
+  } finally {
+    if (previousNetlify === undefined) delete globalThis.Netlify;
+    else globalThis.Netlify = previousNetlify;
+  }
+});
+
+test("checkout rejects absent, invalid, expired, and anonymous sessions without creating orders or sending email", async () => {
+  const previousNetlify = globalThis.Netlify;
+  globalThis.Netlify = { env: { get: name => ({
+    SUPABASE_URL: "https://example.supabase.co",
+    SUPABASE_SERVICE_ROLE_KEY: "test-only",
+    TURNSTILE_SECRET_KEY: "test-only",
+  })[name] } };
+  try {
+    for (const scenario of ["absent", "invalid", "expired", "anonymous", "unavailable"]) {
+      let authCalls = 0;
+      const handler = createOrderHandler({
+        createClient: () => ({
+          auth: { getUser: async () => {
+            authCalls++;
+            if (scenario === "unavailable") throw new Error("offline");
+            if (scenario === "anonymous") return { data: { user: { id: "anon-1", is_anonymous: true } } };
+            return { data: { user: null }, error: { message: scenario } };
+          } },
+          rpc: () => { throw new Error("Unauthenticated order reached the database"); },
+          from: () => { throw new Error("Unauthenticated order reached the database"); },
+        }),
+        fetchImpl: async url => {
+          assert.ok(String(url).includes("siteverify"), "Unauthenticated checkout must never send mail");
+          return new Response(JSON.stringify({ success: true }), { status: 200 });
+        },
+      });
+      const response = await handler(new Request("https://www.tierone.bio/.netlify/functions/create-order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(scenario === "absent" ? {} : { Authorization: `Bearer ${scenario}` }) },
+        body: JSON.stringify(validRequest({ discountCodes: [] })),
+      }));
+      assert.equal(response.status, scenario === "unavailable" ? 503 : 401, scenario);
+      assert.equal(authCalls, scenario === "absent" ? 0 : 1);
+    }
   } finally {
     if (previousNetlify === undefined) delete globalThis.Netlify;
     else globalThis.Netlify = previousNetlify;
