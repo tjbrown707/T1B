@@ -118,7 +118,7 @@ export async function getPrintNodePrinterReadiness({
   });
 }
 
-export async function submitPrintNodeJob({ printerId, title, contentType, content }) {
+export async function submitPrintNodeJob({ printerId, title, contentType, content, idempotencyKey }) {
   const apiKey = normaliseApiKey(printNodeConfig().apiKey);
   if (!apiKey || !positiveInteger(printerId)) throw new Error("PrintNode is not configured.");
   if (!["pdf_base64", "pdf_uri"].includes(contentType)) throw new Error("Unsupported print content.");
@@ -128,6 +128,7 @@ export async function submitPrintNodeJob({ printerId, title, contentType, conten
     headers: {
       Authorization: `Basic ${Buffer.from(`${apiKey}:`).toString("base64")}`,
       "Content-Type": "application/json",
+      ...(idempotencyKey ? { "X-Idempotency-Key": idempotencyKey } : {}),
     },
     body: JSON.stringify({
       printerId: positiveInteger(printerId),

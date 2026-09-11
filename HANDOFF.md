@@ -5,6 +5,24 @@ records state that is not obvious from the code or the git log.
 
 ---
 
+## Automatic packing slip on payment confirmation — 2026-09-10
+
+Confirm Payment now invokes the shared packing-slip print service after the
+payment RPC commits. Print failures return a separate warning with the paid
+order; Print Packing Slip remains available for explicit reprints. Existing lot,
+allocation, local-handoff email, and shipping-email rules still apply. No schema
+or environment changes are required. The print audit marks this job automatic.
+
+Payment RPC retries can return the same paid order. The print service checks
+existing print audits, uses a stable PrintNode idempotency key for concurrent
+requests, and refuses unrecorded automatic retries after 23 hours (PrintNode
+keys expire at 24 hours). Explicit reprints do not reuse the automatic key.
+
+Validation: automatic-packing-slip tests cover success, replay, manual reprints,
+printer/configuration/data failures, provisional lots, expired retries, payment
+failure, amount corrections, and post-update hydration failure.
+---
+
 ## Catalog login gate — implemented 2026-09-09
 
 The owner requested login before viewing products and research. `/products`,
