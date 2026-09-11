@@ -51,6 +51,9 @@ export function createOrderHandler({
   if (validated.error) return fail(400, validated.error);
   const input = validated.data;
 
+  const token = readBearerToken(request);
+  if (!token) return fail(401, "Please sign in to place an order.");
+
   const turnstile = await verifyTurnstileToken(input.turnstileToken, {
     fetchImpl,
     remoteIp: clientIp(request),
@@ -70,12 +73,13 @@ export function createOrderHandler({
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
-  let userId = null;
-  const token = readBearerToken(request);
-  if (token) {
+  let userId;
+  try {
     const { data, error } = await supabase.auth.getUser(token);
-    if (error || !data?.user?.id) return fail(401, "Your session has expired. Please sign in again.");
+    if (error || !data?.user?.id || data.user.is_anonymous) return fail(401, "Your session has expired. Please sign in again.");
     userId = data.user.id;
+  } catch {
+    return fail(503, "We could not verify your sign-in. Please try again.");
   }
 
   let discount = null;

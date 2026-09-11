@@ -14,6 +14,7 @@
 import { PRODUCTS } from "./catalog.js";
 import { ARTICLE_META } from "./articles.js";
 import { SITE_DOMAIN, SITE_NAME } from "./site.js";
+import { requiresLogin } from "./access.js";
 
 // Keep the research library reversible without leaving stale article URLs in
 // the sitemap or prerender output. Product research-use language and required
@@ -76,6 +77,8 @@ export function productImageAlt(product) {
 
 export function productMeta(product) {
   return {
+    noindex: true,
+    loginRequired: true,
     title: `${product.name} ${product.dose}`,
     description: `${product.name} ${product.dose} — ${(product.research || "").slice(0, 150)}`,
     image: product.image,
@@ -88,6 +91,8 @@ export function productMeta(product) {
 
 export function articleMeta(article) {
   return {
+    noindex: true,
+    loginRequired: true,
     title: article.metaTitle || article.title,
     description: article.metaDescription || article.excerpt || "",
     image: article.heroImage,
@@ -104,7 +109,7 @@ export const STATIC_ROUTES = [
   {
     path: "/",
     title: null,
-    description: "Premium research grade peptides with 99%+ purity. Third-party tested. BPC-157, GLP-3RT, Tesamorelin, and more. US-based supplier.",
+    description: "Research-grade laboratory products from a US-based supplier. Sign in to view our catalog and lot-level testing documentation.",
     h1: "Research-grade peptides, tested lot by lot",
     priority: "1.0", changefreq: "weekly",
   },
@@ -264,7 +269,7 @@ export const STATIC_ROUTES = [
     h1: "Set new password",
     noindex: true,
   },
-];
+].map(route => requiresLogin(route.path) ? { ...route, noindex: true, loginRequired: true } : route);
 
 const STATIC_BY_PATH = Object.fromEntries(STATIC_ROUTES.map(r => [r.path, r]));
 

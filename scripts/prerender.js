@@ -202,10 +202,7 @@ ${related.length ? `<h2>Related compounds</h2>${linkList(related.map(p => [`/pro
 function staticBody(route, articles) {
   const head = `<h1>${esc(route.h1 || route.title || SITE_NAME)}</h1><p>${esc(route.description)}</p>`;
   if (route.path === "/") {
-    const library = RESEARCH_LIBRARY_ENABLED
-      ? `<h2>Research library</h2>${articleListing(articles)}`
-      : "";
-    return `${head}<h2>Research compounds</h2>${productListing()}${library}`;
+    return `${head}<h2>Sign in to view products</h2><p>Our catalog and laboratory resources are available to account holders.</p><p><a href="/login?redirect=%2Fproducts">Sign in</a> or <a href="/signup?redirect=%2Fproducts">create an account</a>.</p>`;
   }
   if (route.path === "/products") return `${head}${productListing()}`;
   if (route.path === "/research") return `${head}${articleListing(articles)}`;
@@ -253,6 +250,9 @@ function structuredData(route, articles) {
 // ─── Head assembly ───────────────────────────────────────────────────────────
 
 function headFor(route, articles) {
+  if (route.loginRequired) {
+    return `<title>Sign In${esc(TITLE_SUFFIX)}</title><meta name="robots" content="noindex, nofollow" />${FALLBACK_STYLE}`;
+  }
   if (route.staffOnly) {
     return [
       `<title>${esc(SITE_NAME)}</title>`,
@@ -336,7 +336,9 @@ for (const route of routes) {
   // Staff routes need a real file for direct navigation, but no public page
   // snapshot, navigation, or search/social metadata. React still mounts the
   // normal authenticated application into the empty root.
-  const body = route.staffOnly ? "" : chrome(
+  const body = route.staffOnly ? "" : route.loginRequired
+    ? chrome(`<h1>Sign in to continue</h1><p>An account is required to view our catalog and laboratory resources.</p><p><a href="/login?redirect=${encodeURIComponent(route.path)}">Sign in</a> or <a href="/signup?redirect=${encodeURIComponent(route.path)}">create an account</a>.</p>`)
+    : chrome(
     route.product ? productBody(route)
       : route.article ? articleBody(route)
         : staticBody(route, articles)

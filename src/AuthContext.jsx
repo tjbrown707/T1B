@@ -10,14 +10,24 @@ export function AuthProvider({ children }) {
 
   // Bootstrap the session and subscribe to auth changes.
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
+    let active = true;
+    let authEventSeen = false;
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, next) => {
+      if (!active) return;
+      authEventSeen = true;
+      setSession(next);
       setLoading(false);
     });
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, next) => {
-      setSession(next);
+    supabase.auth.getSession().then(({ data, error }) => {
+      if (!active || authEventSeen) return;
+      setSession(error ? null : data?.session ?? null);
+      setLoading(false);
+    }).catch(() => {
+      if (!active || authEventSeen) return;
+      setSession(null);
+      setLoading(false);
     });
-    return () => sub.subscription.unsubscribe();
+    return () => { active = false; sub.subscription.unsubscribe(); };
   }, []);
 
   // Load the customer's profile row whenever the logged-in user changes.
@@ -52,7 +62,7 @@ export function AuthProvider({ children }) {
     user: session?.user ?? null,
     profile,
     loading,
-    isLoggedIn: !!session?.user,
+    isLoggedIn: !!session?.user?.id && !session.user.is_anonymous,
     signUp: (email, password, meta) =>
       supabase.auth.signUp({ email, password, options: { data: meta } }),
     signIn: (email, password) =>

@@ -191,6 +191,17 @@ if (hasDist) {
       continue;
     }
     const html = readFileSync(target, "utf8");
+    if (route.loginRequired) {
+      if (!route.noindex || !html.includes('content="noindex, nofollow"') || !html.includes("Sign in to continue")) {
+        fail(`dist/${file} must contain a noindex sign-in gate.`);
+      }
+      if (/application\/ld\+json|<meta (?:property="og:|name="twitter:)|\/product\/|\$\d/.test(html)) {
+        fail(`dist/${file} exposes gated content in the public snapshot.`);
+      }
+    }
+    if (route.path === "/" && /href="\/product\/|\$\d/.test(html)) {
+      fail("The public homepage snapshot exposes catalog items.");
+    }
     if (route.product && /Peer-reviewed research|Research on individual components|Sources (?:&|&amp;) References|View Source/i.test(html)) {
       fail(`dist/${file} exposes the product-page research references.`);
     }
@@ -248,12 +259,12 @@ if (hasDist) {
     fail(`The homepage carries Product schema for ${productMentions} products; emit Product only on product pages.`);
   }
 
-  // The prerendered head must not still be the homepage's on a deep route.
+  // Deep catalog URLs must carry a generic gate title, never product metadata.
   const sample = join(DIST, "product", `${PRODUCTS[0].id}.html`);
   if (existsSync(sample)) {
     const html = readFileSync(sample, "utf8");
-    if (!html.includes(`<title>${PRODUCTS[0].name} ${PRODUCTS[0].dose}`)) {
-      fail(`dist/product/${PRODUCTS[0].id}.html does not carry its own <title>.`);
+    if (!html.includes("<title>Sign In") || html.includes(`<title>${PRODUCTS[0].name}`)) {
+      fail(`dist/product/${PRODUCTS[0].id}.html must carry the generic sign-in title.`);
     }
     if (!html.includes(`href="/products"`)) {
       fail(`dist/product/${PRODUCTS[0].id}.html has no crawlable link back to the catalog.`);

@@ -186,7 +186,7 @@ test("invalid Turnstile and cross-origin checkout requests never reach Supabase"
   try {
     const invalid = await handler(new Request("https://www.tierone.bio/.netlify/functions/create-order", {
       method: "POST",
-      headers: { "Content-Type": "application/json", Origin: "https://www.tierone.bio" },
+      headers: { "Content-Type": "application/json", Origin: "https://www.tierone.bio", Authorization: "Bearer customer-token" },
       body: JSON.stringify(body),
     }));
     assert.equal(invalid.status, 403);
