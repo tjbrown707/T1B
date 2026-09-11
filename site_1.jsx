@@ -5214,13 +5214,7 @@ function AdminOrdersPage() {
 
       setOrders(previous => previous.map(item => item.id === order.id ? payload.order : item));
       const messages = {
-        confirm_payment: isPrecountedOrder(payload.order) && isLocalHandoff(payload.order)
-          ? `${payload.order.order_number} is paid for local handoff. Its inventory was already accounted before the August 10 cutoff, so stock was not changed. Print the packing slip through PrintNode to queue the customer email.`
-          : isPrecountedOrder(payload.order)
-            ? `${payload.order.order_number} is paid. Its inventory was already accounted before the August 10 cutoff, so stock was not changed.`
-            : isLocalHandoff(payload.order)
-              ? `${payload.order.order_number} is paid and reserved for local handoff. Inventory was deducted once; print the packing slip through PrintNode before handoff. Carrier postage stays disabled; a free 4×6 pickup label is available in the order details.`
-              : `${payload.order.order_number} is paid and ready to pick. Inventory was deducted once.`,
+        confirm_payment: `${payload.order.order_number} is paid${isLocalHandoff(payload.order) ? " for local handoff" : ""}. ${isPrecountedOrder(payload.order) ? "Its inventory was already accounted before the August 10 cutoff, so stock was not changed." : "Inventory was deducted once."}`,
         cancel_unpaid: `${payload.order.order_number} was cancelled and its reserved stock was released.`,
         reopen_cancelled: isPrecountedOrder(payload.order)
           ? `${payload.order.order_number} was reopened with a fresh 24-hour payment window. This pre-counted order does not create a new inventory reservation.`
@@ -5230,7 +5224,22 @@ function AdminOrdersPage() {
         mark_handed_off: `${payload.order.order_number} is marked handed off to the customer.`,
         update_payment_amount: `${payload.order.order_number}'s amount received was corrected. The original order total and inventory were not changed.`,
       };
-      setNotice({ type: "success", text: messages[action] || `${payload.order.order_number} was updated.` });
+      let text = messages[action] || `${payload.order.order_number} was updated.`;
+      let type = "success";
+      if (action === "confirm_payment") {
+        if (payload.packingSlip?.printed) {
+          text += payload.packingSlip.alreadyPrinted
+            ? " The packing slip was already queued in PrintNode."
+            : " The packing slip was automatically queued in PrintNode.";
+          text += orderEmailNotice(payload.packingSlip.notification);
+          type = orderEmailNoticeType(payload.packingSlip.notification);
+        } else {
+          text += ` Payment is saved. ${payload.packingSlip?.error || "Printing could not be confirmed. Check the printer queue before using Print Packing Slip."}`;
+          type = "error";
+        }
+      }
+      if (payload.warning) { text += ` ${payload.warning}`; type = "error"; }
+      setNotice({ type, text });
       return true;
     } catch (error) {
       const errorText = formatOrderActionError(action, error.message);
@@ -5772,10 +5781,11 @@ function OrderPaymentConfirmation({ order, busy, confirming, onConfirm }) {
               </fieldset>
               {fulfillmentMethod === FULFILLMENT_METHODS.LOCAL_HANDOFF && (
                 <div style={{ padding: 11, border: "1px solid rgba(34,197,94,0.4)", background: "rgba(34,197,94,0.07)", color: "#22c55e", fontFamily: "'Rajdhani', sans-serif", fontSize: 14 }}>
-                  After payment is confirmed, print the packing slip to send the confirmation email, then use <strong>Mark Handed Off</strong> when the customer receives the order.
+                  Confirming payment automatically prints the packing slip and queues the confirmation email, then use <strong>Mark Handed Off</strong> when the customer receives the order.
                 </div>
               )}
             </div>
+            <p style={{ color: "var(--text-secondary)", fontFamily: "'Rajdhani', sans-serif", fontSize: 14 }}>Confirming payment automatically sends a packing slip to your printer. You can use Print Packing Slip again if you need another copy.</p>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 9, marginTop: 20 }}>
               <button type="button" disabled={busy} onClick={() => setOpen(false)} style={adminSecondaryButton(busy)}>Cancel</button>
               <button type="button" disabled={busy || !paymentAmountValid} onClick={confirm} style={adminPrimaryButton(busy || !paymentAmountValid)}>{confirming ? "Confirming…" : "Confirm Payment"}</button>

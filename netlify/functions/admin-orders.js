@@ -9,6 +9,9 @@ import {
 import { authenticateOrderManager } from "./_shared/admin-auth.js";
 import { jsonResponse, readJsonBody } from "./_shared/http.js";
 
+import { printFulfillment } from "./_shared/print-fulfillment.js";
+import { printNodeConfig } from "./_shared/printnode.js";
+
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const MAX_BODY_BYTES = 4 * 1024;
 const METHODS = "GET, PATCH, OPTIONS";
@@ -181,7 +184,7 @@ async function loadPackingSlipPrintRecords(supabase, orderIds) {
   return recorded;
 }
 
-async function updateOrderWorkflow(supabase, user, request) {
+export async function updateOrderWorkflow(supabase, user, request) {
   const parsed = await readJsonBody(request, MAX_BODY_BYTES);
   if (parsed.error) return fail(parsed.error === "Request is too large." ? 413 : 400, parsed.error);
 
@@ -217,6 +220,19 @@ async function updateOrderWorkflow(supabase, user, request) {
   const updated = Array.isArray(data) ? data[0] : data;
   if (!updated) return fail(404, "Order not found.");
 
+  // Printing follows the committed payment transaction. A print failure must
+  // never turn a successful payment confirmation into a failed payment response.
+  let packingSlip = null;
+  if (action === "confirm_payment") {
+    try {
+      const result = await printFulfillment({ supabase, user }, orderId, printNodeConfig(), { automatic: true });
+      packingSlip = result.body;
+    } catch (printError) {
+      console.error("admin-orders: automatic packing slip failed:", printError);
+      packingSlip = { printed: false, error: "The print could not be confirmed. Check the printer queue before using Print Packing Slip." };
+    }
+  }
+
   let allocations;
   let shipments;
   let notifications;
@@ -230,7 +246,11 @@ async function updateOrderWorkflow(supabase, user, request) {
     ]);
   } catch (hydrationError) {
     console.error("admin-orders: updated order hydration failed:", hydrationError);
-    return fail(500, "The order was updated, but its related details could not be reloaded. Refresh the page.");
+    return jsonResponse(200, {
+      order: updated,
+      packingSlip,
+      warning: "The order was updated, but its related details could not be reloaded. Refresh the page.",
+    }, METHODS);
   }
   const order = {
     ...updated,
@@ -240,7 +260,7 @@ async function updateOrderWorkflow(supabase, user, request) {
     packingSlipPrintRecorded: packingSlipPrintRecords.has(orderId),
   };
   console.info(`admin-orders: staff ${user.id} performed ${action} on ${order.order_number}`);
-  return jsonResponse(200, { order }, METHODS);
+  return jsonResponse(200, { order, packingSlip }, METHODS);
 }
 
 export function workflowRpc(action, input) {
