@@ -104,6 +104,7 @@ export function createOrderHandler({
     .join("\n");
 
   const row = {
+    allow_backorder: true,
     user_id: userId,
     order_number: input.orderNumber,
     status: "AWAITING PAYMENT",
@@ -171,6 +172,8 @@ export function createOrderHandler({
     ok: true,
     orderNumber: saved.order_number,
     status: saved.status,
+    backorderPending: saved.backorder_pending === true,
+    estimatedShipDate: saved.estimated_ship_date || null,
     discountCode: saved.discount_code || "",
     totals: {
       subtotal: Number(saved.subtotal),

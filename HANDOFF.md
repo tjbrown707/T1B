@@ -5,6 +5,42 @@ records state that is not obvious from the code or the git log.
 
 ---
 
+## Backorder purchasing — database applied 2026-09-18
+
+Out-of-stock product pages read authenticated live availability and show **On
+Backorder**, **Backorder Now**, and an estimated ship date 14 calendar days from
+today in Arizona. Checkout also detects requested quantities above availability.
+An inventory outage never claims a product is out of stock. The final payment
+screen explains the backorder policy before payment.
+
+Migration `20260918211456_product_backorders.sql` adds `backorder_pending` and
+`estimated_ship_date` to orders. A shortage places the **whole order** on hold:
+all partial reservations roll back, with no fictional inventory or negative
+stock. The estimate freezes at order creation and appears on the confirmation,
+customer receipt, staff email, and customer order history. Normal orders retain
+their existing reservation behavior. Payment can be recorded on a backorder,
+but it remains ON_HOLD and automatic printing is deferred.
+
+After replenishment: **Admin → Inventory → Receive lot**, then **Admin → Orders
+→ open the paid backorder → Allocate stock → Print Packing Slip**. Allocation
+requires enough stock for the entire order, commits once, and is safe to retry.
+Real lot numbers are still required before printing. There are no split shipments
+or automatic stock allocation; staff chooses which paid backorder to allocate.
+The usual 24-hour unpaid cancellation applies. Reopening an unallocated backorder
+preserves its original estimated date and restarts the payment window.
+
+The migration was applied to production as `20260918212056_product_backorders`
+on September 18; the local CLI-generated migration filename is retained above.
+Existing orders were unchanged and security advisors found no warnings or errors.
+Release order: merge the website PR only after the required verify check passes.
+Old server code stays strict until the new create-order function explicitly opts
+into backorders. New RPCs remain service-role only; no RLS policy is widened.
+`node scripts/test-backorders-db.mjs` runs a disposable PostgreSQL lifecycle test;
+the required GitHub verify job runs it in addition to `npm run verify`.
+
+---
+
+
 ## Automatic packing slip on payment confirmation — 2026-09-10
 
 Confirm Payment now invokes the shared packing-slip print service after the

@@ -46,8 +46,8 @@ const ROUTES = [
   ...PRODUCTS.map(product => ({
     path: `/product/${product.id}`,
     expect: product.name,
-    requireBody: ["RESEARCH PROFILE"],
-    forbidBody: PRODUCT_REFERENCE_LABELS,
+    requireBody: ["RESEARCH PROFILE", ...(product.id === "bpc157-5" ? ["On Backorder", "October 2, 2026", "BACKORDER NOW"] : [])],
+    forbidBody: [...PRODUCT_REFERENCE_LABELS, ...(product.id === "bpc157-5" ? [] : ["On Backorder", "BACKORDER NOW"])],
     signedIn: true,
   })),
   ...["/products", ...PRODUCTS.map(p => `/product/${p.id}`), "/lab-results", "/cart", "/calculator", "/checkout"].map(path => ({
@@ -139,7 +139,7 @@ for (const {
   }
   if (exerciseLogin) window.localStorage.setItem("t1b-cart", JSON.stringify([{ id: "bpc157-10", qty: 2 }]));
   window.fetch = async url => new Response(JSON.stringify(
-    String(url).includes("/token") ? fixtureSession : String(url).includes("/orders") ? [] : {}
+    String(url).includes("/product-availability") ? { products: PRODUCTS.map(product => ({ id: product.id, available: product.id === "bpc157-5" ? 0 : 50, estimatedShipDate: product.id === "bpc157-5" ? "2026-10-02" : null })) } : String(url).includes("/token") ? fixtureSession : String(url).includes("/orders") ? [] : {}
   ), { status: 200, headers: { "Content-Type": "application/json" } });
   const transientBodyHits = new Set();
   const bodyObserver = new window.MutationObserver(() => {

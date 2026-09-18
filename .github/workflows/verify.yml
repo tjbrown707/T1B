@@ -26,3 +26,6 @@ jobs:
 
       - name: Run verification
         run: npm run verify
+
+      - name: Verify backorder database lifecycle
+        run: node scripts/test-backorders-db.mjs

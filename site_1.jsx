@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useCallback, lazy, Suspense } from "react";
 import { Routes, Route, Navigate, Outlet, Link, useNavigate, useLocation, useParams, useSearchParams } from "react-router-dom";
 import { supabase } from "./supabaseClient";
+import { useProductAvailability } from "./src/useProductAvailability.js";
+import { estimatedBackorderDate, formatShipDate } from "./src/data/backorders.js";
 import { useAuth } from "./src/AuthContext.jsx";
 import { loginUrl, safeReturnPath, requiresLogin } from "./src/data/access.js";
 
@@ -2810,6 +2812,12 @@ function CartPage({ cart, setCart }) {
   const [orderSubmitError, setOrderSubmitError] = useState("");
   const [orderReferenceError, setOrderReferenceError] = useState("");
   const [receiptSent, setReceiptSent] = useState(true);
+  const [confirmedShipDate, setConfirmedShipDate] = useState(null);
+  const availability = useProductAvailability();
+  const cartHasBackorder = cart.some(item => {
+    const stock = availability?.find(entry => entry.id === item.id);
+    return stock && item.qty > stock.available;
+  });
   const [turnstileToken, setTurnstileToken] = useState("");
   const [turnstileReset, setTurnstileReset] = useState(0);
   // Re-entry guard. This has to be a ref, not the orderSubmitting state: React
@@ -3059,6 +3067,7 @@ function CartPage({ cart, setCart }) {
     // the server's numbers, not the browser's.
     const serverTotals = confirmed.totals;
     setReceiptSent(confirmed.receiptSent === true);
+    setConfirmedShipDate(confirmed.estimatedShipDate || null);
 
     submittingRef.current = false;
     setOrderSubmitting(false);
@@ -3221,6 +3230,7 @@ function CartPage({ cart, setCart }) {
             color: "var(--text-dim)",
             lineHeight: 1.6,
           }}>
+            {confirmedShipDate && <span style={{ display: "block", color: "#fbbf24", marginBottom: 12 }}>On Backorder — estimated ship date: {formatShipDate(confirmedShipDate)}. Your order ships together when stock is available.</span>}
             {receiptSent
               ? "Save your order number for reference. A confirmation has been sent to your email."
               : `Save your order number for reference. Your order is recorded, but we could not send the confirmation email — quote this number to ${CONTACT_EMAIL} if you would like a copy.`}
@@ -3278,6 +3288,11 @@ function CartPage({ cart, setCart }) {
             color: "var(--red-primary)",
             marginBottom: 16,
           }}>ORDER SUMMARY</div>
+          <p role="status" style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 16, lineHeight: 1.5, color: cartHasBackorder ? "#fbbf24" : "var(--text-secondary)" }}>
+            {cartHasBackorder
+              ? `On Backorder — estimated ship date: ${formatShipDate(estimatedBackorderDate())}. Your entire order will ship together when stock arrives.`
+              : `If an item is unavailable when your order is placed, we accept it on backorder with an estimated ship date of ${formatShipDate(estimatedBackorderDate())}. Orders ship together; the confirmed estimate appears on your receipt.`}
+          </p>
           <div style={{
             padding: "12px 16px",
             border: "1px solid var(--border)",
@@ -5214,9 +5229,10 @@ function AdminOrdersPage() {
 
       setOrders(previous => previous.map(item => item.id === order.id ? payload.order : item));
       const messages = {
-        confirm_payment: `${payload.order.order_number} is paid${isLocalHandoff(payload.order) ? " for local handoff" : ""}. ${isPrecountedOrder(payload.order) ? "Its inventory was already accounted before the August 10 cutoff, so stock was not changed." : "Inventory was deducted once."}`,
+        allocate_backorder: `${payload.order.order_number} now has stock allocated. Print its packing slip to continue fulfillment.`,
+        confirm_payment: payload.order.backorder_pending ? `${payload.order.order_number} is paid and on backorder until stock is allocated.` : `${payload.order.order_number} is paid${isLocalHandoff(payload.order) ? " for local handoff" : ""}. ${isPrecountedOrder(payload.order) ? "Its inventory was already accounted before the August 10 cutoff, so stock was not changed." : "Inventory was deducted once."}`,
         cancel_unpaid: `${payload.order.order_number} was cancelled and its reserved stock was released.`,
-        reopen_cancelled: isPrecountedOrder(payload.order)
+        reopen_cancelled: payload.order.backorder_pending ? `${payload.order.order_number} was reopened on backorder with a fresh 24-hour payment window.` : isPrecountedOrder(payload.order)
           ? `${payload.order.order_number} was reopened with a fresh 24-hour payment window. This pre-counted order does not create a new inventory reservation.`
           : `${payload.order.order_number} was reopened. Its original products are reserved again for 24 hours; confirm payment before the new hold ends.`,
         mark_picked: `${payload.order.order_number} is marked picked.`,
@@ -5455,6 +5471,7 @@ function AdminOrdersPage() {
                   <div>
                     <div style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 17, fontWeight: 800, color: "var(--text-primary)" }}>${Number(order.total || 0).toFixed(2)}</div>
                     <span style={{ display: "inline-block", marginTop: 5, padding: "3px 7px", border: `1px solid ${statusColors.border}`, background: statusColors.background, color: statusColors.color, fontFamily: "'Orbitron', sans-serif", fontSize: 8, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase" }}>{formatStatusLabel(order.status)}</span>
+                    {order.backorder_pending && order.payment_status !== "CANCELLED" && <div style={{ color: "#fbbf24", fontFamily: "'Rajdhani', sans-serif", fontSize: 14, marginTop: 5 }}>On Backorder · Est. {formatShipDate(order.estimated_ship_date)}</div>}
                   </div>
                   <div style={{ display: "flex", gap: 7, alignItems: "center", flexWrap: "wrap" }}>
                     {canConfirmPayment(order) && (
@@ -5498,6 +5515,12 @@ function AdminOrdersPage() {
                         </div>
                       )) : <div style={{ whiteSpace: "pre-wrap", color: "var(--text-secondary)", fontFamily: "'Rajdhani', sans-serif", fontSize: 14 }}>{order.items_text || "No item detail"}</div>}
                       <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid var(--border)" }}>
+                        {order.backorder_pending && (
+                          <div style={{ color: "#fbbf24", fontFamily: "'Rajdhani', sans-serif", marginBottom: 12 }}>
+                            <strong>On Backorder</strong> — estimated ship date: {formatShipDate(order.estimated_ship_date)}. The whole order is waiting for stock.
+                            {order.payment_status === "PAID" && <button disabled={busy} onClick={() => performOrderAction(order, "allocate_backorder")} style={{ display: "block", marginTop: 10, padding: "10px 16px", cursor: busy ? "wait" : "pointer" }}>Allocate stock</button>}
+                          </div>
+                        )}
                         <AdminDetailHeading>Allocated lots</AdminDetailHeading>
                         {(order.allocations || []).map((allocation, index) => (
                           <div key={`${allocation.productId}-${allocation.lot?.id || index}`} style={{ padding: "4px 0", color: allocation.lot?.is_provisional ? "#fbbf24" : "var(--text-secondary)", fontFamily: "'Rajdhani', sans-serif", fontSize: 14 }}>
@@ -5709,12 +5732,14 @@ function OrderReopenConfirmation({ order, busy, reopening, onConfirm }) {
             <div style={{ color: "var(--red-primary)", fontFamily: "'Orbitron', sans-serif", fontSize: 9, fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 8 }}>Uncancel order</div>
             <h2 id={titleId} style={{ color: "var(--text-primary)", fontFamily: "'Orbitron', sans-serif", fontSize: 19, margin: "0 0 14px" }}>{order.order_number}</h2>
             <div id={descriptionId} style={{ color: "var(--text-secondary)", fontFamily: "'Rajdhani', sans-serif", fontSize: 16, lineHeight: 1.55 }}>
-              {isPrecountedOrder(order) ? (
+              {order.backorder_pending ? (
+                <p style={{ margin: 0 }}>This order will reopen on backorder with its original estimated ship date. Stock can be allocated after payment and replenishment.</p>
+              ) : isPrecountedOrder(order) ? (
                 <p style={{ margin: 0 }}>This older pre-counted order has no live inventory reservation to restore. Reopening it returns the order to Awaiting Payment for a fresh 24-hour window without changing inventory.</p>
               ) : (
                 <p style={{ margin: 0 }}>Reopening will reserve the order&apos;s original products and quantities again. If an original lot no longer has enough available stock, nothing will change.</p>
               )}
-              <p style={{ margin: "12px 0 0", color: "#fbbf24" }}>A fresh 24-hour inventory hold begins when this succeeds. The order will not be marked paid.</p>
+              <p style={{ margin: "12px 0 0", color: "#fbbf24" }}>A fresh 24-hour payment window begins when this succeeds. The order will not be marked paid.</p>
             </div>
             {error && <div role="alert" style={{ marginTop: 16, padding: 11, border: "1px solid rgba(196,30,42,0.55)", background: "rgba(196,30,42,0.08)", color: "#ff6b6b", fontFamily: "'Rajdhani', sans-serif", fontSize: 14 }}>{error}</div>}
             <div style={{ display: "flex", justifyContent: "flex-end", flexWrap: "wrap", gap: 9, marginTop: 20 }}>
@@ -5785,7 +5810,7 @@ function OrderPaymentConfirmation({ order, busy, confirming, onConfirm }) {
                 </div>
               )}
             </div>
-            <p style={{ color: "var(--text-secondary)", fontFamily: "'Rajdhani', sans-serif", fontSize: 14 }}>Confirming payment automatically sends a packing slip to your printer. You can use Print Packing Slip again if you need another copy.</p>
+            <p style={{ color: "var(--text-secondary)", fontFamily: "'Rajdhani', sans-serif", fontSize: 14 }}>{order.backorder_pending ? "This payment will be recorded while the order stays on backorder. After receiving stock, use Allocate stock and then Print Packing Slip." : "Confirming payment automatically sends a packing slip to your printer. You can use Print Packing Slip again if you need another copy."}</p>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 9, marginTop: 20 }}>
               <button type="button" disabled={busy} onClick={() => setOpen(false)} style={adminSecondaryButton(busy)}>Cancel</button>
               <button type="button" disabled={busy || !paymentAmountValid} onClick={confirm} style={adminPrimaryButton(busy || !paymentAmountValid)}>{confirming ? "Confirming…" : "Confirm Payment"}</button>
@@ -6404,7 +6429,7 @@ function formatReservationHold(order) {
   if (!order?.reservation_expires_at) return "";
   const deadline = formatAdminOrderDate(order.reservation_expires_at);
   if (!deadline) return "";
-  if (order.payment_status === "AWAITING_PAYMENT") return `Reserved until ${deadline}`;
+  if (order.payment_status === "AWAITING_PAYMENT") return `${order.backorder_pending ? "Payment due by" : "Reserved until"} ${deadline}`;
   if (order.payment_status === "CANCELLED") return `Original hold deadline: ${deadline}`;
   return "";
 }
@@ -6641,6 +6666,7 @@ function AccountPage() {
                     letterSpacing: "0.12em",
                     textTransform: "uppercase",
                   }}>{formatStatusLabel(o.status)}</span>
+                  {o.estimated_ship_date && o.payment_status !== "CANCELLED" && <div style={{ color: "#fbbf24", fontFamily: "'Rajdhani', sans-serif", fontSize: 15, marginTop: 8 }}>{o.backorder_pending ? "On Backorder · " : ""}Estimated ship date: {formatShipDate(o.estimated_ship_date)}</div>}
                   <div style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 18, fontWeight: 800, color: "var(--text-primary)", marginTop: 8 }}>${Number(o.total).toFixed(2)}</div>
                 </div>
               </div>
@@ -7599,9 +7625,12 @@ function ProductsPage({ searchQuery, setSearchQuery, onAddToCart, onSelectProduc
 
 // Individual Product Page
 function ProductPage({ onAddToCart }) {
+  const availability = useProductAvailability();
   const navigate = useNavigate();
   const { id } = useParams();
   const product = PRODUCTS.find(p => p.id === id);
+  const stock = availability?.find(entry => entry.id === id);
+  const onBackorder = stock?.available === 0;
   // productMeta() is the same helper the prerenderer uses.
   const meta = product ? productMeta(product) : null;
   usePageMeta(
@@ -7679,6 +7708,14 @@ function ProductPage({ onAddToCart }) {
             marginBottom: 24,
           }}>{product.dose}</div>
 
+          {onBackorder && (
+            <div role="status" style={{ padding: "14px 18px", marginBottom: 20, border: "1px solid rgba(251,191,36,0.4)", background: "rgba(251,191,36,0.06)", fontFamily: "'Rajdhani', sans-serif" }}>
+              <strong style={{ color: "#fbbf24", fontSize: 20 }}>On Backorder</strong>
+              <div style={{ color: "var(--text-primary)", fontSize: 17, marginTop: 4 }}>Estimated ship date: {formatShipDate(stock.estimatedShipDate)}</div>
+              <div style={{ color: "var(--text-secondary)", fontSize: 15, marginTop: 4 }}>Order now. Your order will ship together when stock arrives.</div>
+            </div>
+          )}
+
           {/* Price block */}
           <div style={{
             padding: "16px 20px",
@@ -7721,7 +7758,7 @@ function ProductPage({ onAddToCart }) {
           }}
             onMouseEnter={e => { e.target.style.background = "transparent"; e.target.style.color = "var(--red-primary)"; }}
             onMouseLeave={e => { e.target.style.background = "var(--red-primary)"; e.target.style.color = "#fff"; }}
-          >ADD TO CART</button>
+          >{onBackorder ? "BACKORDER NOW" : "ADD TO CART"}</button>
 
           {/* Trust bar */}
           <div style={{

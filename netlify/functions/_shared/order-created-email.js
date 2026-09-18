@@ -1,3 +1,4 @@
+import { formatShipDate } from "../../../src/data/backorders.js";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { getEnv } from "./http.js";
@@ -51,7 +52,7 @@ export function orderEmailValues(order) {
     customerEmail: order.customer_email || "",
     customerPhone: order.customer_phone || "",
     orderNumber: order.order_number || "",
-    orderItems: order.items_text || "",
+    orderItems: (order.items_text || "") + (order.estimated_ship_date ? `\n\nOn Backorder — estimated ship date: ${formatShipDate(order.estimated_ship_date)}. Your order ships together.` : ""),
     orderSubtotal: money(order.subtotal),
     discountCode,
     discountAmount: discountAmount > 0 ? `-${money(discountAmount)}` : "",

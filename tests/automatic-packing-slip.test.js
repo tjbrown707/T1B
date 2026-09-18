@@ -138,3 +138,16 @@ test("a related-record reload failure still returns the saved payment and succes
   assert.equal(payload.packingSlip.printed, true);
   assert.match(payload.warning, /Refresh/);
 });
+
+
+test("confirming a backorder records payment without sending a premature packing slip", async t => {
+  const f = fixture(t, { order: { backorder_pending: true, fulfillment_status: "ON_HOLD" } });
+  const response = await f.confirm();
+  const payload = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(payload.order.payment_status, "PAID");
+  assert.equal(payload.order.fulfillment_status, "ON_HOLD");
+  assert.equal(payload.packingSlip, null);
+  assert.equal(f.jobs.length, 0);
+  assert.equal(f.rpcCalls.some(call => call.name === "record_order_print_submission"), false);
+});

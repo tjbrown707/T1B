@@ -22,7 +22,7 @@ const ORDER_FIELDS = [
   "ship_city", "ship_state", "ship_zip", "created_at", "updated_at",
   "payment_status", "fulfillment_status", "fulfillment_method",
   "payment_received_via", "payment_amount_received", "payment_confirmed_at",
-  "inventory_accounting_mode", "reservation_expires_at",
+  "inventory_accounting_mode", "reservation_expires_at", "backorder_pending", "estimated_ship_date",
 ].join(",");
 
 export default async function handler(request) {
@@ -223,7 +223,7 @@ export async function updateOrderWorkflow(supabase, user, request) {
   // Printing follows the committed payment transaction. A print failure must
   // never turn a successful payment confirmation into a failed payment response.
   let packingSlip = null;
-  if (action === "confirm_payment") {
+  if (action === "confirm_payment" && !updated.backorder_pending) {
     try {
       const result = await printFulfillment({ supabase, user }, orderId, printNodeConfig(), { automatic: true });
       packingSlip = result.body;
@@ -267,6 +267,9 @@ export function workflowRpc(action, input) {
   const fulfillmentMethod = input.fulfillmentMethod || "SHIP";
   const paymentReceivedVia = input.paymentReceivedVia || "Other";
   const paymentAmountReceived = parsePaymentAmount(input.paymentAmountReceived);
+  if (action === "allocate_backorder" && input.expectedPaymentStatus === "PAID") {
+    return { name: "allocate_backorder", args: { p_order_id: input.orderId, p_actor_user_id: input.actorUserId } };
+  }
   if (action === "confirm_payment"
       && input.expectedPaymentStatus === "AWAITING_PAYMENT"
       && ["SHIP", "LOCAL_HANDOFF"].includes(fulfillmentMethod)
@@ -337,6 +340,7 @@ export function workflowRpc(action, input) {
 export function workflowError(error, action) {
   const message = String(error?.message || "");
   if (message.includes("insufficient_inventory:")) {
+    if (action === "allocate_backorder") return fail(409, "This backorder is still waiting for stock. Receive enough inventory for the complete order, then try again.");
     if (action === "reopen_cancelled") {
       return fail(409, "One or more originally allocated lots do not have enough available inventory to reopen this order.");
     }
