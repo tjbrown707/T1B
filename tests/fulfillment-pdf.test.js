@@ -51,7 +51,7 @@ test("a normal order produces one branded packing slip page", async () => {
   const resources = document.getPage(0).node.Resources();
   const images = resources.lookup(PDFName.of("XObject"), PDFDict);
   assert.ok(images.keys().length > 0, "the horizontal logo should be embedded");
-  assert.match(readFileSync("netlify.toml", "utf8"), /public\/logo-wide\.png/);
+  assert.match(readFileSync("netlify.toml", "utf8"), /public\/logo-print\.png/);
 });
 
 test("the packing rows preserve split lots, locations, and allocated quantities", () => {

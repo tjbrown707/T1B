@@ -7,7 +7,7 @@
   node_bundler = "esbuild"
   # Email templates and the packing-slip wordmark are read at runtime. esbuild
   # only bundles imported code, so these assets must be included explicitly.
-  included_files = ["email-templates/**", "email-template.html", "public/logo-wide.png"]
+  included_files = ["email-templates/**", "email-template.html", "public/logo-wide.png", "public/logo-print.png"]
 
 # ─── Security headers ────────────────────────────────────────────────────────
 # All headers below are enforcing. The CSP ran in Report-Only mode first and
