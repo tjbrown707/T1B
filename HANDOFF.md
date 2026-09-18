@@ -5,6 +5,17 @@ records state that is not obvious from the code or the git log.
 
 ---
 
+## Print logo contrast — 2026-09-18
+
+Packing slips and 4x6 local-handoff labels now embed `public/logo-print.png`,
+a white-on-black print variant, preserving the owner's preferred black background. The website's dark-background logo made its red
+triangle disappear on monochrome printers. Both PDF generators and the Netlify
+function asset bundle use the new image. Existing website branding is unchanged.
+Regenerate documents through the dashboard to get the corrected logo; previously
+downloaded PDFs and already queued jobs retain the old artwork.
+
+---
+
 ## Backorder purchasing — database applied 2026-09-18
 
 Out-of-stock product pages read authenticated live availability and show **On

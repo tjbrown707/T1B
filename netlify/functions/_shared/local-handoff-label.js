@@ -166,9 +166,9 @@ export function wrapTextLines(font, text, maxWidth, size) {
 function loadLogoBytes() {
   if (cachedLogoBytes) return cachedLogoBytes;
   const candidates = [
-    path.join(process.cwd(), "public", "logo-wide.png"),
-    path.join(process.cwd(), "..", "public", "logo-wide.png"),
-    path.resolve("public/logo-wide.png"),
+    path.join(process.cwd(), "public", "logo-print.png"),
+    path.join(process.cwd(), "..", "public", "logo-print.png"),
+    path.resolve("public/logo-print.png"),
   ];
   for (const candidate of candidates) {
     try {
@@ -178,7 +178,7 @@ function loadLogoBytes() {
       // Try the next Netlify/local runtime path.
     }
   }
-  throw new Error("logo-wide.png not found in the function bundle");
+  throw new Error("logo-print.png not found in the function bundle");
 }
 
 function formatDate(value) {
