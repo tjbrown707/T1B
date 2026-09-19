@@ -5,6 +5,24 @@ records state that is not obvious from the code or the git log.
 
 ---
 
+## Packing slips on order arrival — 2026-09-18
+
+New checkout orders automatically request an order-copy packing slip before payment,
+including backorders. Payment confirmation no longer prints. Unpaid/backorder
+copies display their status and use the original order items without claiming
+allocated lots. `ORDER_PACKING_SLIP_PRINTED` audits are separate from fulfillment
+print events and never unlock handoff or queue processed-order emails. Staff can
+reprint before payment; after payment and allocation, the existing paid packing
+slip still supplies real lots and triggers the established email workflow.
+
+Checkout failures/replays cannot print arbitrary orders. Printer failures do not
+fail checkout; staff can see whether the order-copy print was recorded and retry
+manually. PrintNode order-id keys and print audits suppress automatic duplicates;
+unrecorded automatic retries expire after 23 hours. No historical print backfill,
+schema migration, or environment setting is involved.
+
+---
+
 ## Print logo contrast — 2026-09-18
 
 Packing slips and 4x6 local-handoff labels now embed `public/logo-print.png`,
@@ -52,7 +70,7 @@ the required GitHub verify job runs it in addition to `npm run verify`.
 ---
 
 
-## Automatic packing slip on payment confirmation — 2026-09-10
+## Automatic packing slip on payment confirmation — 2026-09-10 (superseded)
 
 Confirm Payment now invokes the shared packing-slip print service after the
 payment RPC commits. Print failures return a separate warning with the paid

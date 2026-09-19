@@ -1,3 +1,4 @@
+import { needsOrderCopy } from "./src/data/packing-slip.js";
 import { useState, useEffect, useRef, useCallback, lazy, Suspense } from "react";
 import { Routes, Route, Navigate, Outlet, Link, useNavigate, useLocation, useParams, useSearchParams } from "react-router-dom";
 import { supabase } from "./supabaseClient";
@@ -5242,7 +5243,7 @@ function AdminOrdersPage() {
       };
       let text = messages[action] || `${payload.order.order_number} was updated.`;
       let type = "success";
-      if (action === "confirm_payment") {
+      if (payload.packingSlip) {
         if (payload.packingSlip?.printed) {
           text += payload.packingSlip.alreadyPrinted
             ? " The packing slip was already queued in PrintNode."
@@ -5268,7 +5269,7 @@ function AdminOrdersPage() {
   }
 
   async function openFulfillmentPdf(order) {
-    if (!canPrintFulfillment(order) || !session?.access_token || (isLocalHandoff(order) && !canCompleteLocalHandoff(order))) return;
+    if (!canPrintFulfillment(order) || !session?.access_token || (isLocalHandoff(order) && !needsOrderCopy(order) && !canCompleteLocalHandoff(order))) return;
     const key = `${order.id}:pdf`;
     setActionKey(key);
     setNotice({ type: "", text: "" });
@@ -5310,8 +5311,8 @@ function AdminOrdersPage() {
       if (!res.ok) throw new Error(payload.error || `Print service returned HTTP ${res.status}`);
       await fetchOrders();
       setNotice({
-        type: orderEmailNoticeType(payload.notification),
-        text: `${order.order_number}'s packing slip was queued in PrintNode.${orderEmailNotice(payload.notification)}`,
+        type: payload.warning ? "error" : orderEmailNoticeType(payload.notification),
+        text: `${order.order_number}'s packing slip was queued in PrintNode.${orderEmailNotice(payload.notification)}${payload.warning ? ` ${payload.warning}` : ""}`,
       });
     } catch (error) {
       setNotice({ type: "error", text: error.message || "The packing slip could not be printed." });
@@ -5445,7 +5446,7 @@ function AdminOrdersPage() {
             const busy = actionKey.startsWith(`${order.id}:`);
             const printReady = canPrintFulfillment(order);
             const localHandoffReady = canCompleteLocalHandoff(order);
-            const pdfReady = printReady && (!isLocalHandoff(order) || localHandoffReady);
+            const pdfReady = printReady && (!isLocalHandoff(order) || needsOrderCopy(order) || localHandoffReady);
             const packingPrinterStatus = packingPrinterUiStatus(printNodeReadiness?.packing, pdfReady);
             const packingPrintReady = printReady && !packingPrinterStatus.unavailable;
             const localEmailMessage = isLocalHandoff(order)
@@ -5598,7 +5599,7 @@ function AdminOrdersPage() {
                     <div>
                       <AdminDetailHeading>Fulfillment documents</AdminDetailHeading>
                       <div style={{ color: "var(--text-dim)", fontFamily: "'Rajdhani', sans-serif", fontSize: 14 }}>
-                        {isPrecountedOrder(order) && (order.allocations || []).length === 0
+                        {needsOrderCopy(order) ? (order.orderCopyPrintRecorded ? "Order-copy packing slip queued in PrintNode. You can print another copy below." : "No order-copy print is recorded. Check the printer queue, then use Print Packing Slip if needed.") : isPrecountedOrder(order) && (order.allocations || []).length === 0
                           ? isLocalHandoff(order) && printReady
                             ? localHandoffReady
                               ? "Pre-counted cutoff order — the PrintNode packing-slip job is recorded. Preview PDF is now available for reference."
@@ -5810,7 +5811,7 @@ function OrderPaymentConfirmation({ order, busy, confirming, onConfirm }) {
                 </div>
               )}
             </div>
-            <p style={{ color: "var(--text-secondary)", fontFamily: "'Rajdhani', sans-serif", fontSize: 14 }}>{order.backorder_pending ? "This payment will be recorded while the order stays on backorder. After receiving stock, use Allocate stock and then Print Packing Slip." : "Confirming payment automatically sends a packing slip to your printer. You can use Print Packing Slip again if you need another copy."}</p>
+            <p style={{ color: "var(--text-secondary)", fontFamily: "'Rajdhani', sans-serif", fontSize: 14 }}>{order.backorder_pending ? "This payment will be recorded while the order stays on backorder. After receiving stock, use Allocate stock and then Print Packing Slip." : "Packing slips print automatically when orders are placed. Confirming payment will not print a duplicate. Use Print Packing Slip for an updated copy; local handoff requires that paid-order print before completion."}</p>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 9, marginTop: 20 }}>
               <button type="button" disabled={busy} onClick={() => setOpen(false)} style={adminSecondaryButton(busy)}>Cancel</button>
               <button type="button" disabled={busy || !paymentAmountValid} onClick={confirm} style={adminPrimaryButton(busy || !paymentAmountValid)}>{confirming ? "Confirming…" : "Confirm Payment"}</button>

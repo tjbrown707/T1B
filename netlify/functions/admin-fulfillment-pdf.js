@@ -1,3 +1,4 @@
+import { needsOrderCopy } from "../../src/data/packing-slip.js";
 import { authenticateOrderManager } from "./_shared/admin-auth.js";
 import { buildFulfillmentPdf, assertOrderPrintable } from "./_shared/fulfillment-pdf.js";
 import { SITE_ORIGIN, jsonResponse } from "./_shared/http.js";
@@ -5,7 +6,7 @@ import { SITE_ORIGIN, jsonResponse } from "./_shared/http.js";
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const METHODS = "GET, OPTIONS";
 const ORDER_FIELDS = [
-  "id", "order_number", "status", "payment_status", "fulfillment_status", "fulfillment_method",
+  "backorder_pending", "estimated_ship_date", "id", "order_number", "status", "payment_status", "fulfillment_status", "fulfillment_method",
   "inventory_accounting_mode", "payment_confirmed_at", "items", "subtotal", "discount_amount", "shipping",
   "total", "payment_method", "customer_name", "customer_email", "customer_phone",
   "ship_address", "ship_city", "ship_state", "ship_zip", "created_at",
@@ -47,7 +48,7 @@ export default async function handler(request) {
   if (blocked) return fail(409, blocked);
 
   try {
-    if (order.fulfillment_method === "LOCAL_HANDOFF") {
+    if (order.fulfillment_method === "LOCAL_HANDOFF" && !needsOrderCopy(order)) {
       const [printEventResult, deliveryResult] = await Promise.all([
         auth.supabase
           .from("order_events")

@@ -172,6 +172,7 @@ test("verified checkout saves once, queues the receipt, and preserves the staff 
   const orderId = "11111111-1111-4111-8111-111111111111";
   const deliveryId = "22222222-2222-4222-8222-222222222222";
   let createCalls = 0;
+  let printCalls = 0;
   const resendRecipients = [];
   let delivery = null;
   const supabase = {
@@ -234,6 +235,14 @@ test("verified checkout saves once, queues the receipt, and preserves the staff 
   };
   const handler = createOrderHandler({
     createClient: () => supabase,
+    printOrder: async (auth, orderId, config, options) => {
+      assert.equal(createCalls, 1, "order is saved before printing");
+      assert.ok(orderId);
+      printCalls += 1;
+      assert.equal(auth.supabase, supabase);
+      assert.equal(options.automatic, true);
+      throw new Error("Printer unavailable must not fail checkout");
+    },
     fetchImpl: async (url, options) => {
       if (String(url).includes("siteverify")) {
         return new Response(JSON.stringify({ success: true }), { status: 200 });
@@ -255,6 +264,7 @@ test("verified checkout saves once, queues the receipt, and preserves the staff 
     assert.equal(payload.receiptSent, true);
     assert.equal(payload.staffNotificationSent, true);
     assert.equal(createCalls, 1);
+    assert.equal(printCalls, 1);
     assert.equal(delivery.status, "SENT");
     assert.deepEqual(resendRecipients.sort(), ["researcher@example.com", "sales@tierone.bio"]);
   } finally {

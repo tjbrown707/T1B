@@ -3,8 +3,10 @@ import { assertOrderPrintable, buildFulfillmentPdf } from "./fulfillment-pdf.js"
 import { recordOrderPrintSubmission } from "./order-processed-email.js";
 import { getPrintNodePrinterReadiness, submitPrintNodeJob } from "./printnode.js";
 
+import { needsOrderCopy } from "../../../src/data/packing-slip.js";
+
 const ORDER_FIELDS = [
-  "id", "order_number", "status", "payment_status", "fulfillment_status", "fulfillment_method",
+  "backorder_pending", "estimated_ship_date", "id", "order_number", "status", "payment_status", "fulfillment_status", "fulfillment_method",
   "inventory_accounting_mode", "payment_confirmed_at", "items", "subtotal", "discount_amount", "shipping",
   "total", "payment_method", "customer_name", "customer_email", "customer_phone",
   "ship_address", "ship_city", "ship_state", "ship_zip", "created_at",
@@ -34,21 +36,22 @@ export async function printFulfillment(auth, orderId, config, { automatic = fals
       lot: allocation.inventory_lots || null,
     })),
   };
+  const orderCopy = automatic || needsOrderCopy(order);
   if (automatic) {
     const { data: events, error } = await auth.supabase.from("order_events")
-      .select("details").eq("order_id", orderId).eq("event_type", "FULFILLMENT_PACKET_PRINTED");
+      .select("details").eq("order_id", orderId).eq("event_type", "ORDER_PACKING_SLIP_PRINTED");
     if (error) return fail(503, "The previous print status could not be checked. Check the printer before using Print Packing Slip.");
     const previous = (events || []).find(event => Number.isInteger(Number(event?.details?.printnode_job_id))
       && Number(event.details.printnode_job_id) > 0);
     if (previous) return { status: 200, body: { printed: true, alreadyPrinted: true, jobId: Number(previous.details.printnode_job_id) } };
-    // PrintNode retains idempotency keys for 24 hours. Old confirmation retries
+    // PrintNode retains idempotency keys for 24 hours. Old checkout retries
     // must use the explicit reprint action rather than risk a second automatic job.
-    const confirmedAt = new Date(order.payment_confirmed_at).getTime();
-    if (!Number.isFinite(confirmedAt) || Date.now() - confirmedAt >= 23 * 60 * 60 * 1000) {
-      return fail(409, "Automatic printing has expired for this payment. Check the printer, then use Print Packing Slip if needed.");
+    const createdAt = new Date(order.created_at).getTime();
+    if (!Number.isFinite(createdAt) || Date.now() - createdAt >= 23 * 60 * 60 * 1000) {
+      return fail(409, "Automatic printing has expired for this order. Check the printer, then use Print Packing Slip if needed.");
     }
   }
-  const blocked = assertOrderPrintable(order);
+  const blocked = assertOrderPrintable(order, { orderCopy });
   if (blocked) return fail(409, blocked);
 
   const printerReadiness = await getPrintNodePrinterReadiness({
@@ -62,14 +65,22 @@ export async function printFulfillment(auth, orderId, config, { automatic = fals
   }
 
   try {
-    const bytes = await buildFulfillmentPdf(order);
+    const bytes = await buildFulfillmentPdf(order, { orderCopy });
     const jobId = await submitPrintNodeJob({
       printerId: config.fulfillmentPrinterId,
       title: `${order.order_number} - packing slip`,
       contentType: "pdf_base64",
       content: Buffer.from(bytes).toString("base64"),
-      ...(automatic ? { idempotencyKey: `payment-packing-slip/${orderId}` } : {}),
+      ...(automatic ? { idempotencyKey: `order-packing-slip/${orderId}` } : {}),
     });
+    if (orderCopy) {
+      const { error } = await auth.supabase.from("order_events").insert({
+        order_id: orderId, event_type: "ORDER_PACKING_SLIP_PRINTED", actor_user_id: auth.user?.id || null,
+        details: { printnode_job_id: jobId, automatic, payment_status: order.payment_status, backorder_pending: order.backorder_pending === true },
+      });
+      if (error) console.error("order packing slip: audit failed", error);
+      return { status: 200, body: { printed: true, jobId, warning: error ? "Print submitted, but its record could not be saved. Check the queue before reprinting." : undefined } };
+    }
     const notification = await recordOrderPrintSubmission({
       supabase: auth.supabase,
       orderId,

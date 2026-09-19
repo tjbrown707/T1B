@@ -9,8 +9,6 @@ import {
 import { authenticateOrderManager } from "./_shared/admin-auth.js";
 import { jsonResponse, readJsonBody } from "./_shared/http.js";
 
-import { printFulfillment } from "./_shared/print-fulfillment.js";
-import { printNodeConfig } from "./_shared/printnode.js";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const MAX_BODY_BYTES = 4 * 1024;
@@ -100,6 +98,7 @@ async function listOrders(supabase, params) {
     shipment: shipments.get(order.id) || null,
     trackingEmail: notifications.get(order.id) || null,
     packingSlipPrintRecorded: packingSlipPrintRecords.has(order.id),
+    orderCopyPrintRecorded: packingSlipPrintRecords.orderCopies.has(order.id),
   }));
   const nextCursor = hasMore && orders.length > 0 ? encodeCursor(orders[orders.length - 1]) : null;
   return jsonResponse(200, {
@@ -167,11 +166,12 @@ async function loadOrderNotifications(supabase, orderIds) {
 
 async function loadPackingSlipPrintRecords(supabase, orderIds) {
   const recorded = new Set();
+  recorded.orderCopies = new Set();
   if (orderIds.length === 0) return recorded;
   const { data, error } = await supabase
     .from("order_events")
-    .select("order_id,details")
-    .eq("event_type", "FULFILLMENT_PACKET_PRINTED")
+    .select("order_id,event_type,details")
+    .in("event_type", ["FULFILLMENT_PACKET_PRINTED", "ORDER_PACKING_SLIP_PRINTED"])
     .in("order_id", orderIds);
   if (error) {
     console.error("admin-orders: packing-slip print audit read failed:", error);
@@ -179,7 +179,10 @@ async function loadPackingSlipPrintRecords(supabase, orderIds) {
   }
   for (const event of data || []) {
     const jobId = Number(event?.details?.printnode_job_id);
-    if (Number.isInteger(jobId) && jobId > 0) recorded.add(event.order_id);
+    if (Number.isInteger(jobId) && jobId > 0) {
+      if (event.event_type === "ORDER_PACKING_SLIP_PRINTED") recorded.orderCopies.add(event.order_id);
+      else if (event.event_type === "FULFILLMENT_PACKET_PRINTED") recorded.add(event.order_id);
+    }
   }
   return recorded;
 }
@@ -220,18 +223,8 @@ export async function updateOrderWorkflow(supabase, user, request) {
   const updated = Array.isArray(data) ? data[0] : data;
   if (!updated) return fail(404, "Order not found.");
 
-  // Printing follows the committed payment transaction. A print failure must
-  // never turn a successful payment confirmation into a failed payment response.
-  let packingSlip = null;
-  if (action === "confirm_payment" && !updated.backorder_pending) {
-    try {
-      const result = await printFulfillment({ supabase, user }, orderId, printNodeConfig(), { automatic: true });
-      packingSlip = result.body;
-    } catch (printError) {
-      console.error("admin-orders: automatic packing slip failed:", printError);
-      packingSlip = { printed: false, error: "The print could not be confirmed. Check the printer queue before using Print Packing Slip." };
-    }
-  }
+  // Order-arrival printing runs in create-order. Payment confirmation never reprints.
+  const packingSlip = null;
 
   let allocations;
   let shipments;
@@ -258,6 +251,7 @@ export async function updateOrderWorkflow(supabase, user, request) {
     shipment: shipments.get(orderId) || null,
     trackingEmail: notifications.get(orderId) || null,
     packingSlipPrintRecorded: packingSlipPrintRecords.has(orderId),
+    orderCopyPrintRecorded: packingSlipPrintRecords.orderCopies.has(orderId),
   };
   console.info(`admin-orders: staff ${user.id} performed ${action} on ${order.order_number}`);
   return jsonResponse(200, { order, packingSlip }, METHODS);
