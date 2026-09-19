@@ -131,7 +131,7 @@ test("fulfillment stays blocked until payment, commitment, and real lot ids", ()
   assert.equal(canPrintFulfillment(legacyLocal), true);
   assert.equal(canPrintFulfillment({ ...legacyLocal, fulfillment_method: "SHIP" }), false);
   assert.equal(canPrintFulfillment({ ...legacyLocal, inventory_accounting_mode: "TRACKED" }), false);
-  assert.equal(canPrintFulfillment({ ...legacyLocal, payment_status: "AWAITING_PAYMENT" }), false);
+  assert.equal(canPrintFulfillment({ ...legacyLocal, payment_status: "AWAITING_PAYMENT" }), true);
   assert.equal(canPrintFulfillment({ ...legacyLocal, items: [] }), false);
   assert.equal(canPrintFulfillment({ ...legacyLocal, allocations: base.allocations }), true);
   assert.equal(canPrintFulfillment({ ...legacyLocal, allocations: [{ ...base.allocations[0], state: "RELEASED" }] }), false);

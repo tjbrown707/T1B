@@ -7,7 +7,7 @@ The secure inventory, order workflow, and fulfillment code went live on 2026-08-
 - Every one of the 27 catalog products starts with 50 units of active inventory.
 - Those opening units sit in clearly marked provisional lots until their real lot and supplier batch IDs are entered.
 - Placing an order immediately reserves the required units so two customers cannot buy the same last vial.
-- Clicking **Confirm Payment** in the staff order screen commits the reserved units, reduces on-hand inventory, and automatically sends the packing slip to the configured PrintNode fulfillment printer. Payment stays saved if printing fails; the screen explains the problem and **Print Packing Slip** remains available for retries or extra copies.
+- Saving a new order automatically sends an order-copy packing slip to the PrintNode fulfillment printer, including unpaid and backordered orders. The slip labels payment and stock status honestly. **Confirm Payment** commits inventory without printing again. **Print Packing Slip** remains available for reprints.
 - Cancelling an unpaid order releases its reservation.
 - One private branded packing slip combines the order details with the internal lot, storage-location, quantity, and verification fields. Ordinary orders print on one sheet; unusually large orders can continue onto another page without losing rows.
 - Fulfillment documents and shipping labels stay blocked until payment is confirmed and every allocated vial has a real lot number.
@@ -80,7 +80,7 @@ The customer address, parcel measurements, and selected rate are sent only from 
 
 When confirming payment in `/admin/orders`, choose the actual payment channel
 and select **Hand directly to customer**. Inventory is committed normally and the
-packing slip prints automatically; once PrintNode accepts that job, the customer confirmation
+paid fulfillment packing slip can be printed with **Print Packing Slip**; once PrintNode accepts that job, the customer confirmation
 email is durably queued and **Mark Handed Off** unlocks. **Preview PDF** becomes
 available only after that recorded print and does not trigger another email. The
 order permanently blocks Shippo rates, shipping labels, and postage. Use **Mark
@@ -140,7 +140,7 @@ Orders can reserve the starting inventory immediately, even while lot IDs are pr
 
 1. Place a small test order with Cash App, Venmo, or Zelle.
 2. Confirm the inventory screen shows those units as **Reserved** while on-hand remains unchanged.
-3. In `/admin/orders`, click **Confirm Payment**. Confirm the packing slip is automatically sent to the fulfillment printer. **Print Packing Slip** can still be used for another copy.
+3. In `/admin/orders`, confirm the order-arrival slip was queued before payment. Click **Confirm Payment** and verify no duplicate is sent. **Print Packing Slip** produces an updated fulfillment copy after payment.
 4. Confirm reserved decreases and on-hand decreases by the ordered quantity.
 5. Open the fulfillment PDF and verify item, quantity, lot, location, and address.
 6. Click **Mark Picked**, then **Mark Packed** after completing those steps.
@@ -157,16 +157,19 @@ Orders can reserve the starting inventory immediately, even while lot IDs are pr
 - Keep the PrintNode computer awake, online, and signed in.
 - On the first real order, verify that both print jobs succeed and that the customer receives one processed-order email with the correct carrier, tracking number, and secure tracking link.
 
-### Automatic packing slips after payment confirmation
+### Automatic packing slips on order arrival
 
-The server requests printing only after payment is saved. Existing real-lot and
-committed-inventory checks still apply. Printer configuration, data, or network
-failures report a separate print problem while retaining the paid order. Check
-the printer queue before requesting another copy if a submission timed out.
+After the server saves and validates ownership of the order, it requests a packing
+slip before returning checkout success. Unpaid/backordered copies use original
+order items, clearly show payment/backorder status, and do not invent committed
+lots. Printing does not confirm payment, deduct inventory, unlock handoff, or send
+a processed-order email. A paid fulfillment print still follows the existing
+lot checks and customer-email rules.
 
-Recorded packing-slip jobs prevent automatic reprints on payment retries. A
-stable PrintNode idempotency key also protects concurrent submissions within
-PrintNode's 24-hour retention window; unrecorded payment retries older than 23
-hours require the explicit print button. Manual reprints remain unrestricted by
-this automatic key and keep the existing email deduplication. No new migration
-or environment variable is needed.
+Checkout success is preserved if printing fails. The staff dashboard shows
+whether an order-copy print was recorded; check the printer queue before using
+**Print Packing Slip** to retry. There is no unattended printer-failure retry.
+Recorded jobs prevent duplicate checkout prints, and a stable PrintNode key
+protects concurrent retries for 24 hours. Unrecorded automatic retries older
+than 23 hours require the manual print button. No migration or environment
+variable is needed. Existing orders are not automatically backfilled.

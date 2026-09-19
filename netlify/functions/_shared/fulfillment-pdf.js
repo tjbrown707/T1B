@@ -2,6 +2,8 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 
+import { canPrintOrderCopy, needsOrderCopy } from "../../../src/data/packing-slip.js";
+
 const PAGE = { width: 612, height: 792, margin: 42 };
 const RED = rgb(0.77, 0.12, 0.16);
 const BLACK = rgb(0.08, 0.08, 0.08);
@@ -31,7 +33,8 @@ export function isAllocationlessLegacyLocalHandoff(order) {
     });
 }
 
-export function assertOrderPrintable(order) {
+export function assertOrderPrintable(order, { orderCopy = needsOrderCopy(order) } = {}) {
+  if (orderCopy) return canPrintOrderCopy(order) ? "" : "This order cannot be printed.";
   if (order?.payment_status !== "PAID") return "Confirm payment before printing the packing slip.";
   const allocations = Array.isArray(order?.allocations) ? order.allocations : [];
   if (allocations.length === 0) {
@@ -50,7 +53,11 @@ export function assertOrderPrintable(order) {
   return "";
 }
 
-export function buildPackingRows(order) {
+export function buildPackingRows(order, { orderCopy = needsOrderCopy(order) } = {}) {
+  if (orderCopy) return order.items.map(item => ({
+    productId: safe(item.id), item: `${safe(item.name || item.id)} ${safe(item.dose || "")}`.trim(),
+    lotNumber: "Verify before packing", storageLocation: "-", quantity: Number(item.qty),
+  }));
   if (isAllocationlessLegacyLocalHandoff(order)) {
     return order.items.map(item => ({
       productId: safe(item.id || ""),
@@ -74,8 +81,8 @@ export function buildPackingRows(order) {
   });
 }
 
-export async function buildFulfillmentPdf(order) {
-  const blocked = assertOrderPrintable(order);
+export async function buildFulfillmentPdf(order, { orderCopy = needsOrderCopy(order) } = {}) {
+  const blocked = assertOrderPrintable(order, { orderCopy });
   if (blocked) throw new Error(blocked);
 
   const pdf = await PDFDocument.create();
@@ -84,7 +91,7 @@ export async function buildFulfillmentPdf(order) {
   const logo = await pdf.embedPng(loadLogoBytes());
   const fonts = { regular, bold };
 
-  drawPackingSlip(pdf, fonts, logo, order, buildPackingRows(order));
+  drawPackingSlip(pdf, fonts, logo, { ...order, orderCopy }, buildPackingRows(order, { orderCopy }));
 
   pdf.setTitle(`Tier One packing slip - ${safe(order.order_number)}`);
   pdf.setAuthor("Tier One BioSystems");
@@ -98,7 +105,7 @@ function drawPackingSlip(pdf, fonts, logo, order, rows) {
   let { page, y } = newPage(pdf, fonts, logo, order, pageNumber, "PACKING SLIP");
 
   y = detailPair(page, fonts, "Order", order.order_number, "Order date", formatDate(order.created_at), y);
-  y = detailPair(page, fonts, "Customer", order.customer_name, "Payment", "Paid", y);
+  y = detailPair(page, fonts, "Customer", order.customer_name, "Payment", order.payment_status === "PAID" ? "Paid" : "NOT CONFIRMED", y);
   const deliveryLabel = order.fulfillment_method === "LOCAL_HANDOFF" ? "Deliver to" : "Ship to";
   y = drawWrapped(page, fonts, deliveryLabel + ": " + shippingAddress(order), PAGE.margin, y - 2, 520, 9, GREY) - 15;
   if (isAllocationlessLegacyLocalHandoff(order)) {
@@ -114,7 +121,13 @@ function drawPackingSlip(pdf, fonts, logo, order, rows) {
     ) - 12;
   }
 
-  page.drawText("PICK, PACK & VERIFY", { x: PAGE.margin, y, size: 10, font: fonts.bold, color: BLACK });
+  if (order.orderCopy) {
+    const warning = order.backorder_pending
+      ? `BACKORDER - DO NOT SHIP. Estimated ship date: ${safe(order.estimated_ship_date || "Pending")}`
+      : order.payment_status !== "PAID" ? "PAYMENT NOT CONFIRMED - DO NOT SHIP OR HAND OFF" : "ORDER COPY - VERIFY PAYMENT, STOCK AND LOTS BEFORE FULFILLMENT";
+    y = drawWrapped(page, fonts, warning, PAGE.margin, y, 528, 10, RED) - 16;
+  }
+  page.drawText(order.orderCopy ? "ORDER ITEMS - VERIFY LOTS BEFORE PACKING" : "PICK, PACK & VERIFY", { x: PAGE.margin, y, size: 10, font: fonts.bold, color: BLACK });
   y -= 19;
   drawPackingHeader(page, fonts, y);
   y -= 15;
@@ -166,7 +179,8 @@ function newPage(pdf, fonts, logo, order, pageNumber, label) {
     font: fonts.bold,
     color: BLACK,
   });
-  page.drawText(`Page ${pageNumber}`, {
+  if (order.orderCopy) page.drawText(order.backorder_pending ? "BACKORDER / ORDER COPY" : order.payment_status !== "PAID" ? "UNPAID / ORDER COPY" : "ORDER COPY", { x: 360, y: 681, size: 9, font: fonts.bold, color: RED });
+  page.drawText(`Page ${pageNumber}`,  {
     x: 360,
     y: 701,
     size: 8.5,

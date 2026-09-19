@@ -1,3 +1,4 @@
+import { canPrintOrderCopy, needsOrderCopy } from "./packing-slip.js";
 export const OPENING_INVENTORY_QUANTITY = 50;
 export const DEFAULT_REORDER_POINT = 10;
 
@@ -71,6 +72,7 @@ export function isAllocationlessLegacyLocalHandoff(order) {
 }
 
 export function canPrintFulfillment(order) {
+  if (needsOrderCopy(order)) return canPrintOrderCopy(order);
   if (isAllocationlessLegacyLocalHandoff(order)) return true;
   return order?.payment_status === "PAID"
     && Array.isArray(order?.allocations)

@@ -150,7 +150,7 @@ test("pre-counted local handoff without allocations prints honest original-item 
 
   assert.match(assertOrderPrintable({ ...order, fulfillment_method: "SHIP" }), /no inventory allocation/);
   assert.match(assertOrderPrintable({ ...order, inventory_accounting_mode: "TRACKED" }), /no inventory allocation/);
-  assert.match(assertOrderPrintable({ ...order, payment_status: "AWAITING_PAYMENT" }), /Confirm payment/);
+  assert.equal(assertOrderPrintable({ ...order, payment_status: "AWAITING_PAYMENT" }), "");
   assert.match(assertOrderPrintable({
     ...order,
     allocations: [{
@@ -162,10 +162,19 @@ test("pre-counted local handoff without allocations prints honest original-item 
   }), /not been committed/);
 });
 
-test("PDF generation fails closed for unpaid, uncommitted, or provisional orders", async () => {
+test("PDF generation allows unpaid order copies but requires valid lots for paid fulfillment", async () => {
   const order = printableOrder();
-  assert.equal(assertOrderPrintable({ ...order, payment_status: "AWAITING_PAYMENT" }), "Confirm payment before printing the packing slip.");
+  assert.equal(assertOrderPrintable({ ...order, payment_status: "AWAITING_PAYMENT" }), "");
   assert.match(assertOrderPrintable({ ...order, allocations: [{ ...order.allocations[0], state: "RESERVED" }] }), /not been committed/);
   assert.match(assertOrderPrintable({ ...order, allocations: [{ ...order.allocations[0], lot: { is_provisional: true } }] }), /real lot number/);
   await assert.rejects(() => buildFulfillmentPdf({ ...order, allocations: [] }), /no inventory allocation/);
+});
+
+test("backorder order copies include every original item without fictional allocations", async () => {
+  const order = { ...printableOrder(), payment_status: "AWAITING_PAYMENT", backorder_pending: true, allocations: [], estimated_ship_date: "2026-10-02" };
+  assert.equal(assertOrderPrintable(order), "");
+  assert.deepEqual(buildPackingRows(order).map(row => [row.item, row.quantity, row.lotNumber]), [["BPC-157 5 mg", 2, "Verify before packing"]]);
+  assert.equal((await PDFDocument.load(await buildFulfillmentPdf(order))).getPageCount(), 1);
+  assert.notEqual(assertOrderPrintable({ ...order, status: "CANCELLED" }), "");
+  assert.notEqual(assertOrderPrintable({ ...order, items: [] }), "");
 });
