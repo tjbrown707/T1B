@@ -20,6 +20,7 @@ try {
     sql += '\n' + readFileSync(`supabase/migrations/${migration}`, 'utf8');
   }
   sql += '\n' + readFileSync('tests/sql/product-backorders.sql', 'utf8');
+  sql += '\n' + readFileSync('tests/sql/fulfillment-method.sql', 'utf8');
   execFileSync('docker', ['exec', '-i', name, 'psql', '-U', 'postgres', '-v', 'ON_ERROR_STOP=1'], {
     input: sql, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'],
   });

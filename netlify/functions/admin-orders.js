@@ -96,7 +96,7 @@ async function listOrders(supabase, params) {
     ...order,
     allocations: allocations.get(order.id) || [],
     shipment: shipments.get(order.id) || null,
-    trackingEmail: notifications.get(order.id) || null,
+    trackingEmail: notifications.get(`${order.id}:${order.fulfillment_method}`) || null,
     packingSlipPrintRecorded: packingSlipPrintRecords.has(order.id),
     orderCopyPrintRecorded: packingSlipPrintRecords.orderCopies.has(order.id),
   }));
@@ -160,7 +160,7 @@ async function loadOrderNotifications(supabase, orderIds) {
     console.error("admin-orders: tracking-email read failed:", error);
     throw new Error("Order tracking-email details could not be loaded.");
   }
-  for (const notification of data || []) grouped.set(notification.order_id, notification);
+  for (const notification of data || []) grouped.set(`${notification.order_id}:${notification.fulfillment_method}`, notification);
   return grouped;
 }
 
@@ -211,6 +211,7 @@ export async function updateOrderWorkflow(supabase, user, request) {
     expectedPaymentStatus,
     expectedFulfillmentStatus,
     fulfillmentMethod,
+    expectedFulfillmentMethod: parsed.data?.expectedFulfillmentMethod,
     paymentReceivedVia,
     paymentAmountReceived: parsed.data?.paymentAmountReceived,
     expectedPaymentAmount: parsed.data?.expectedPaymentAmount,
@@ -249,7 +250,7 @@ export async function updateOrderWorkflow(supabase, user, request) {
     ...updated,
     allocations: allocations.get(orderId) || [],
     shipment: shipments.get(orderId) || null,
-    trackingEmail: notifications.get(orderId) || null,
+    trackingEmail: notifications.get(`${orderId}:${updated.fulfillment_method}`) || null,
     packingSlipPrintRecorded: packingSlipPrintRecords.has(orderId),
     orderCopyPrintRecorded: packingSlipPrintRecords.orderCopies.has(orderId),
   };
@@ -258,6 +259,20 @@ export async function updateOrderWorkflow(supabase, user, request) {
 }
 
 export function workflowRpc(action, input) {
+  if (action === "update_fulfillment_method") {
+    if (!["SHIP", "LOCAL_HANDOFF"].includes(input.fulfillmentMethod)
+        || !["SHIP", "LOCAL_HANDOFF"].includes(input.expectedFulfillmentMethod)
+        || !["AWAITING_PAYMENT", "PAID"].includes(input.expectedPaymentStatus)
+        || !["ON_HOLD", "READY_TO_PICK", "PICKED", "PACKED"].includes(input.expectedFulfillmentStatus)) return null;
+    return { name: "update_order_fulfillment_method", args: {
+      p_order_id: input.orderId,
+      p_expected_fulfillment_method: input.expectedFulfillmentMethod,
+      p_fulfillment_method: input.fulfillmentMethod,
+      p_expected_payment_status: input.expectedPaymentStatus,
+      p_expected_fulfillment_status: input.expectedFulfillmentStatus,
+      p_actor_user_id: input.actorUserId,
+    } };
+  }
   const fulfillmentMethod = input.fulfillmentMethod || "SHIP";
   const paymentReceivedVia = input.paymentReceivedVia || "Other";
   const paymentAmountReceived = parsePaymentAmount(input.paymentAmountReceived);
@@ -363,6 +378,9 @@ export function workflowError(error, action) {
   if (message.includes("local_handoff_requires_printnode_packing_slip")) {
     return fail(409, "Print the packing slip through PrintNode before marking this order handed off.");
   }
+  if (message.includes("fulfillment_method_shipment_locked")) return fail(409, "A shipping label is purchased or being purchased. Resolve the shipment before changing delivery method.");
+  if (message.includes("fulfillment_method_email_sending")) return fail(409, "A customer email is being sent. Refresh and try again shortly.");
+  if (message.includes("fulfillment_method_order_locked")) return fail(409, "Delivery method cannot change on a completed or cancelled order.");
   if (message.includes("invalid_fulfillment_method")
       || message.includes("invalid_payment_received_via")
       || message.includes("invalid_payment_amount")

@@ -100,6 +100,7 @@ const ROUTES = [
     expectHeadRobots: "noindex, nofollow",
     forbidHead: ["Order Management", "Staff order management"],
   },
+  { path: "/admin/orders", expect: "Change Delivery Method", signedIn: true, exerciseFulfillment: true },
   { path: "/no-such-page", expect: "PAGE NOT FOUND" },
 ];
 let failures = 0;
@@ -114,6 +115,7 @@ for (const {
   requireBody = [],
   signedIn = false,
   exerciseLogin = false,
+  exerciseFulfillment = false,
 } of ROUTES) {
   const errors = [];
   const forbiddenHeadHits = new Set();
@@ -129,7 +131,7 @@ for (const {
     { url: `https://www.tierone.bio${route}`, runScripts: "outside-only", pretendToBeVisual: true, virtualConsole }
   );
   const { window } = dom;
-  const fixtureUser = { id: "11111111-1111-4111-8111-111111111111", email: "researcher@example.com", role: "authenticated", app_metadata: {}, user_metadata: {}, email_confirmed_at: "2026-01-01T00:00:00Z" };
+  const fixtureUser = { id: "11111111-1111-4111-8111-111111111111", email: "researcher@example.com", role: "authenticated", app_metadata: exerciseFulfillment ? { role: "admin" } : {}, user_metadata: {}, email_confirmed_at: "2026-01-01T00:00:00Z" };
   const fixtureSession = {
     access_token: "smoke-access-token", refresh_token: "smoke-refresh-token", token_type: "bearer",
     expires_at: Math.floor(Date.now() / 1000) + 3600, expires_in: 3600, user: fixtureUser,
@@ -141,6 +143,21 @@ for (const {
   window.fetch = async url => new Response(JSON.stringify(
     String(url).includes("/product-availability") ? { products: PRODUCTS.map(product => ({ id: product.id, available: product.id === "bpc157-5" ? 0 : 50, estimatedShipDate: product.id === "bpc157-5" ? "2026-10-02" : null })) } : String(url).includes("/token") ? fixtureSession : String(url).includes("/orders") ? [] : {}
   ), { status: 200, headers: { "Content-Type": "application/json" } });
+  let fulfillmentRequest;
+  if (exerciseFulfillment) {
+    let order = { id: "22222222-2222-4222-8222-222222222222", order_number: "T1B-TEST", status: "PROCESSING", payment_status: "PAID", fulfillment_status: "PACKED", fulfillment_method: "SHIP", customer_name: "Test Customer", customer_email: "test@example.com", total: 100, payment_amount_received: 100, items: [], allocations: [] };
+    window.fetch = async (url, options = {}) => {
+      let payload = {};
+      if (String(url).includes("/admin-orders")) {
+        if (options.method === "PATCH") {
+          fulfillmentRequest = JSON.parse(options.body);
+          order = { ...order, fulfillment_method: fulfillmentRequest.fulfillmentMethod, fulfillment_status: "READY_TO_PICK" };
+          payload = { order };
+        } else payload = { orders: [order], total: 1 };
+      } else if (String(url).includes("/admin-print")) payload = { packing: { configured: true, available: true } };
+      return new Response(JSON.stringify(payload), { status: 200, headers: { "Content-Type": "application/json" } });
+    };
+  }
   const transientBodyHits = new Set();
   const bodyObserver = new window.MutationObserver(() => {
     const bodyText = window.document.getElementById("root")?.textContent || "";
@@ -274,6 +291,32 @@ for (const {
   const privateRobotsClean = !expectHeadRobots
     || [...adminRobotsHistory].every(value => value === expectHeadRobots);
   const publicBodyClean = forbiddenBodyHits.length === 0 && missingBodyTerms.length === 0;
+  if (exerciseFulfillment) {
+    try {
+      const clickButton = label => {
+        const button = [...window.document.querySelectorAll("button")].find(el => el.textContent === label);
+        if (!button || button.disabled) throw new Error(`Missing enabled button: ${label}`);
+        button.click();
+      };
+      const tick = () => new Promise(resolve => setTimeout(resolve, 80));
+      clickButton("Change Delivery Method");
+      await tick();
+      window.document.querySelectorAll('input[name^="delivery-method-"]')[1].click();
+      await tick();
+      clickButton("Save Delivery Method");
+      await tick();
+      if (fulfillmentRequest?.action !== "update_fulfillment_method" || fulfillmentRequest?.expectedFulfillmentMethod !== "SHIP" || fulfillmentRequest?.fulfillmentMethod !== "LOCAL_HANDOFF") throw new Error("Incorrect fulfillment update request");
+      if (!root.textContent.includes("changed to local handoff")) throw new Error("Saved handoff missing");
+      clickButton("Change Delivery Method");
+      await tick();
+      window.document.querySelectorAll('input[name^="delivery-method-"]')[0].click();
+      await tick();
+      clickButton("Save Delivery Method");
+      await tick();
+      if (fulfillmentRequest?.expectedFulfillmentMethod !== "LOCAL_HANDOFF" || fulfillmentRequest?.fulfillmentMethod !== "SHIP") throw new Error("Incorrect reverse fulfillment update");
+      if (!root.textContent.includes("changed to shipping")) throw new Error("Saved shipping missing");
+    } catch (error) { errors.push(`Fulfillment switch: ${error.message}`); }
+  }
   if (exerciseLogin) {
     try {
       const setInput = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
