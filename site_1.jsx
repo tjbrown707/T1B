@@ -61,6 +61,7 @@ import {
   canCancelUnpaidOrder,
   canCompleteLocalHandoff,
   canConfirmPayment,
+  fulfillmentMethodChangeBlock,
   canReopenCancelledOrder,
   hasOrderManagerRole,
   isLocalHandoff,
@@ -5218,6 +5219,7 @@ function AdminOrdersPage() {
           expectedPaymentStatus: order.payment_status,
           expectedFulfillmentStatus: order.fulfillment_status,
           fulfillmentMethod: options.fulfillmentMethod,
+          expectedFulfillmentMethod: order.fulfillment_method,
           paymentReceivedVia: options.paymentReceivedVia,
           paymentAmountReceived: options.paymentAmountReceived,
           expectedPaymentAmount: options.expectedPaymentAmount,
@@ -5239,6 +5241,7 @@ function AdminOrdersPage() {
         mark_picked: `${payload.order.order_number} is marked picked.`,
         mark_packed: `${payload.order.order_number} is marked packed.`,
         mark_handed_off: `${payload.order.order_number} is marked handed off to the customer.`,
+        update_fulfillment_method: `${payload.order.order_number} changed to ${isLocalHandoff(payload.order) ? "local handoff" : "shipping"}. Print an updated packing slip before continuing. Contact the customer if their delivery plans changed.`,
         update_payment_amount: `${payload.order.order_number}'s amount received was corrected. The original order total and inventory were not changed.`,
       };
       let text = messages[action] || `${payload.order.order_number} was updated.`;
@@ -5540,6 +5543,7 @@ function AdminOrdersPage() {
                       <AdminDetailLine label="Phone" value={order.customer_phone} />
                       <AdminDetailLine label="Address" value={[order.ship_address, order.ship_city, order.ship_state, order.ship_zip].filter(Boolean).join(", ")} />
                       <AdminDetailLine label="Fulfillment" value={isLocalHandoff(order) ? "Local handoff" : "Ship to customer"} />
+                      <OrderFulfillmentMethodEditor order={order} busy={busy} onSave={performOrderAction} />
                       <AdminDetailLine label="Inventory accounting" value={isPrecountedOrder(order) ? "Already accounted — no deduction" : "Tracked automatically"} />
                       {formatReservationHold(order) && <AdminDetailLine label="Inventory hold" value={formatReservationHold(order)} />}
                     </div>
@@ -5754,13 +5758,40 @@ function OrderReopenConfirmation({ order, busy, reopening, onConfirm }) {
   );
 }
 
+function OrderFulfillmentMethodEditor({ order, busy, onSave }) {
+  const [editing, setEditing] = useState(false);
+  const [method, setMethod] = useState(order.fulfillment_method);
+  const blocked = fulfillmentMethodChangeBlock(order);
+  async function save() {
+    const saved = await onSave(order, "update_fulfillment_method", { fulfillmentMethod: method });
+    if (saved) setEditing(false);
+  }
+  return (
+    <div style={{ margin: "12px 0", fontFamily: "'Rajdhani', sans-serif" }}>
+      {!editing ? <button type="button" disabled={busy || !!blocked} style={adminSecondaryButton(busy || !!blocked)} onClick={() => { setMethod(order.fulfillment_method); setEditing(true); }}>Change Delivery Method</button> : (
+        <fieldset disabled={busy || !!blocked} style={{ border: "1px solid var(--border)", padding: 12, margin: 0 }}>
+          <legend>Delivery method</legend>
+          <label style={{ display: "block", marginBottom: 8 }}><input type="radio" name={`delivery-method-${order.id}`} checked={method === "SHIP"} onChange={() => setMethod("SHIP")} /> Ship to customer</label>
+          <label style={{ display: "block", marginBottom: 8 }}><input type="radio" name={`delivery-method-${order.id}`} checked={method === "LOCAL_HANDOFF"} onChange={() => setMethod("LOCAL_HANDOFF")} /> Local handoff</label>
+          <p style={{ color: "var(--text-secondary)", fontSize: 14 }}>Payment, shipping charges, and inventory stay the same. Print an updated packing slip after saving. If the customer already received an email, contact them about the change.</p>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            <button type="button" onClick={() => setEditing(false)} style={adminSecondaryButton(busy)}>Cancel</button>
+            <button type="button" disabled={method === order.fulfillment_method} onClick={save} style={adminPrimaryButton(busy || method === order.fulfillment_method)}>{busy ? "Saving…" : "Save Delivery Method"}</button>
+          </div>
+        </fieldset>
+      )}
+      {blocked && <p style={{ color: "var(--text-dim)", fontSize: 13 }}>{blocked}</p>}
+    </div>
+  );
+}
+
 function OrderPaymentConfirmation({ order, busy, confirming, onConfirm }) {
   const defaultPaymentMethod = PAYMENT_RECEIVED_OPTIONS.includes(order?.payment_method)
     ? order.payment_method
     : "Other";
   const [open, setOpen] = useState(false);
   const [paymentReceivedVia, setPaymentReceivedVia] = useState(defaultPaymentMethod);
-  const [fulfillmentMethod, setFulfillmentMethod] = useState(FULFILLMENT_METHODS.SHIP);
+  const [fulfillmentMethod, setFulfillmentMethod] = useState(order.fulfillment_method || FULFILLMENT_METHODS.SHIP);
   const [paymentAmountReceived, setPaymentAmountReceived] = useState(Number(order.total || 0).toFixed(2));
   const paymentAmountValid = validPaymentAmountInput(paymentAmountReceived);
 
@@ -5771,7 +5802,7 @@ function OrderPaymentConfirmation({ order, busy, confirming, onConfirm }) {
 
   return (
     <>
-      <button type="button" disabled={busy} onClick={() => setOpen(true)} style={adminPrimaryButton(busy)}>
+      <button type="button" disabled={busy} onClick={() => { setFulfillmentMethod(order.fulfillment_method || FULFILLMENT_METHODS.SHIP); setOpen(true); }} style={adminPrimaryButton(busy)}>
         {confirming ? "Confirming…" : "Confirm Payment"}
       </button>
       {open && (
@@ -5807,7 +5838,7 @@ function OrderPaymentConfirmation({ order, busy, confirming, onConfirm }) {
               </fieldset>
               {fulfillmentMethod === FULFILLMENT_METHODS.LOCAL_HANDOFF && (
                 <div style={{ padding: 11, border: "1px solid rgba(34,197,94,0.4)", background: "rgba(34,197,94,0.07)", color: "#22c55e", fontFamily: "'Rajdhani', sans-serif", fontSize: 14 }}>
-                  Confirming payment automatically prints the packing slip and queues the confirmation email, then use <strong>Mark Handed Off</strong> when the customer receives the order.
+                  After payment and stock allocation, use Print Packing Slip to queue the confirmation email, then use <strong>Mark Handed Off</strong> when the customer receives the order.
                 </div>
               )}
             </div>

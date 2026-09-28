@@ -5,6 +5,34 @@ records state that is not obvious from the code or the git log.
 
 ---
 
+## Per-order shipping / handoff changes — 2026-09-27
+
+Admin → Orders → expand an order → Customer & delivery → **Change Delivery
+Method** now allows switching shipping/local handoff before payment, on backorder,
+and during picking/packing. Saving preserves all money and inventory and records
+an immutable `FULFILLMENT_METHOD_CHANGED` event. Switching a picked/packed order
+to handoff returns fulfillment to READY_TO_PICK. Payment confirmation starts
+with the currently saved method. Print an updated packing slip after switching;
+contact the customer directly if an earlier email described different plans.
+
+Completed/cancelled/refunded orders and purchased/in-flight postage are locked.
+An in-flight customer email also temporarily blocks switching. Draft quotes can
+remain attached but cannot be purchased while the order is local handoff. Queued
+emails for the old method pause; printing after switching back resumes them with
+the original idempotency key and retry limits. Sent emails are preserved, and a
+handoff email no longer prevents a later shipping email. Staff sees the email for
+the current method. Reprints never create duplicate messages for that method.
+
+Migration `20260928022149_order_fulfillment_method_changes.sql` has been applied
+to production. It adds the service-role-only change RPC, serializes shipment
+writes against method changes, and makes processed emails unique per method.
+No existing order choices are changed by the migration. Website release is via
+PR and required verify check. Verification: 214 tests, route smoke including
+both directions through the actual order UI, production build/secret/integrity
+checks, and disposable PostgreSQL lifecycle tests including email and postage.
+
+---
+
 ## Packing slips on order arrival — 2026-09-18
 
 New checkout orders automatically request an order-copy packing slip before payment,

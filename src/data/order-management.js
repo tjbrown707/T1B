@@ -92,7 +92,8 @@ export function canCompleteLocalHandoff(order) {
   return order?.fulfillment_method === FULFILLMENT_METHODS.LOCAL_HANDOFF
     && order?.packingSlipPrintRecorded === true
     && order?.trackingEmail?.fulfillment_method === FULFILLMENT_METHODS.LOCAL_HANDOFF
-    && Number(order?.trackingEmail?.template_version) === 2;
+    && Number(order?.trackingEmail?.template_version) === 2
+    && order?.trackingEmail?.last_error !== "Paused because delivery method changed.";
 }
 
 export function nextFulfillmentAction(order) {
@@ -125,4 +126,18 @@ export function isPrecountedOrder(order) {
 export function hasOrderManagerRole(user) {
   const role = user?.app_metadata?.role;
   return role === "admin" || role === "order_manager";
+}
+
+export function fulfillmentMethodChangeBlock(order) {
+  if (!["AWAITING_PAYMENT", "PAID"].includes(order?.payment_status)
+      || !["ON_HOLD", "READY_TO_PICK", "PICKED", "PACKED"].includes(order?.fulfillment_status)
+      || ["SHIPPED", "DELIVERED", "CANCELLED", "REFUNDED"].includes(order?.status)) {
+    return "Delivery method cannot change on a completed or cancelled order.";
+  }
+  if (order?.shipment && (!["DRAFT", "ERROR"].includes(order.shipment.status)
+      || order.shipment.label_url || order.shipment.tracking_number)) {
+    return "A shipping label is purchased or being purchased. Resolve the shipment before changing delivery method.";
+  }
+  if (order?.trackingEmail?.status === "SENDING") return "A customer email is being sent. Refresh and try again shortly.";
+  return "";
 }
