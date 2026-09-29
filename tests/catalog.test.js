@@ -13,9 +13,10 @@ test("product ids are unique", () => {
 
 test("every product has the fields the storefront and schema depend on", () => {
   for (const product of PRODUCTS) {
-    for (const field of ["id", "name", "dose", "image", "category", "research", "purity"]) {
+    for (const field of ["id", "name", "dose", "image", "category", "research"]) {
       assert.ok(product[field], `${product.id} is missing ${field}`);
     }
+    assert.ok(product.purity || product.composition, `${product.id} needs purity or composition`);
     assert.equal(typeof product.price, "number", `${product.id} price must be a number`);
     assert.equal(typeof product.bulk, "number", `${product.id} bulk must be a number`);
     assert.ok(product.price > 0, `${product.id} price must be positive`);

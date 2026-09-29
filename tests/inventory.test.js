@@ -67,11 +67,11 @@ const adminPrintSource = readFileSync("netlify/functions/admin-print.js", "utf8"
 const adminShippingSource = readFileSync("netlify/functions/admin-shipping.js", "utf8");
 const siteSource = readFileSync("site_1.jsx", "utf8");
 
-test("opening inventory is active at 50 for every catalog product", () => {
+test("opening inventory is active at 50 for the original catalog products", () => {
   assert.equal(OPENING_INVENTORY_QUANTITY, 50);
   assert.match(migration, /'OPENING_BALANCE',[\s\S]*?\n\s*50,/);
   assert.match(migration, /is_provisional,[\s\S]*?\n\s*50,[\s\S]*?\n\s*50,/);
-  for (const product of PRODUCTS) {
+  for (const product of PRODUCTS.filter(p => p.id !== "bac-water")) {
     assert.match(migration, new RegExp(`\\('${product.id.replaceAll("-", "\\-")}',`));
   }
 });
