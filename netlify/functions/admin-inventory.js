@@ -95,11 +95,11 @@ export function validateInventoryOperation(body) {
     const productId = cleanString(body.productId, 80);
     const lotNumber = cleanString(body.lotNumber, 80);
     const supplierBatchId = cleanString(body.supplierBatchId, 120);
-    const storageLocation = cleanString(body.storageLocation, 120);
+    const storageLocation = cleanString(body.storageLocation, 120) || "Tier One BioSystems HQ";
     const quantity = integer(body.quantity);
     const expiresOn = optionalDate(body.expiresOn);
     if (!PRODUCT_ID_PATTERN.test(productId)) return { error: "Choose a valid product." };
-    if (!lotNumber || lotNumber.length > 80 || lotNumber.toUpperCase().startsWith("PROVISIONAL-")) return { error: "Enter the real lot number." };
+    if (lotNumber.length > 80 || lotNumber.toUpperCase().startsWith("PROVISIONAL-")) return { error: "Enter the real lot number." };
     if (supplierBatchId.length > 120 || storageLocation.length > 120) return { error: "Lot details are too long." };
     if (!quantity || quantity < 1 || quantity > 100000) return { error: "Enter a valid received quantity." };
     if (expiresOn === false) return { error: "Enter a valid expiration date." };
@@ -108,7 +108,7 @@ export function validateInventoryOperation(body) {
       rpc: "receive_inventory_lot",
       args: {
         p_product_id: productId,
-        p_lot_number: lotNumber,
+        p_lot_number: lotNumber || null,
         p_supplier_batch_id: supplierBatchId,
         p_quantity: quantity,
         p_expires_on: expiresOn,
@@ -191,7 +191,7 @@ function inventoryWriteError(error, action) {
     return fail(409, "That adjustment would remove units already reserved for orders.");
   }
   if (message.includes("duplicate key") || error?.code === "23505") {
-    return fail(409, "That lot number is already in use for this product.");
+    return fail(409, "That lot number is already in use. Choose another number.");
   }
   if (message.includes("foreign key") || error?.code === "23503") return fail(400, "The selected product or lot no longer exists.");
   console.error(`admin-inventory: ${action} failed:`, error);

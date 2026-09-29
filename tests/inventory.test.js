@@ -399,3 +399,16 @@ test("Shippo rates are reduced to safe fields and sorted by price", () => {
   assert.equal(rates[0].provider, "Carrier A");
   assert.equal("account_id" in rates[0], false);
 });
+
+
+test("new lots default to database-generated IDs while manual IDs stay supported", () => {
+  for (const lotNumber of [undefined, "", "   "]) {
+    const operation = validateInventoryOperation({ action: "receive_lot", productId: "klow", quantity: 500, lotNumber });
+    assert.equal(operation.rpc, "receive_inventory_lot");
+    assert.equal(operation.args.p_lot_number, null);
+    assert.equal(operation.args.p_storage_location, "Tier One BioSystems HQ");
+    assert.equal(operation.args.p_expires_on, null);
+  }
+  const manual = validateInventoryOperation({ action: "receive_lot", productId: "klow", quantity: 500, lotNumber: "T1B-3K7W" });
+  assert.equal(manual.args.p_lot_number, "T1B-3K7W");
+});

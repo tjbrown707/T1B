@@ -101,6 +101,7 @@ const ROUTES = [
     forbidHead: ["Order Management", "Staff order management"],
   },
   { path: "/admin/orders", expect: "Change Delivery Method", signedIn: true, exerciseFulfillment: true },
+  { path: "/admin/inventory", expect: "RECEIVE A NEW LOT", signedIn: true, exerciseInventory: true },
   { path: "/no-such-page", expect: "PAGE NOT FOUND" },
 ];
 let failures = 0;
@@ -116,6 +117,7 @@ for (const {
   signedIn = false,
   exerciseLogin = false,
   exerciseFulfillment = false,
+  exerciseInventory = false,
 } of ROUTES) {
   const errors = [];
   const forbiddenHeadHits = new Set();
@@ -131,7 +133,7 @@ for (const {
     { url: `https://www.tierone.bio${route}`, runScripts: "outside-only", pretendToBeVisual: true, virtualConsole }
   );
   const { window } = dom;
-  const fixtureUser = { id: "11111111-1111-4111-8111-111111111111", email: "researcher@example.com", role: "authenticated", app_metadata: exerciseFulfillment ? { role: "admin" } : {}, user_metadata: {}, email_confirmed_at: "2026-01-01T00:00:00Z" };
+  const fixtureUser = { id: "11111111-1111-4111-8111-111111111111", email: "researcher@example.com", role: "authenticated", app_metadata: (exerciseFulfillment || exerciseInventory) ? { role: "admin" } : {}, user_metadata: {}, email_confirmed_at: "2026-01-01T00:00:00Z" };
   const fixtureSession = {
     access_token: "smoke-access-token", refresh_token: "smoke-refresh-token", token_type: "bearer",
     expires_at: Math.floor(Date.now() / 1000) + 3600, expires_in: 3600, user: fixtureUser,
@@ -155,6 +157,19 @@ for (const {
           payload = { order };
         } else payload = { orders: [order], total: 1 };
       } else if (String(url).includes("/admin-print")) payload = { packing: { configured: true, available: true } };
+      return new Response(JSON.stringify(payload), { status: 200, headers: { "Content-Type": "application/json" } });
+    };
+  }
+  let inventoryRequest;
+  if (exerciseInventory) {
+    window.fetch = async (url, options = {}) => {
+      let payload = {};
+      if (String(url).includes("/admin-inventory")) {
+        if (options.method === "POST") {
+          inventoryRequest = JSON.parse(options.body);
+          payload = { lot: { lot_number: "T1B-2ABC", received_quantity: inventoryRequest.quantity } };
+        } else payload = { products: [{ product_id: "klow", product_name: "KLOW", dose: "80 mg", lots: [] }], movements: [] };
+      }
       return new Response(JSON.stringify(payload), { status: 200, headers: { "Content-Type": "application/json" } });
     };
   }
@@ -316,6 +331,32 @@ for (const {
       if (fulfillmentRequest?.expectedFulfillmentMethod !== "LOCAL_HANDOFF" || fulfillmentRequest?.fulfillmentMethod !== "SHIP") throw new Error("Incorrect reverse fulfillment update");
       if (!root.textContent.includes("changed to shipping")) throw new Error("Saved shipping missing");
     } catch (error) { errors.push(`Fulfillment switch: ${error.message}`); }
+  }
+  if (exerciseInventory) {
+    try {
+      const tick = () => new Promise(resolve => setTimeout(resolve, 80));
+      [...window.document.querySelectorAll("button")].find(el => el.textContent.includes("RECEIVE A NEW LOT")).click();
+      await tick();
+      if (root.textContent.includes("Supplier batch ID") || !root.textContent.includes("Expires two years") || !root.textContent.includes("Tier One BioSystems HQ")) throw new Error("Receiving defaults missing");
+      const checkbox = window.document.querySelector('input[type="checkbox"]');
+      if (!checkbox.checked || !root.textContent.includes("T1B-XXXX")) throw new Error("Automatic lot ID is not the default");
+      checkbox.click();
+      await tick();
+      if (!window.document.querySelector('input[aria-label="Lot number"]')) throw new Error("Manual option missing");
+      checkbox.click();
+      await tick();
+      const select = window.document.querySelector("select");
+      select.value = "klow";
+      select.dispatchEvent(new window.Event("change", { bubbles: true }));
+      const quantity = window.document.querySelector('input[type="number"]');
+      Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set.call(quantity, "500");
+      quantity.dispatchEvent(new window.Event("input", { bubbles: true }));
+      await tick();
+      quantity.closest("form").dispatchEvent(new window.Event("submit", { bubbles: true, cancelable: true }));
+      await tick();
+      if (inventoryRequest?.lotNumber !== "" || inventoryRequest?.quantity !== 500 || inventoryRequest?.productId !== "klow") throw new Error("Incorrect receive request");
+      if (!root.textContent.includes("Lot T1B-2ABC received: 500 vials added.")) throw new Error("Assigned ID missing from confirmation");
+    } catch (error) { errors.push(`Automatic lot receipt: ${error.message}`); }
   }
   if (exerciseLogin) {
     try {

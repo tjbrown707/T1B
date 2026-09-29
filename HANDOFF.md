@@ -688,3 +688,24 @@ Validation: npm run verify passed (lint, unit tests, signed-in/out route
 smoke, production build, secret scan, integrity). Owner applied the inventory SQL in the Supabase dashboard on September 28;
 read-back confirmed bac-water / BAC Water / 10 mL. No stock was invented.
 The connected MCP remains read-only and the local CLI has no access token.
+
+## Automatic lot IDs and receiving defaults — 2026-09-28
+
+New lots default to an automatically assigned T1B-XXXX identifier when saved.
+The first suffix character is 2–9, followed by three uppercase letters/digits
+excluding ambiguous I/O/0/1. Database uniqueness covers all products, manual
+entries and metadata edits; automatic collisions retry before any receipt audit.
+A manual-ID option remains. The receipt confirmation displays the saved ID.
+
+Supplier batch and storage input fields are removed. New lots default to
+Tier One BioSystems HQ and expiration two calendar years after their Arizona
+creation date. Existing dates, stock and lot names are unchanged. Existing
+metadata can still be corrected, including expiration. Supplier metadata is
+preserved internally for historical records and existing integrations.
+
+Migration 20260929041110_automatic_lot_numbers.sql was applied to production
+via the write-enabled Supabase connection. Full verification and disposable
+PostgreSQL tests passed, including forced collisions, cross-product duplicates,
+metadata-edit rejection, defaults, audit counts and service-only permissions.
+The same transactional checks passed in production and rolled back all test
+stock. Security advisors report only the existing informational RLS notices.
