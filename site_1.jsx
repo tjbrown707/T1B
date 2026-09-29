@@ -2165,7 +2165,7 @@ function ProductQuickView({ product, onClose, onAddToCart, onViewDetails }) {
 
               {/* Purity + Form */}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                {[{ label: "PURITY", value: product.purity }, { label: "FORM", value: "Lyophilized" }].map((s, i) => (
+                {[{ label: product.composition ? "COMPOSITION" : "PURITY", value: product.composition || product.purity }, { label: "FORM", value: product.form || "Lyophilized" }].map((s, i) => (
                   <div key={i} style={{ padding: "8px 12px", border: "1px solid var(--border)" }}>
                     <div style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 10, fontWeight: 600, letterSpacing: "0.1em", color: "var(--text-dim)", marginBottom: 3 }}>{s.label}</div>
                     <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 14, fontWeight: 600, color: "var(--text-primary)" }}>{s.value}</div>
@@ -7800,7 +7800,7 @@ function ProductPage({ onAddToCart }) {
             marginBottom: 20,
           }}>
             {[
-              { label: "LOT-TESTED", color: "#22c55e" },
+              ...(product.lotTested === false ? [] : [{ label: "LOT-TESTED", color: "#22c55e" }]),
               { label: "SHIPS FROM US", color: "var(--red-primary)" },
               { label: "FREE OVER $200", color: "#22c55e" },
             ].map((b, i) => (
@@ -7820,8 +7820,8 @@ function ProductPage({ onAddToCart }) {
           {/* Quick specs */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             {[
-              { label: "PURITY", value: product.purity },
-              { label: "FORM", value: "Lyophilized" },
+              { label: product.composition ? "COMPOSITION" : "PURITY", value: product.composition || product.purity },
+              { label: "FORM", value: product.form || "Lyophilized" },
             ].map((spec, i) => (
               <div key={i} style={{ padding: "10px 14px", border: "1px solid var(--border)" }}>
                 <div style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 11, fontWeight: 600, letterSpacing: "0.1em", color: "var(--text-secondary)", marginBottom: 4 }}>{spec.label}</div>

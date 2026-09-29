@@ -55,9 +55,9 @@ test("no summary contradicts the quantity its product is sold as", () => {
   );
 });
 
-test("every product has a summary to show", () => {
+test("every lot-tested product has a summary to show", () => {
   const uncovered = PRODUCTS
-    .filter(p => !getLabResults(p.name, p.dose))
+    .filter(p => p.lotTested !== false && !getLabResults(p.name, p.dose))
     .map(p => `${p.name} ${p.dose}`);
   assert.deepEqual(uncovered, []);
 });

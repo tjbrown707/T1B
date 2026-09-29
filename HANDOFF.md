@@ -673,3 +673,18 @@ node scripts/check-citations.js --all
 ```
 
 Run `npm install` first on a fresh machine — `node_modules` is not tracked.
+
+
+## BAC Water catalog addition — 2026-09-28
+
+Added `bac-water`: BAC Water 10 mL at $10 per vial (also $10 for 5+).
+The matching image uses stacked BAC / Water and a red 0.9% benzyl alcohol
+line. Product specs display composition and Liquid; no purity or lot-tested
+claim and no fabricated lab report. Product routes derive from the catalog.
+The additive inventory migration registers the product with no opening stock.
+Receive the actual lot and count through Admin → Inventory → Receive lot.
+
+Validation: npm run verify passed (lint, unit tests, signed-in/out route
+smoke, production build, secret scan, integrity). Owner applied the inventory SQL in the Supabase dashboard on September 28;
+read-back confirmed bac-water / BAC Water / 10 mL. No stock was invented.
+The connected MCP remains read-only and the local CLI has no access token.
