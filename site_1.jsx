@@ -6050,7 +6050,8 @@ function InventorySummaryCard({ label, value, note = "", color = "var(--text-pri
 
 function InventoryReceiveForm({ products, onAction, setNotice }) {
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ productId: "", lotNumber: "", supplierBatchId: "", quantity: "", expiresOn: "", storageLocation: "" });
+  const [form, setForm] = useState({ productId: "", lotNumber: "", quantity: "" });
+  const [automaticLot, setAutomaticLot] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -6059,9 +6060,10 @@ function InventoryReceiveForm({ products, onAction, setNotice }) {
     setBusy(true);
     setError("");
     try {
-      await onAction({ action: "receive_lot", ...form, quantity: Number(form.quantity) });
-      setNotice({ type: "success", text: "The new inventory lot was received and added to the audit history." });
-      setForm({ productId: "", lotNumber: "", supplierBatchId: "", quantity: "", expiresOn: "", storageLocation: "" });
+      const result = await onAction({ action: "receive_lot", ...form, lotNumber: automaticLot ? "" : form.lotNumber, quantity: Number(form.quantity) });
+      setNotice({ type: "success", text: `Lot ${result.lot.lot_number} received: ${result.lot.received_quantity} vials added.` });
+      setAutomaticLot(true);
+      setForm({ productId: "", lotNumber: "", quantity: "" });
       setOpen(false);
     } catch (submitError) {
       setError(submitError.message || "The lot could not be received.");
@@ -6076,11 +6078,12 @@ function InventoryReceiveForm({ products, onAction, setNotice }) {
       {open && (
         <form onSubmit={submit} style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(180px, 1fr))", gap: 12, padding: "0 16px 16px" }} className="inventory-form-grid">
           <InventoryField label="Product"><select required value={form.productId} onChange={event => setForm(previous => ({ ...previous, productId: event.target.value }))} style={AUTH_INPUT_STYLE}><option value="">Choose product</option>{products.map(product => <option key={product.product_id} value={product.product_id}>{product.product_name} {product.dose}</option>)}</select></InventoryField>
-          <InventoryField label="Lot number"><input required value={form.lotNumber} onChange={event => setForm(previous => ({ ...previous, lotNumber: event.target.value }))} style={AUTH_INPUT_STYLE} /></InventoryField>
-          <InventoryField label="Supplier batch ID"><input value={form.supplierBatchId} onChange={event => setForm(previous => ({ ...previous, supplierBatchId: event.target.value }))} style={AUTH_INPUT_STYLE} /></InventoryField>
+          <InventoryField label="Lot number">
+            <label style={{ display: "flex", alignItems: "center", gap: 8, fontFamily: "'Rajdhani', sans-serif", fontSize: 15, marginBottom: 8 }}><input type="checkbox" checked={automaticLot} onChange={event => setAutomaticLot(event.target.checked)} />Generate automatically</label>
+            {automaticLot ? <div style={{ color: "var(--text-secondary)", fontFamily: "'Rajdhani', sans-serif", fontSize: 14 }}>An unused T1B-XXXX ID will be assigned when you receive this lot.</div> : <input aria-label="Lot number" required value={form.lotNumber} onChange={event => setForm(previous => ({ ...previous, lotNumber: event.target.value }))} style={AUTH_INPUT_STYLE} />}
+          </InventoryField>
           <InventoryField label="Quantity received"><input required type="number" min="1" step="1" value={form.quantity} onChange={event => setForm(previous => ({ ...previous, quantity: event.target.value }))} style={AUTH_INPUT_STYLE} /></InventoryField>
-          <InventoryField label="Expiration date"><input type="date" value={form.expiresOn} onChange={event => setForm(previous => ({ ...previous, expiresOn: event.target.value }))} style={AUTH_INPUT_STYLE} /></InventoryField>
-          <InventoryField label="Storage location"><input value={form.storageLocation} onChange={event => setForm(previous => ({ ...previous, storageLocation: event.target.value }))} style={AUTH_INPUT_STYLE} placeholder="Freezer / bin" /></InventoryField>
+          <div style={{ gridColumn: "1 / -1", color: "var(--text-secondary)", fontFamily: "'Rajdhani', sans-serif", fontSize: 14 }}>Storage: Tier One BioSystems HQ · Expires two years after this batch is created.</div>
           {error && <div role="alert" style={{ gridColumn: "1 / -1", color: "#ff6b6b", fontFamily: "'Rajdhani', sans-serif" }}>{error}</div>}
           <button type="submit" disabled={busy} style={{ ...adminPrimaryButton(busy), justifySelf: "start" }}>{busy ? "Receiving…" : "Receive Lot"}</button>
         </form>
@@ -6157,11 +6160,9 @@ function InventoryLotEditor({ lot, product, onAction, setNotice }) {
         <button type="button" onClick={() => setEditing(value => !value)} style={adminSecondaryButton(false)}>{editing ? "Close" : "Edit Lot"}</button>
       </div>
       {editing && (
-        <form onSubmit={saveMetadata} style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(140px, 1fr))", gap: 9, marginTop: 12 }} className="inventory-lot-grid">
+        <form onSubmit={saveMetadata} style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(140px, 1fr))", gap: 9, marginTop: 12 }} className="inventory-lot-grid">
           <InventoryField label="Real lot number"><input required value={form.lotNumber} onChange={event => setForm(previous => ({ ...previous, lotNumber: event.target.value }))} style={AUTH_INPUT_STYLE} /></InventoryField>
-          <InventoryField label="Supplier batch ID"><input value={form.supplierBatchId} onChange={event => setForm(previous => ({ ...previous, supplierBatchId: event.target.value }))} style={AUTH_INPUT_STYLE} /></InventoryField>
           <InventoryField label="Expiration"><input type="date" value={form.expiresOn} onChange={event => setForm(previous => ({ ...previous, expiresOn: event.target.value }))} style={AUTH_INPUT_STYLE} /></InventoryField>
-          <InventoryField label="Storage location"><input value={form.storageLocation} onChange={event => setForm(previous => ({ ...previous, storageLocation: event.target.value }))} style={AUTH_INPUT_STYLE} /></InventoryField>
           <InventoryField label="Low-stock alert"><input type="number" min="0" step="1" value={form.reorderPoint} onChange={event => setForm(previous => ({ ...previous, reorderPoint: event.target.value }))} style={AUTH_INPUT_STYLE} /></InventoryField>
           <button type="submit" disabled={Boolean(busy)} style={{ ...adminPrimaryButton(Boolean(busy)), justifySelf: "start" }}>{busy === "save" ? "Saving…" : "Save Lot"}</button>
         </form>
