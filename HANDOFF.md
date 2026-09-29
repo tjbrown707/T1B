@@ -685,6 +685,6 @@ The additive inventory migration registers the product with no opening stock.
 Receive the actual lot and count through Admin → Inventory → Receive lot.
 
 Validation: npm run verify passed (lint, unit tests, signed-in/out route
-smoke, production build, secret scan, integrity). Inventory migration is NOT
-applied: MCP is read-only and local Supabase CLI has no access token. Apply
-20260929032818_add_bac_water_inventory.sql before deploying the website.
+smoke, production build, secret scan, integrity). Owner applied the inventory SQL in the Supabase dashboard on September 28;
+read-back confirmed bac-water / BAC Water / 10 mL. No stock was invented.
+The connected MCP remains read-only and the local CLI has no access token.
