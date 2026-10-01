@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { Buffer } from "node:buffer";
 import { readFileSync } from "node:fs";
-import { PDFDict, PDFDocument, PDFName, StandardFonts } from "pdf-lib";
+import { PDFDict, PDFDocument, PDFName, PDFRawStream, decodePDFRawStream, StandardFonts } from "pdf-lib";
 
 import {
   assertOrderPrintable,
@@ -52,6 +52,18 @@ test("a normal order produces one branded packing slip page", async () => {
   const images = resources.lookup(PDFName.of("XObject"), PDFDict);
   assert.ok(images.keys().length > 0, "the horizontal logo should be embedded");
   assert.match(readFileSync("netlify.toml", "utf8"), /public\/logo-print\.png/);
+});
+
+test('dealer packing slips never print private pricing', async () => {
+  const order = { ...printableOrder(), dealer_sale: { dealerName: 'David' } };
+  for (const dealer of [false, true]) {
+    const document = await PDFDocument.load(await buildFulfillmentPdf({ ...order, dealer_sale: dealer ? order.dealer_sale : null }));
+    const streams = document.getPage(0).node.Contents().asArray().map(ref => Buffer.from(decodePDFRawStream(document.context.lookup(ref, PDFRawStream)).decode()).toString('latin1')).join('\n');
+    const subtotalLabel = Buffer.from('Subtotal').toString('hex').toUpperCase();
+    const privateAmount = Buffer.from('$90.00').toString('hex').toUpperCase();
+    assert.equal(streams.includes(subtotalLabel), !dealer);
+    assert.equal(streams.includes(privateAmount), !dealer);
+  }
 });
 
 test("the packing rows preserve split lots, locations, and allocated quantities", () => {

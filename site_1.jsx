@@ -5,6 +5,7 @@ import { supabase } from "./supabaseClient";
 import { useProductAvailability } from "./src/useProductAvailability.js";
 import { estimatedBackorderDate, formatShipDate } from "./src/data/backorders.js";
 import { useAuth } from "./src/AuthContext.jsx";
+import { dealerQuote, money, readDealerPending } from "./src/data/dealers.js";
 import { loginUrl, safeReturnPath, requiresLogin } from "./src/data/access.js";
 
 // ─── Data ────────────────────────────────────────────────────────────────────
@@ -5076,8 +5077,8 @@ function AdminOrdersPage() {
 
   const [orders, setOrders] = useState([]);
   const [statusFilter, setStatusFilter] = useState("");
-  const [searchInput, setSearchInput] = useState("");
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchInput, setSearchInput] = useState(() => new URLSearchParams(window.location.search).get('q') || '');
+  const [searchQuery, setSearchQuery] = useState(() => new URLSearchParams(window.location.search).get('q') || '');
   const [nextCursor, setNextCursor] = useState(null);
   const [total, setTotal] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -5549,6 +5550,7 @@ function AdminOrdersPage() {
                     </div>
                     <div>
                       <AdminDetailHeading>Payment & totals</AdminDetailHeading>
+                      {order.dealer_sale && <DealerOrderBreakdown sale={order.dealer_sale} />}
                       <AdminDetailLine label="Requested method" value={order.payment_method} />
                       {order.payment_received_via && <AdminDetailLine label="Received via" value={order.payment_received_via} />}
                       {order.payment_amount_received !== null && order.payment_amount_received !== undefined && (
@@ -6192,6 +6194,7 @@ function AdminOperationsNav({ navigate, active }) {
   const items = [
     { id: "orders", label: "Orders", path: "/admin/orders" },
     { id: "inventory", label: "Inventory", path: "/admin/inventory" },
+    { id: "dealers", label: "Dealers", path: "/admin/dealers" },
     { id: "account", label: "My Account", path: "/account" },
   ];
   return (
@@ -6480,9 +6483,282 @@ function orderStatusColors(status) {
 
 // ─── Account Page (Profile + Order History) ───────────────────────────────────
 
+const DEALER_BUTTON_STYLE = { padding: '12px 18px', background: 'var(--red-primary)', border: '1px solid var(--red-primary)', color: '#fff', fontFamily: "'Rajdhani', sans-serif", fontSize: 16, fontWeight: 700, cursor: 'pointer' };
+const DEALER_PANEL_STYLE = { padding: 24, border: '1px solid var(--border)', background: 'var(--bg-card)', marginBottom: 24 };
+const DEALER_DELIVERY_LABELS = { LOCAL_HANDOFF: 'Dealer picks up and hand-delivers', SHIP_TO_DEALER: 'Tier One ships to dealer', SHIP_TO_CUSTOMER: 'Tier One ships to customer' };
+
+async function dealerApi(token, params = '', body) {
+  const response = await fetch(`/.netlify/functions/dealers${params}`, {
+    method: body ? 'PUT' : 'GET',
+    headers: { Authorization: `Bearer ${token}`, ...(body ? { 'Content-Type': 'application/json' } : {}) },
+    ...(body ? { body: JSON.stringify(body) } : {}),
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || 'Dealer service is unavailable.');
+  return data;
+}
+
+function DealerOrderBreakdown({ sale }) {
+  return <div style={{ padding: 16, border: '1px solid var(--red-primary)', marginBottom: 16 }}>
+    <strong>Dealer order · {sale.dealerName}</strong>
+    <p style={{ margin: '6px 0' }}>Customer reference: {sale.customerReference}</p>
+    <p style={{ margin: '6px 0' }}>Collect from customer: <strong>{money(sale.customerTotal)}</strong></p>
+    <p style={{ margin: '6px 0' }}>Pay Tier One: <strong>{money(sale.dealerTotal)}</strong></p>
+    <p style={{ margin: '6px 0', color: '#69b34c' }}>Dealer keeps: <strong>{money(sale.retained)}</strong></p>
+    <small>{sale.percentOff}% dealer discount · Original delivery: {DEALER_DELIVERY_LABELS[sale.delivery]} · Before dealer expenses</small>
+  </div>;
+}
+
+function DealerStats({ summary }) {
+  return <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(145px,1fr))', gap: 12, marginBottom: 24 }}>
+    {[["Dealer orders", summary?.orders || 0], ["Customer sales (ordered)", money(summary?.customerSales)], ["Margin on paid orders", money(summary?.retained)], ["Still owed to Tier One", money(summary?.owed)], ["Paid to Tier One", money(summary?.paid)]].map(([label, value]) =>
+      <div key={label} style={{ ...DEALER_PANEL_STYLE, marginBottom: 0, padding: 16 }}><div style={{ fontSize: 14, color: 'var(--text-secondary)' }}>{label}</div><strong style={{ fontSize: 25 }}>{value}</strong></div>)}
+  </div>;
+}
+
+function DealerOrders({ orders, staff = false }) {
+  const navigate = useNavigate();
+  return <div style={DEALER_PANEL_STYLE}><h2 style={{ marginTop: 0 }}>Dealer orders</h2>
+    <p>Each order keeps its original pricing. Cancelled and refunded orders are excluded from totals. Customer sales are based on the quoted price; payment collected by the dealer is not verified by Tier One.</p>
+    {!orders?.length && <p>No dealer orders yet.</p>}
+    {(orders || []).map(order => <details key={order.id} style={{ borderTop: '1px solid var(--border)', padding: '16px 0' }}>
+      <summary style={{ cursor: 'pointer', fontWeight: 700 }}>{order.order_number} · {order.dealer_sale.customerReference} · {money(order.total)} to Tier One · {order.payment_status.replaceAll('_', ' ')}</summary>
+      <p>{new Date(order.created_at).toLocaleDateString('en-US')} · {isLocalHandoff(order) ? 'Dealer pickup' : 'Shipping'} · Fulfillment: {order.fulfillment_status.replaceAll('_', ' ')}</p>
+      {order.payment_status === 'PAID' && <p>Tier One received: {money(order.payment_amount_received ?? order.total)} · Remaining owed: {money(Math.max(0, Number(order.total) - Number(order.payment_amount_received ?? order.total)))}</p>}
+      {order.estimated_ship_date && <p>Estimated ship date: {formatShipDate(order.estimated_ship_date)}</p>}
+      <DealerOrderBreakdown sale={order.dealer_sale} />
+      {order.dealer_sale.retailItems.map((line, index) => <div key={line.id} style={{ padding: '6px 0' }}>{line.name} {line.dose} ×{line.qty} · Customer {money(line.lineTotal)} · Dealer {money(order.dealer_sale.dealerItems[index].lineTotal)}</div>)}
+      {!staff && order.payment_status === 'AWAITING_PAYMENT' && <DealerPaymentInstructions method={Object.keys(CHECKOUT_PAYMENT_METHODS).find(key => CHECKOUT_PAYMENT_METHODS[key] === order.payment_method) || 'zelle'} total={order.total} orderNumber={order.order_number} />}
+      {staff && <button style={DEALER_BUTTON_STYLE} onClick={() => navigate(`/admin/orders?q=${encodeURIComponent(order.order_number)}`)}>Open order to confirm payment / fulfill</button>}
+    </details>)}
+  </div>;
+}
+
+function DealerDeskPage() {
+  useRouteMeta('/dealer');
+  const { user, session, profile } = useAuth();
+  const navigate = useNavigate();
+  const token = session?.access_token;
+  const [desk, setDesk] = useState(null);
+  const [error, setError] = useState('');
+  const [items, setItems] = useState([]);
+  const [productId, setProductId] = useState(PRODUCTS[0].id);
+  const [qty, setQty] = useState(1);
+  const [reference, setReference] = useState('');
+  const [delivery, setDelivery] = useState('LOCAL_HANDOFF');
+  const [recipient, setRecipient] = useState({ name: '', phone: '', address: '', city: '', state: '', zip: '' });
+  const [method, setMethod] = useState('zelle');
+  const [acknowledged, setAcknowledged] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState('');
+  const [turnstileReset, setTurnstileReset] = useState(0);
+  const [busy, setBusy] = useState(false);
+  const [confirmed, setConfirmed] = useState(null);
+  const [pending, setPending] = useState(() => readDealerPending(sessionStorage, user?.id));
+  const submitting = useRef(false);
+  const availability = useProductAvailability();
+  const load = useCallback(async (offset = 0) => {
+    try {
+      const data = await dealerApi(token, `?offset=${offset}`);
+      setDesk(previous => offset ? { ...data, orders: [...(previous?.orders || []), ...data.orders] } : data);
+      setError('');
+    } catch (err) { setError(err.message); }
+  }, [token]);
+  useEffect(() => {
+    // load awaits a server response before setting state.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (token) load();
+  }, [token, load]);
+  const quote = desk?.dealer?.active ? dealerQuote(items, desk.dealer.percent_off, delivery) : null;
+  const backorder = items.some(item => availability?.some(stock => stock.id === item.id && stock.available < item.qty));
+
+  function addItem() {
+    const count = Number(qty);
+    if (!Number.isInteger(count) || count < 1 || count > MAX_CART_QUANTITY) { setError('Choose a quantity from 1 to 99.'); return; }
+    setItems(previous => {
+      const exists = previous.find(item => item.id === productId);
+      return exists ? previous.map(item => item.id === productId ? { ...item, qty: Math.min(MAX_CART_QUANTITY, item.qty + count) } : item) : [...previous, { id: productId, qty: count }];
+    });
+    setError('');
+  }
+
+  async function placeOrder(event) {
+    event.preventDefault();
+    if (submitting.current || !turnstileToken || !acknowledged) return;
+    submitting.current = true; setBusy(true); setError('');
+    let payload = pending;
+    try {
+      if (!payload) {
+        if (!quote || !items.length) throw new Error('Add products first.');
+        const random = new Uint32Array(1);
+        globalThis.crypto.getRandomValues(random);
+        const date = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Phoenix' }).replaceAll('-', '').slice(2);
+        const customer = delivery === 'SHIP_TO_CUSTOMER' ? { ...recipient, email: user.email } : {
+          name: profile?.full_name || desk.dealer.display_name, email: user.email, phone: profile?.phone || recipient.phone,
+          address: profile?.address || (delivery === 'LOCAL_HANDOFF' ? 'Local pickup' : ''),
+          city: profile?.city || (delivery === 'LOCAL_HANDOFF' ? 'Local pickup' : ''),
+          state: profile?.state || (delivery === 'LOCAL_HANDOFF' ? 'AZ' : ''),
+          zip: profile?.zip || (delivery === 'LOCAL_HANDOFF' ? 'N/A' : ''),
+        };
+        if (Object.values(customer).some(value => !String(value).trim())) throw new Error('Complete your account phone and shipping details, or enter the customer delivery details.');
+        payload = { orderNumber: `T1B-${date}-${100000 + random[0] % 900000}`, items, customer, paymentMethod: method, discountCodes: [], dealerOrder: true, dealerDelivery: delivery, customerReference: reference, quotedDealerTotal: quote.dealerTotal, quotedCustomerTotal: quote.customerTotal };
+        // Persist before sending. Refresh/network retries reuse the same order
+        // reference and immutable input rather than placing another order.
+        sessionStorage.setItem(`t1b-dealer-pending-${user.id}`, JSON.stringify(payload));
+        setPending(payload);
+      }
+      const response = await fetch('/.netlify/functions/create-order', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ ...payload, researchAcknowledged: acknowledged, turnstileToken }),
+      });
+      const result = await response.json();
+      if (!response.ok || !result.ok) {
+        if ([400, 401, 403, 409].includes(response.status)) { sessionStorage.removeItem(`t1b-dealer-pending-${user.id}`); setPending(null); }
+        throw new Error(result.error || 'Order could not be saved. Retry this order.');
+      }
+      setConfirmed({ ...result, paymentMethod: payload.paymentMethod });
+      try { sessionStorage.removeItem(`t1b-dealer-pending-${user.id}`); } catch { /* saved order stays visible below */ }
+      setPending(null); setItems([]); setReference(''); setAcknowledged(false);
+      await load();
+    } catch (err) { setError(err.message); }
+    finally { submitting.current = false; setBusy(false); setTurnstileToken(''); setTurnstileReset(value => value + 1); }
+  }
+
+  return <div style={{ maxWidth: 1100, margin: '0 auto', padding: '120px 24px 80px', color: 'var(--text-primary)', fontFamily: "'Rajdhani', sans-serif", fontSize: 17 }}>
+    <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16, marginBottom: 20 }}><h1 style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 26 }}>Dealer Desk</h1><button style={DEALER_BUTTON_STYLE} onClick={() => navigate('/account')}>My Account</button></div>
+    {error && <p role="alert" style={{ color: '#ff9e9e' }}>{error}</p>}
+    {!desk && <button style={DEALER_BUTTON_STYLE} onClick={() => load()}>Load dealer details</button>}
+    {desk && !desk.dealer && <p>Dealer access has not been enabled for this account. Contact Tier One to set it up.</p>}
+    {desk?.dealer && <>
+      <p>{desk.dealer.display_name} · {desk.dealer.percent_off}% off current product prices, including quantity pricing and any active sale. You collect customer payment and pay Tier One your dealer total. Shipping passes through without a dealer discount.</p>
+      <DealerStats summary={desk.summary} />
+      <button style={{ ...DEALER_BUTTON_STYLE, marginBottom: 16 }} onClick={() => load()}>Refresh orders and balance</button>
+      {!desk.dealer.active && <p>Dealer ordering is paused. Your previous orders remain available.</p>}
+      {confirmed && <div style={DEALER_PANEL_STYLE}><h2>Order saved · {confirmed.orderNumber}</h2><p>Awaiting your dealer payment. Include this order number in the payment memo.</p><DealerOrderBreakdown sale={confirmed.dealerSale} />
+        {confirmed.estimatedShipDate && <p>On backorder · Estimated availability: {formatShipDate(confirmed.estimatedShipDate)}</p>}
+        {!confirmed.receiptSent && <p>Your receipt email is pending. Your order is saved and appears below.</p>}
+        <DealerPaymentInstructions method={confirmed.paymentMethod} total={confirmed.totals.total} orderNumber={confirmed.orderNumber} />
+        <button style={DEALER_BUTTON_STYLE} onClick={() => setConfirmed(null)}>Start another customer order</button>
+      </div>}
+      {(desk.dealer.active || pending) && !confirmed && <form onSubmit={placeOrder} style={DEALER_PANEL_STYLE}>
+        <h2 style={{ marginTop: 0 }}>New customer order</h2>
+        <p>Use this desk for dealer orders. The regular storefront checkout keeps its regular prices.</p>
+        {pending && <div><p>A previous submission needs a retry: {pending.orderNumber}. Retry with the original saved details to recover it safely.</p><p>Customer: {pending.customerReference} · Collect {money(pending.quotedCustomerTotal)} · Pay Tier One {money(pending.quotedDealerTotal)} · {DEALER_DELIVERY_LABELS[pending.dealerDelivery]}</p>{pending.items.map(item => <p key={item.id}>{PRODUCTS.find(product => product.id === item.id)?.name || item.id} ×{item.qty}</p>)}</div>}
+        <fieldset disabled={busy || !!pending} style={{ border: 0, padding: 0, margin: 0 }}>
+          <label style={AUTH_LABEL_STYLE}>Customer name / reference<input required maxLength={120} value={reference} onChange={event => setReference(event.target.value)} style={AUTH_INPUT_STYLE} placeholder="e.g. Jordan — October order" /></label>
+          <label style={AUTH_LABEL_STYLE}>Delivery<select value={delivery} onChange={event => setDelivery(event.target.value)} style={AUTH_INPUT_STYLE}>
+            <option value="LOCAL_HANDOFF">I pick up and hand-deliver — no shipping charge</option><option value="SHIP_TO_DEALER">Ship to me — use my account address</option><option value="SHIP_TO_CUSTOMER">Ship directly to my customer</option>
+          </select></label>
+          {delivery === 'SHIP_TO_DEALER' && <p>Shipping to {[profile?.address, profile?.city, profile?.state, profile?.zip].filter(Boolean).join(', ') || 'your saved account address'}. <Link to="/account">Edit your address</Link>.</p>}
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', margin: '20px 0' }}>
+            <select aria-label="Product" value={productId} onChange={event => setProductId(event.target.value)} style={{ ...AUTH_INPUT_STYLE, flex: '1 1 240px', width: 'auto' }}>{PRODUCTS.map(product => <option key={product.id} value={product.id}>{product.name} {product.dose}</option>)}</select>
+            <input aria-label="Quantity" type="number" min="1" max="99" step="1" value={qty} onChange={event => setQty(event.target.value)} style={{ ...AUTH_INPUT_STYLE, width: 90 }} />
+            <button type="button" onClick={addItem} style={DEALER_BUTTON_STYLE}>Add product</button>
+          </div>
+          {quote?.retailItems.map((line, index) => <div key={line.id} style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', gap: 12, borderTop: '1px solid var(--border)', padding: '14px 0' }}>
+            <div><strong>{line.name} {line.dose} ×{line.qty}</strong><div>Per vial: charge {money(line.unitPrice)} · pay Tier One {money(quote.dealerItems[index].unitPrice)} · keep {money(line.unitPrice - quote.dealerItems[index].unitPrice)}</div><div>Line total: customer {money(line.lineTotal)} · dealer {money(quote.dealerItems[index].lineTotal)}</div></div>
+            <button type="button" onClick={() => setItems(previous => previous.filter(item => item.id !== line.id))} style={DEALER_BUTTON_STYLE}>Remove</button>
+          </div>)}
+          {quote && <DealerOrderBreakdown sale={{ ...quote, dealerName: desk.dealer.display_name, customerReference: reference || 'New customer', delivery }} />}
+          {backorder && <p style={{ color: '#fbbf24' }}>This order includes backordered stock. Estimated availability: {formatShipDate(estimatedBackorderDate())}. The full order waits until all items are available.</p>}
+          <p>Shipping: {money(quote?.shipping)}. You keep the displayed difference if you collect the quoted customer total. Any price reduction or payment-app fee you absorb reduces your earnings.</p>
+          {delivery === 'SHIP_TO_CUSTOMER' ? <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 12 }}>{Object.keys(recipient).map(field => <label key={field} style={AUTH_LABEL_STYLE}>{field === 'name' ? 'Recipient name' : field}<input required maxLength={field === 'address' ? 200 : field === 'name' ? 120 : field === 'phone' ? 40 : field === 'zip' ? 20 : 100} value={recipient[field]} onChange={event => setRecipient(previous => ({ ...previous, [field]: event.target.value }))} style={AUTH_INPUT_STYLE} /></label>)}</div> : !profile?.phone && <label style={AUTH_LABEL_STYLE}>Your phone<input required value={recipient.phone} onChange={event => setRecipient(previous => ({ ...previous, phone: event.target.value }))} style={AUTH_INPUT_STYLE} /></label>}
+          <label style={AUTH_LABEL_STYLE}>How you will pay Tier One<select value={method} onChange={event => setMethod(event.target.value)} style={AUTH_INPUT_STYLE}><option value="zelle">Zelle</option><option value="cashapp">Cash App</option><option value="venmo">Venmo</option></select></label>
+        </fieldset>
+        <label style={{ display: 'block', margin: '20px 0' }}><input type="checkbox" required checked={acknowledged} onChange={event => setAcknowledged(event.target.checked)} /> I understand all products are for research and laboratory use only, not for human consumption.</label>
+        <TurnstileField onToken={setTurnstileToken} resetKey={turnstileReset} />
+        <button type="submit" disabled={busy || !acknowledged || !turnstileToken || (!pending && !items.length)} style={{ ...DEALER_BUTTON_STYLE, opacity: busy || !acknowledged || !turnstileToken ? 0.5 : 1 }}>{busy ? 'Saving order…' : pending ? 'Retry saved order' : `Place dealer order · Pay ${money(quote?.dealerTotal)}`}</button>
+      </form>}
+      <DealerOrders orders={desk.orders} />
+      {desk.nextOffset !== null && desk.nextOffset !== undefined && <button style={DEALER_BUTTON_STYLE} onClick={() => load(desk.nextOffset)}>Load older orders</button>}
+    </>}
+  </div>;
+}
+
+function DealerPaymentInstructions({ method, total, orderNumber }) {
+  if (method === 'zelle') return <div style={{ marginBottom: 24 }}><p>Send <strong>{money(total)}</strong> via Zelle to <strong>TIER ONE BIO LLC / TierOneBio</strong>. Memo: {orderNumber}. Tier One verifies receipt before release.</p><div style={{ width: 'min(100%, 300px)', aspectRatio: '1 / 1', overflow: 'hidden', position: 'relative', margin: '16px 0', background: '#fff', border: '8px solid #fff', boxSizing: 'border-box' }}><img src="/zelle-tier-one-bio-qr.jpg" alt="Tier One business Zelle QR code" width="1035" height="1280" style={{ position: 'absolute', display: 'block', width: '153.33%', maxWidth: 'none', height: 'auto', left: '-26.67%', top: '-44.44%' }} /></div><p>On this same phone, search your bank’s Zelle for TierOneBio and verify TIER ONE BIO LLC.</p></div>;
+  const url = method === 'venmo' ? `https://venmo.com/u/TierOneBio?txn=pay&amount=${Number(total).toFixed(2)}&note=${encodeURIComponent(orderNumber)}` : `https://cash.app/$TierOneBio/${Number(total).toFixed(2)}`;
+  return <p><a href={url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--red-primary)', fontWeight: 700 }}>Pay {money(total)} using {method === 'venmo' ? 'Venmo' : 'Cash App'}</a> · Memo: {orderNumber}</p>;
+}
+
+function AdminDealersPage() {
+  const { session, user, isLoggedIn, loading } = useAuth();
+  const navigate = useNavigate();
+  const staff = hasOrderManagerRole(user);
+  useRouteMeta('/admin/dealers', { revealStaffTitle: !loading && staff });
+  const [dealers, setDealers] = useState([]);
+  const [email, setEmail] = useState('');
+  const [selected, setSelected] = useState(null);
+  const [name, setName] = useState('');
+  const [rate, setRate] = useState(60);
+  const [active, setActive] = useState(true);
+  const [desk, setDesk] = useState(null);
+  const [notice, setNotice] = useState('');
+  const [busy, setBusy] = useState(false);
+  const token = session?.access_token;
+  const loadDealers = useCallback(async () => {
+    try { const data = await dealerApi(token, '?staff=1'); setDealers(data.dealers); }
+    catch (error) { setNotice(error.message); }
+  }, [token]);
+  useEffect(() => { if (!loading && !isLoggedIn) navigate('/login?redirect=/admin/dealers', { replace: true }); }, [loading, isLoggedIn, navigate]);
+  useEffect(() => {
+    // loadDealers awaits a server response before setting state.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (token && staff) loadDealers();
+  }, [token, staff, loadDealers]);
+
+  async function selectDealer(dealer, offset = 0) {
+    setBusy(true); setNotice('');
+    if (!offset) { setDesk(null); setSelected({ id: dealer.user_id, email: dealer.email }); setName(dealer.display_name); setRate(dealer.percent_off); setActive(dealer.active); }
+    try { const data = await dealerApi(token, `?dealerId=${dealer.user_id}&offset=${offset}`); setDesk(previous => offset ? { ...data, orders: [...previous.orders, ...data.orders] } : data); }
+    catch (error) { setDesk(null); setNotice(error.message); }
+    finally { setBusy(false); }
+  }
+
+  async function findAccount(event) {
+    event.preventDefault(); setBusy(true); setNotice(''); setDesk(null); setSelected(null);
+    try {
+      const data = await dealerApi(token, `?staff=1&email=${encodeURIComponent(email.trim())}`);
+      if (!data.customer) throw new Error('No account found for that exact email. Ask the dealer to create an account first.');
+      const existing = data.dealers.find(dealer => dealer.user_id === data.customer.id);
+      if (existing) await selectDealer(existing);
+      else { setSelected(data.customer); setName(data.customer.full_name || ''); setRate(60); setActive(true); }
+    } catch (error) { setNotice(error.message); }
+    finally { setBusy(false); }
+  }
+
+  async function save(event) {
+    event.preventDefault(); setBusy(true); setNotice('');
+    try {
+      const result = await dealerApi(token, '', { userId: selected.id, name, percentOff: Number(rate), active });
+      await loadDealers(); await selectDealer(result.dealer);
+      setNotice('Dealer settings saved. New orders use this rate; past orders keep their original prices.');
+    } catch (error) { setNotice(error.message); }
+    finally { setBusy(false); }
+  }
+
+  if (loading || !isLoggedIn) return null;
+  if (!staff) return <div style={{ padding: '120px 24px' }}>This account does not have staff access.</div>;
+  return <div style={{ maxWidth: 1100, margin: '0 auto', padding: '120px 24px 80px', fontFamily: "'Rajdhani', sans-serif", color: 'var(--text-primary)', fontSize: 17 }}>
+    <h1 style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 26 }}>Dealers</h1><AdminOperationsNav navigate={navigate} active="dealers" />
+    <p>Set each dealer’s discount and track the amount they pay Tier One. Confirm their dealer payment and complete pickup/shipping in Orders.</p>
+    {notice && <p role="status" style={{ color: '#fbbf24' }}>{notice}</p>}
+    <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 24 }}>{dealers.map(dealer => <button key={dealer.user_id} disabled={busy} onClick={() => selectDealer(dealer)} style={DEALER_BUTTON_STYLE}>{dealer.display_name} · {dealer.percent_off}% off{!dealer.active ? ' · Paused' : ''}</button>)}</div>
+    <form onSubmit={findAccount} style={DEALER_PANEL_STYLE}><label style={AUTH_LABEL_STYLE}>Find an existing customer by exact email<input type="email" required value={email} onChange={event => setEmail(event.target.value)} style={AUTH_INPUT_STYLE} /></label><button disabled={busy} style={DEALER_BUTTON_STYLE}>Find account</button></form>
+    {selected && <form onSubmit={save} style={DEALER_PANEL_STYLE}><h2>Dealer settings</h2>
+      <p>Selected account: {selected.email || name}</p>
+      <label style={AUTH_LABEL_STYLE}>Dealer name<input required maxLength={120} value={name} onChange={event => setName(event.target.value)} style={AUTH_INPUT_STYLE} /></label>
+      <label style={AUTH_LABEL_STYLE}>Percent off current product price<input type="number" required min="0.01" max="99.99" step="0.01" value={rate} onChange={event => setRate(event.target.value)} style={AUTH_INPUT_STYLE} /></label>
+      <p>For a $100 product: dealer pays {money(100 - Number(rate))} and keeps {money(Number(rate))} at the quoted customer price. Shipping is separate. This applies after quantity pricing and any active sale.</p>
+      <label style={{ display: 'block', marginBottom: 16 }}><input type="checkbox" checked={active} onChange={event => setActive(event.target.checked)} /> Dealer ordering enabled</label>
+      <button disabled={busy} style={DEALER_BUTTON_STYLE}>{busy ? 'Saving…' : 'Save dealer settings'}</button>
+    </form>}
+    {desk && <><DealerStats summary={desk.summary} /><DealerOrders orders={desk.orders} staff />{desk.nextOffset !== null && <button disabled={busy} style={DEALER_BUTTON_STYLE} onClick={() => selectDealer(desk.dealer, desk.nextOffset)}>Load older orders</button>}</>}
+  </div>;
+}
+
 function AccountPage() {
   const navigate = useNavigate();
-  const { user, profile, isLoggedIn, loading: authLoading, signOut, updatePassword, refreshProfile } = useAuth();
+  const { user, session, profile, isLoggedIn, loading: authLoading, signOut, updatePassword, refreshProfile } = useAuth();
   useRouteMeta("/account");
 
   const [form, setForm] = useState({ full_name: "", phone: "", address: "", city: "", state: "", zip: "" });
@@ -6495,6 +6771,15 @@ function AccountPage() {
   const [changingPassword, setChangingPassword] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 700);
   const canManageOrders = hasOrderManagerRole(user);
+  const [dealerAccount, setDealerAccount] = useState(null);
+  useEffect(() => {
+    if (!session?.access_token) return;
+    let active = true;
+    fetch('/.netlify/functions/dealers', { headers: { Authorization: `Bearer ${session.access_token}` } })
+      .then(response => response.ok ? response.json() : null)
+      .then(data => { if (active) setDealerAccount(data?.dealer || null); }).catch(() => {});
+    return () => { active = false; };
+  }, [session?.access_token]);
   useEffect(() => {
     const h = () => setIsMobile(window.innerWidth < 700);
     window.addEventListener("resize", h);
@@ -6567,6 +6852,7 @@ function AccountPage() {
           {canManageOrders && (
             <button onClick={() => navigate("/admin/orders")} style={{ padding: "10px 22px", background: "var(--red-primary)", border: "1px solid var(--red-primary)", color: "#fff", fontFamily: "'Orbitron', sans-serif", fontWeight: 700, fontSize: 11, letterSpacing: "0.15em", textTransform: "uppercase", cursor: "pointer" }}>Manage Orders</button>
           )}
+          {dealerAccount && <button onClick={() => navigate('/dealer')} style={DEALER_BUTTON_STYLE}>Dealer Desk</button>}
           <button onClick={handleSignOut} style={{
             padding: "10px 22px",
             background: "transparent",
@@ -8065,6 +8351,7 @@ export default function App() {
         <Route path="/lab-results" element={<LabResultsPage />} />
         <Route path="/cart" element={<CartPage cart={cart} setCart={setCart} />} />
         <Route path="/checkout" element={<Navigate to="/cart" replace />} />
+        <Route path="/dealer" element={<DealerDeskPage />} />
         </Route>
         <Route path="/contact" element={<ContactPage />} />
         <Route path="/login" element={<AuthPage />} />
@@ -8073,6 +8360,7 @@ export default function App() {
         <Route path="/account" element={<AccountPage />} />
         <Route path="/admin/orders" element={<AdminOrdersPage />} />
         <Route path="/admin/inventory" element={<AdminInventoryPage />} />
+        <Route path="/admin/dealers" element={<AdminDealersPage />} />
         <Route path="/admin" element={<Navigate to="/admin/orders" replace />} />
         <Route path="/about" element={<AboutPage />} />
         <Route path="/faq" element={<FAQPage />} />

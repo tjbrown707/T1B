@@ -8,6 +8,7 @@ import { readFileSync } from "node:fs";
 import { SITE_NAME } from "../src/data/site.js";
 import { PRODUCTS } from "../src/data/catalog.js";
 import { requiresLogin } from "../src/data/access.js";
+import { dealerQuote } from "../src/data/dealers.js";
 
 // Inside node_modules so the throwaway bundle is never committed and never
 // collides with the real dist/.
@@ -102,6 +103,12 @@ const ROUTES = [
   },
   { path: "/admin/orders", expect: "Change Delivery Method", signedIn: true, exerciseFulfillment: true },
   { path: "/admin/inventory", expect: "RECEIVE A NEW LOT", signedIn: true, exerciseInventory: true },
+  { path: '/dealer', expect: 'SIGN IN', forbidBody: ['Dealer orders', 'New customer order'] },
+  { path: '/dealer', expect: 'New customer order', signedIn: true, exerciseDealer: true, requireBody: ['60% off', 'Still owed to Tier One'] },
+  { path: '/dealer', expect: 'Dealer access has not been enabled', signedIn: true },
+  { path: '/admin/dealers', expect: 'Sign', expectHeadTitle: SITE_NAME, expectHeadRobots: 'noindex, nofollow', forbidHead: ['Dealer Management'] },
+  { path: '/admin/dealers', expect: 'does not have staff access', signedIn: true },
+  { path: '/admin/dealers', expect: 'Find an existing customer', signedIn: true, exerciseDealersAdmin: true },
   { path: "/no-such-page", expect: "PAGE NOT FOUND" },
 ];
 let failures = 0;
@@ -118,6 +125,8 @@ for (const {
   exerciseLogin = false,
   exerciseFulfillment = false,
   exerciseInventory = false,
+  exerciseDealer = false,
+  exerciseDealersAdmin = false,
 } of ROUTES) {
   const errors = [];
   const forbiddenHeadHits = new Set();
@@ -133,7 +142,7 @@ for (const {
     { url: `https://www.tierone.bio${route}`, runScripts: "outside-only", pretendToBeVisual: true, virtualConsole }
   );
   const { window } = dom;
-  const fixtureUser = { id: "11111111-1111-4111-8111-111111111111", email: "researcher@example.com", role: "authenticated", app_metadata: (exerciseFulfillment || exerciseInventory) ? { role: "admin" } : {}, user_metadata: {}, email_confirmed_at: "2026-01-01T00:00:00Z" };
+  const fixtureUser = { id: "11111111-1111-4111-8111-111111111111", email: "researcher@example.com", role: "authenticated", app_metadata: (exerciseFulfillment || exerciseInventory || exerciseDealersAdmin) ? { role: "admin" } : {}, user_metadata: {}, email_confirmed_at: "2026-01-01T00:00:00Z" };
   const fixtureSession = {
     access_token: "smoke-access-token", refresh_token: "smoke-refresh-token", token_type: "bearer",
     expires_at: Math.floor(Date.now() / 1000) + 3600, expires_in: 3600, user: fixtureUser,
@@ -143,7 +152,7 @@ for (const {
   }
   if (exerciseLogin) window.localStorage.setItem("t1b-cart", JSON.stringify([{ id: "bpc157-10", qty: 2 }]));
   window.fetch = async url => new Response(JSON.stringify(
-    String(url).includes("/product-availability") ? { products: PRODUCTS.map(product => ({ id: product.id, available: product.id === "bpc157-5" ? 0 : 50, estimatedShipDate: product.id === "bpc157-5" ? "2026-10-02" : null })) } : String(url).includes("/token") ? fixtureSession : String(url).includes("/orders") ? [] : {}
+    String(url).includes("/product-availability") ? { products: PRODUCTS.map(product => ({ id: product.id, available: product.id === "bpc157-5" ? 0 : 50, estimatedShipDate: product.id === "bpc157-5" ? "2026-10-02" : null })) } : String(url).includes('/dealers') ? { dealer: null, orders: [], summary: {} } : String(url).includes("/token") ? fixtureSession : String(url).includes("/orders") ? [] : {}
   ), { status: 200, headers: { "Content-Type": "application/json" } });
   let fulfillmentRequest;
   if (exerciseFulfillment) {
@@ -171,6 +180,18 @@ for (const {
         } else payload = { products: [{ product_id: "klow", product_name: "KLOW", dose: "80 mg", lots: [] }], movements: [] };
       }
       return new Response(JSON.stringify(payload), { status: 200, headers: { "Content-Type": "application/json" } });
+    };
+  }
+  const fixtureDealer = { user_id: fixtureUser.id, display_name: 'David', percent_off: 60, active: true };
+  if (exerciseDealer || exerciseDealersAdmin) {
+    window.localStorage.setItem('tierone-analytics-consent', 'denied');
+    window.fetch = async url => {
+      const payload = String(url).includes('/dealers') ? String(url).includes('staff=1')
+        ? { dealers: [fixtureDealer], customer: { id: fixtureUser.id, email: fixtureUser.email, full_name: 'David' } }
+        : { dealer: fixtureDealer, orders: [], summary: { orders: 0, owed: 0 }, nextOffset: null }
+        : String(url).includes('/product-availability') ? { products: PRODUCTS.map(product => ({ id: product.id, available: 50 })) }
+        : String(url).includes('/profiles') ? { full_name: 'David', phone: '555-555-1212', address: '123 Test St', city: 'Phoenix', state: 'AZ', zip: '85001' } : {};
+      return new Response(JSON.stringify(payload), { status: 200, headers: { 'Content-Type': 'application/json' } });
     };
   }
   const transientBodyHits = new Set();
@@ -306,6 +327,42 @@ for (const {
   const privateRobotsClean = !expectHeadRobots
     || [...adminRobotsHistory].every(value => value === expectHeadRobots);
   const publicBodyClean = forbiddenBodyHits.length === 0 && missingBodyTerms.length === 0;
+  if (exerciseDealer) {
+    try {
+      const add = [...window.document.querySelectorAll('button')].find(button => button.textContent === 'Add product');
+      add.click();
+      await new Promise(resolve => setTimeout(resolve, 80));
+      const quote = dealerQuote([{ id: PRODUCTS[0].id, qty: 1 }], 60);
+      const dealerText = root.textContent;
+      for (const value of [quote.customerTotal, quote.dealerTotal, quote.retained]) {
+        if (!dealerText.includes(`$${value.toFixed(2)}`)) throw new Error('Dealer quote does not reconcile with shared pricing');
+      }
+      const deliverySelect = [...window.document.querySelectorAll('select')].find(element => [...element.options].some(option => option.value === 'LOCAL_HANDOFF'));
+      if (deliverySelect.value !== 'LOCAL_HANDOFF') throw new Error('Dealer pickup is not the default');
+      deliverySelect.value = 'SHIP_TO_CUSTOMER';
+      deliverySelect.dispatchEvent(new window.Event('change', { bubbles: true }));
+      await new Promise(resolve => setTimeout(resolve, 80));
+      if (!root.textContent.includes('Recipient name')) throw new Error('Direct shipping form is missing');
+      deliverySelect.value = 'LOCAL_HANDOFF';
+      deliverySelect.dispatchEvent(new window.Event('change', { bubbles: true }));
+      await new Promise(resolve => setTimeout(resolve, 80));
+      if (process.env.DEALER_PREVIEW_DIR) {
+        const { writeFileSync } = await import('node:fs');
+        writeFileSync(`${process.env.DEALER_PREVIEW_DIR}/dealer.html`, window.document.documentElement.outerHTML.replace('<head>', '<head><meta charset="utf-8">'));
+      }
+    } catch (error) { errors.push(error.message); }
+  }
+  if (exerciseDealersAdmin) {
+    try {
+      [...window.document.querySelectorAll('button')].find(button => button.textContent.includes('David · 60% off')).click();
+      await new Promise(resolve => setTimeout(resolve, 80));
+      if (!root.textContent.includes('Save dealer settings')) throw new Error('Dealer settings did not open');
+      if (process.env.DEALER_PREVIEW_DIR) {
+        const { writeFileSync } = await import('node:fs');
+        writeFileSync(`${process.env.DEALER_PREVIEW_DIR}/admin-dealers.html`, window.document.documentElement.outerHTML.replace('<head>', '<head><meta charset="utf-8">'));
+      }
+    } catch (error) { errors.push(error.message); }
+  }
   if (exerciseFulfillment) {
     try {
       const clickButton = label => {

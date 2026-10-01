@@ -21,6 +21,7 @@ const ORDER_FIELDS = [
   "payment_status", "fulfillment_status", "fulfillment_method",
   "payment_received_via", "payment_amount_received", "payment_confirmed_at",
   "inventory_accounting_mode", "reservation_expires_at", "backorder_pending", "estimated_ship_date",
+  "dealer_sale",
 ].join(",");
 
 export default async function handler(request) {
