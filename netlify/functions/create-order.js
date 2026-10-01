@@ -177,6 +177,9 @@ export function createOrderHandler({
     console.error(`create-order: order number collision for ${input.orderNumber}`);
     return fail(409, "That order reference is already in use. Please start a new order.");
   }
+  if (saved.dealer_sale && ['CANCELLED', 'REFUNDED'].includes(saved.payment_status)) {
+    return fail(409, 'This dealer order was cancelled or refunded. Review your order history and start a new order before paying.');
+  }
 
   // Print only after the durable order and replay ownership checks succeed.
   // Printer failure must never undo checkout or expose operational details to customers.
@@ -217,7 +220,7 @@ export function createOrderHandler({
     },
     itemsText: saved.items_text || "",
     items: Array.isArray(saved.items) ? saved.items : [],
-    ...(saved.dealer_sale ? { dealerSale: saved.dealer_sale } : {}),
+    ...(saved.dealer_sale ? { dealerSale: saved.dealer_sale, paymentStatus: saved.payment_status || 'AWAITING_PAYMENT' } : {}),
     receiptSent: receipt.ok === true,
     staffNotificationSent,
   }, "POST, OPTIONS");

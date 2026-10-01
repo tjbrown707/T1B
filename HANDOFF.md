@@ -37,6 +37,9 @@ David has no staff role. The new `dealers` function verifies account ownership
 server-side; only existing staff can change dealer settings. Historical snapshots
 survive rate changes, cancellation/reopening, and retries. A pending submission
 is retained in sessionStorage so refreshes reuse the original order reference.
+Recovery shows payment instructions only for an unpaid order; already-paid
+orders show their recorded payment state, and cancelled/refunded orders refuse
+a payment retry and direct the dealer to start a new order.
 
 The verified dealer email is always the order-notification recipient, including
 direct customer shipments. Downstream customers are not emailed dealer invoices.

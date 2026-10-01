@@ -6633,10 +6633,10 @@ function DealerDeskPage() {
       <DealerStats summary={desk.summary} />
       <button style={{ ...DEALER_BUTTON_STYLE, marginBottom: 16 }} onClick={() => load()}>Refresh orders and balance</button>
       {!desk.dealer.active && <p>Dealer ordering is paused. Your previous orders remain available.</p>}
-      {confirmed && <div style={DEALER_PANEL_STYLE}><h2>Order saved · {confirmed.orderNumber}</h2><p>Awaiting your dealer payment. Include this order number in the payment memo.</p><DealerOrderBreakdown sale={confirmed.dealerSale} />
+      {confirmed && <div style={DEALER_PANEL_STYLE}><h2>Order saved · {confirmed.orderNumber}</h2><p>{confirmed.paymentStatus === 'AWAITING_PAYMENT' ? 'Awaiting your dealer payment. Include this order number in the payment memo.' : 'Your dealer payment is already recorded. Check fulfillment in your order history.'}</p><DealerOrderBreakdown sale={confirmed.dealerSale} />
         {confirmed.estimatedShipDate && <p>On backorder · Estimated availability: {formatShipDate(confirmed.estimatedShipDate)}</p>}
         {!confirmed.receiptSent && <p>Your receipt email is pending. Your order is saved and appears below.</p>}
-        <DealerPaymentInstructions method={confirmed.paymentMethod} total={confirmed.totals.total} orderNumber={confirmed.orderNumber} />
+        {confirmed.paymentStatus === 'AWAITING_PAYMENT' && <DealerPaymentInstructions method={confirmed.paymentMethod} total={confirmed.totals.total} orderNumber={confirmed.orderNumber} />}
         <button style={DEALER_BUTTON_STYLE} onClick={() => setConfirmed(null)}>Start another customer order</button>
       </div>}
       {(desk.dealer.active || pending) && !confirmed && <form onSubmit={placeOrder} style={DEALER_PANEL_STYLE}>

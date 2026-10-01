@@ -159,5 +159,16 @@ test('real dealer checkout uses the verified payer email, saves only dealer-pric
     assert.equal(second.status, 200);
     assert.equal((await second.json()).dealerSale.percentOff, 60);
     assert.equal(prints, 2, 'print service receives the stable saved ID and handles its existing idempotency');
+    saved.payment_status = 'PAID';
+    const paid = await handler(request());
+    assert.equal(paid.status, 200);
+    assert.equal((await paid.json()).paymentStatus, 'PAID');
+    for (const status of ['CANCELLED', 'REFUNDED']) {
+      saved.payment_status = status;
+      const cancelled = await handler(request());
+      assert.equal(cancelled.status, 409);
+      assert.match((await cancelled.json()).error, /cancelled or refunded/);
+    }
+    assert.equal(prints, 3, 'cancelled/refunded recovery must not print or send notifications');
   } finally { globalThis.Netlify = before; }
 });
