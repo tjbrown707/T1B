@@ -44,7 +44,7 @@ test("transactional pages are served but never indexed", () => {
 
 test("all staff routes use empty application shells and stay out of the sitemap", () => {
   const staffPaths = STATIC_ROUTES.filter(route => /^\/admin(?:\/|$)/.test(route.path)).map(route => route.path);
-  assert.deepEqual(staffPaths.toSorted(), ["/admin", "/admin/inventory", "/admin/orders"]);
+  assert.deepEqual(staffPaths.toSorted(), ["/admin", "/admin/dealers", "/admin/inventory", "/admin/orders"]);
   for (const path of staffPaths) {
     assert.equal(routeMeta(path).staffOnly, true, `${path} must not prerender public content`);
     assert.equal(routeMeta(path).noindex, true);

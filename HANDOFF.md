@@ -5,6 +5,59 @@ records state that is not obvious from the code or the git log.
 
 ---
 
+## Dealer Desk — 2026-10-01
+
+The owner authorized David's existing account as a dealer at **60% off** the
+current catalog/quantity/sale price. David collects the quoted customer total,
+keeps the merchandise difference before his expenses, and pays Tier One the
+dealer total. Existing ordinary orders are not converted or repriced. Dealer
+orders must be placed in **My Account → Dealer Desk** (`/dealer`); the ordinary
+storefront cart retains ordinary pricing.
+
+Default delivery is **dealer pickup and hand-delivery**, with no shipping charge.
+Shipping to the dealer's saved account address or directly to a named customer
+is also supported. Shipping uses the existing $10 / $200-free-shipping rule on
+the dealer merchandise subtotal and passes through equally to both totals.
+Other discount codes cannot stack onto dealer orders.
+
+**Admin → Dealers** (`/admin/dealers`) finds existing accounts by exact email,
+enables/pauses ordering, changes each dealer's percentage, and shows order history,
+quoted customer sales, margin on paid orders, actual payments received, and the
+remaining amount owed. Use **Open order to confirm payment / fulfill** for the
+existing staff workflow. The amount to confirm is the dealer total. Paid orders
+with an amount correction below that total continue to contribute the difference
+to the balance. Cancelled/refunded orders are excluded. Customer sales/margins
+are quoted figures, not verification that the dealer collected customer payment.
+
+Migration `20261001195033_dealer_accounts_and_orders.sql` is applied to production
+and David's 60% rate is enabled. It adds server-only dealer settings and immutable
+settings audits, immutable `orders.dealer_sale` snapshots, a protected summary RPC,
+and an atomic wrapper around the existing inventory/backorder/expiry transaction.
+David has no staff role. The new `dealers` function verifies account ownership
+server-side; only existing staff can change dealer settings. Historical snapshots
+survive rate changes, cancellation/reopening, and retries. A pending submission
+is retained in sessionStorage so refreshes reuse the original order reference.
+Recovery shows payment instructions only for an unpaid order; already-paid
+orders show their recorded payment state, and cancelled/refunded orders refuse
+a payment retry and direct the dealer to start a new order.
+
+The verified dealer email is always the order-notification recipient, including
+direct customer shipments. Downstream customers are not emailed dealer invoices.
+Dealer packing slips omit all prices, including automatically printed order
+copies. The dealer rate is applied per vial and rounded to cents before summing;
+the server checks the displayed quote and rejects stale prices before insertion.
+
+Validation: full `npm run verify`, dealer authorization/pricing/checkout tests,
+signed-in/out dealer and admin route smoke checks with pickup/direct-shipping
+interaction, desktop/390px layout inspection, and isolated PostgreSQL lifecycle
+tests alongside the existing stock/fulfillment tests. The GitHub verify job also
+runs `tests/sql/dealers.sql`. Supabase advisors report no warnings/errors; the
+new server-only tables intentionally have RLS with no client policies.
+Website release uses the required PR + successful verify check workflow.
+No new environment variable, SMTP template, or owner dashboard action is needed.
+
+---
+
 ## Per-order shipping / handoff changes — 2026-09-27
 
 Admin → Orders → expand an order → Customer & delivery → **Change Delivery

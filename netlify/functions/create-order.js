@@ -22,6 +22,7 @@ import { clientIp, readTurnstileToken, verifyTurnstileToken } from "./_shared/tu
 
 import { printFulfillment } from "./_shared/print-fulfillment.js";
 import { printNodeConfig } from "./_shared/printnode.js";
+import { priceDealerOrder } from "./_shared/dealer-order.js";
 
 const MAX_BODY_BYTES = 32 * 1024;
 const ORDER_NUMBER_PATTERN = /^T1B-\d{6}-\d{6}$/;
@@ -78,10 +79,12 @@ export function createOrderHandler({
   });
 
   let userId;
+  let verifiedUser;
   try {
     const { data, error } = await supabase.auth.getUser(token);
     if (error || !data?.user?.id || data.user.is_anonymous) return fail(401, "Your session has expired. Please sign in again.");
     userId = data.user.id;
+    verifiedUser = data.user;
   } catch {
     return fail(503, "We could not verify your sign-in. Please try again.");
   }
@@ -101,11 +104,22 @@ export function createOrderHandler({
     }
   }
 
-  const totals = orderTotals(input.items, { discount, freeShipping });
-  const lineItems = orderLineItems(input.items);
+  let dealerSale = null;
+  if (input.dealerOrder) {
+    try { dealerSale = await priceDealerOrder(supabase, input, verifiedUser); }
+    catch (error) { return fail(409, error.message); }
+    // The dealer is the buyer/payer. Receipts and shipment messages go only
+    // to their verified account, never to a downstream customer with margins.
+    input.customer.email = verifiedUser.email;
+  }
+  const totals = dealerSale ? {
+    subtotal: dealerSale.dealerSubtotal, discountAmount: 0,
+    shipping: dealerSale.shipping, total: dealerSale.dealerTotal,
+  } : orderTotals(input.items, { discount, freeShipping });
+  const lineItems = dealerSale ? dealerSale.dealerItems : orderLineItems(input.items);
   const itemsText = lineItems
     .map(line => `${line.name} ${line.dose} x${line.qty} @ $${line.unitPrice.toFixed(2)}${line.bulk ? " (bulk)" : ""} = $${line.lineTotal.toFixed(2)}`)
-    .join("\n");
+    .join("\n") + (dealerSale ? `\n\nDealer: ${dealerSale.dealerName}\nCustomer reference: ${dealerSale.customerReference}\nCollect from customer: $${dealerSale.customerTotal.toFixed(2)}\nPay Tier One: $${dealerSale.dealerTotal.toFixed(2)}\nDealer keeps: $${dealerSale.retained.toFixed(2)} before expenses\nDelivery: ${dealerSale.delivery === 'LOCAL_HANDOFF' ? 'Dealer pickup and hand-delivery' : dealerSale.delivery === 'SHIP_TO_DEALER' ? 'Ship to dealer' : 'Ship to customer'}` : '');
 
   const row = {
     allow_backorder: true,
@@ -127,6 +141,7 @@ export function createOrderHandler({
     ship_city: input.customer.city,
     ship_state: input.customer.state,
     ship_zip: input.customer.zip,
+    ...(dealerSale ? { dealer_sale: dealerSale } : {}),
   };
 
   const { data, error } = await supabase.rpc("create_order_transaction", {
@@ -134,6 +149,9 @@ export function createOrderHandler({
     personal_discount_code: personalDiscountCode,
   });
   if (error) {
+    if (/dealer_(?:rate_changed|not_active)/.test(String(error.message))) {
+      return fail(409, "Your dealer settings changed. Refresh the quote and try again.");
+    }
     if (String(error.message).includes("discount_code_not_redeemable")) {
       return fail(409, "That personal discount code was just used or has expired. Please review your order.");
     }
@@ -158,6 +176,9 @@ export function createOrderHandler({
   if (!ordersMatch(saved, row)) {
     console.error(`create-order: order number collision for ${input.orderNumber}`);
     return fail(409, "That order reference is already in use. Please start a new order.");
+  }
+  if (saved.dealer_sale && ['CANCELLED', 'REFUNDED'].includes(saved.payment_status)) {
+    return fail(409, 'This dealer order was cancelled or refunded. Review your order history and start a new order before paying.');
   }
 
   // Print only after the durable order and replay ownership checks succeed.
@@ -199,6 +220,7 @@ export function createOrderHandler({
     },
     itemsText: saved.items_text || "",
     items: Array.isArray(saved.items) ? saved.items : [],
+    ...(saved.dealer_sale ? { dealerSale: saved.dealer_sale, paymentStatus: saved.payment_status || 'AWAITING_PAYMENT' } : {}),
     receiptSent: receipt.ok === true,
     staffNotificationSent,
   }, "POST, OPTIONS");
@@ -214,6 +236,12 @@ export function validateOrderRequest(body) {
   const orderNumber = typeof body.orderNumber === "string" ? body.orderNumber.trim() : "";
   if (!ORDER_NUMBER_PATTERN.test(orderNumber)) return { error: "Invalid order reference." };
   if (body.researchAcknowledged !== true) return { error: "The research-use acknowledgement is required." };
+  if (body.dealerOrder !== undefined && typeof body.dealerOrder !== "boolean") return { error: "Invalid dealer order." };
+  const dealerOrder = body.dealerOrder === true;
+  if (dealerOrder && (!['LOCAL_HANDOFF', 'SHIP_TO_DEALER', 'SHIP_TO_CUSTOMER'].includes(body.dealerDelivery)
+      || typeof body.customerReference !== 'string' || !body.customerReference.trim() || body.customerReference.trim().length > 120
+      || typeof body.quotedDealerTotal !== 'number' || !Number.isFinite(body.quotedDealerTotal) || body.quotedDealerTotal < 0
+      || typeof body.quotedCustomerTotal !== 'number' || !Number.isFinite(body.quotedCustomerTotal) || body.quotedCustomerTotal < 0)) return { error: "Dealer delivery, customer reference, and current quote are required." };
 
   const sourceCustomer = body.customer && typeof body.customer === "object" && !Array.isArray(body.customer)
     ? body.customer
@@ -258,7 +286,9 @@ export function validateOrderRequest(body) {
     if (!discountCodes.includes(code)) discountCodes.push(code);
   }
 
-  return { data: { orderNumber, customer, items, paymentMethod, discountCodes, turnstileToken } };
+  return { data: { orderNumber, customer, items, paymentMethod, discountCodes, turnstileToken,
+    ...(dealerOrder ? { dealerOrder, dealerDelivery: body.dealerDelivery, customerReference: body.customerReference.trim(), quotedDealerTotal: body.quotedDealerTotal, quotedCustomerTotal: body.quotedCustomerTotal } : {}),
+  } };
 }
 
 export function ordersMatch(saved, expected) {
@@ -273,7 +303,8 @@ export function ordersMatch(saved, expected) {
   if (moneyFields.some(field => Math.round(Number(saved[field]) * 100) !== Math.round(Number(expected[field]) * 100))) {
     return false;
   }
-  return canonicalJson(saved.items) === canonicalJson(expected.items);
+  return canonicalJson(saved.items) === canonicalJson(expected.items)
+    && canonicalJson(saved.dealer_sale ?? null) === canonicalJson(expected.dealer_sale ?? null);
 }
 
 async function resolveDiscount(supabase, code, userId, orderNumber) {

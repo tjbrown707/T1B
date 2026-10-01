@@ -9,7 +9,7 @@ const ORDER_FIELDS = [
   "backorder_pending", "estimated_ship_date", "id", "order_number", "status", "payment_status", "fulfillment_status", "fulfillment_method",
   "inventory_accounting_mode", "payment_confirmed_at", "items", "subtotal", "discount_amount", "shipping",
   "total", "payment_method", "customer_name", "customer_email", "customer_phone",
-  "ship_address", "ship_city", "ship_state", "ship_zip", "created_at",
+  "ship_address", "ship_city", "ship_state", "ship_zip", "created_at", "dealer_sale",
 ].join(",");
 
 export async function printFulfillment(auth, orderId, config, { automatic = false } = {}) {

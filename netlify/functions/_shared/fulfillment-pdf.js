@@ -255,6 +255,9 @@ function drawPackedByAndTotals(page, fonts, order, y) {
     color: BLACK,
   });
 
+  // This sheet may be inside a parcel delivered to the dealer's customer.
+  // Dealer invoices stay in their account; packing slips contain no prices.
+  if (order.dealer_sale) return;
   const totals = [
     ["Subtotal", money(order.subtotal)],
     ...(Number(order.discount_amount) > 0 ? [["Discount", `-${money(order.discount_amount)}`]] : []),

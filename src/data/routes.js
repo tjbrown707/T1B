@@ -252,6 +252,10 @@ export const STATIC_ROUTES = [
     staffOnly: true,
   },
   {
+    path: "/dealer", title: "Dealer Desk", description: "Dealer pricing and order history.", h1: "Dealer desk", noindex: true,
+  },
+  { path: "/admin/dealers", title: "Dealer Management", description: "Staff dealer management.", h1: "Dealers", noindex: true, staffOnly: true },
+  {
     // Compatibility route for the first admin-console deployment. React
     // redirects it to /admin/orders; keeping it registered prevents a 404 for
     // anyone who bookmarked the earlier address.
