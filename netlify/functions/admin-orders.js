@@ -1,6 +1,8 @@
 // Authenticated staff order queue. A normal Supabase access token is checked
 // server-side and the user must have app_metadata.role admin/order_manager.
 
+import { printFulfillment } from "./_shared/print-fulfillment.js";
+import { printNodeConfig } from "./_shared/printnode.js";
 import { loadLotChoices } from "./_shared/lot-assignment.js";
 import { Buffer } from "node:buffer";
 import {
@@ -231,22 +233,39 @@ export async function updateOrderWorkflow(supabase, user, request) {
   const updated = Array.isArray(data) ? data[0] : data;
   if (!updated) return fail(404, "Order not found.");
 
-  // Order-arrival printing runs in create-order. Payment confirmation never reprints.
-  const packingSlip = null;
+  // Payment is already durable. Printing failure is separate from payment,
+  // allocation and assignment success. Retries share one fulfillment print key.
+  let packingSlip = null;
+  if (["confirm_payment", "assign_lots", "allocate_backorder"].includes(action) && updated.payment_status === "PAID") {
+    try {
+      if (updated.backorder_pending) packingSlip = { printed: false, deferred: true, reason: "backorder" };
+      else if ((await loadLotChoices(supabase, [orderId])).get(orderId)?.lot_selection_required) {
+        packingSlip = { printed: false, deferred: true, reason: "lots" };
+      } else {
+        packingSlip = (await printFulfillment({ supabase, user }, orderId, printNodeConfig(), { automatic: true })).body;
+      }
+    } catch (printError) {
+      console.error("admin-orders: automatic packing-slip print failed", printError);
+      packingSlip = { printed: false, error: "Automatic printing could not be confirmed. Check the printer queue, then use Print Packing Slip if needed." };
+    }
+  }
 
   let allocations;
   let shipments;
   let notifications;
   let packingSlipPrintRecords;
   let lotChoices;
+  let freshOrder;
   try {
-    [allocations, shipments, notifications, packingSlipPrintRecords, lotChoices] = await Promise.all([
+    [allocations, shipments, notifications, packingSlipPrintRecords, lotChoices, freshOrder] = await Promise.all([
       loadOrderAllocations(supabase, [orderId]),
       loadOrderShipments(supabase, [orderId]),
       loadOrderNotifications(supabase, [orderId]),
       loadPackingSlipPrintRecords(supabase, [orderId]),
       loadLotChoices(supabase, [orderId]),
+      packingSlip ? supabase.from("orders").select(ORDER_FIELDS).eq("id", orderId).maybeSingle() : Promise.resolve({ data: updated }),
     ]);
+    if (freshOrder.error) throw freshOrder.error;
   } catch (hydrationError) {
     console.error("admin-orders: updated order hydration failed:", hydrationError);
     return jsonResponse(200, {
@@ -257,6 +276,7 @@ export async function updateOrderWorkflow(supabase, user, request) {
   }
   const order = {
     ...updated,
+    ...(freshOrder.data?.id ? freshOrder.data : {}),
     ...lotChoices.get(orderId),
     allocations: allocations.get(orderId) || [],
     shipment: shipments.get(orderId) || null,

@@ -20,8 +20,6 @@ import { sendStaffOrderCreatedEmail } from "./_shared/order-created-email.js";
 import { deliverOrderReceipt } from "./_shared/order-receipt.js";
 import { clientIp, readTurnstileToken, verifyTurnstileToken } from "./_shared/turnstile.js";
 
-import { printFulfillment } from "./_shared/print-fulfillment.js";
-import { printNodeConfig } from "./_shared/printnode.js";
 import { priceDealerOrder } from "./_shared/dealer-order.js";
 
 const MAX_BODY_BYTES = 32 * 1024;
@@ -40,7 +38,6 @@ const CUSTOMER_LIMITS = {
 
 export function createOrderHandler({
   createClient = defaultCreateClient,
-  printOrder = printFulfillment,
   fetchImpl = globalThis.fetch,
 } = {}) {
   return async function handler(request) {
@@ -181,17 +178,6 @@ export function createOrderHandler({
     return fail(409, 'This dealer order was cancelled or refunded. Review your order history and start a new order before paying.');
   }
 
-  // Print only after the durable order and replay ownership checks succeed.
-  // Printer failure must never undo checkout or expose operational details to customers.
-  const printPromise = (async () => {
-    try {
-      const result = await printOrder({ supabase, user: { id: userId } }, saved.id, printNodeConfig(), { automatic: true });
-      if (!result.body.printed) console.error("create-order: packing slip not queued", saved.id, result.body.error);
-    } catch (error) {
-      console.error("create-order: packing slip failed", saved.id, error);
-    }
-  })();
-
   // The customer receipt is copied from this saved, server-priced row into a
   // protected outbox before Resend is called. The current staff alert remains
   // server-side and keeps its own stable Resend idempotency key.
@@ -202,7 +188,6 @@ export function createOrderHandler({
       fetchImpl,
     }),
     sendStaffOrderCreatedEmail(saved, { fetchImpl }),
-    printPromise,
   ]);
 
   return jsonResponse(200, {

@@ -131,11 +131,11 @@ test('refresh recovery rejects malformed storage and retains a valid immutable s
   assert.equal(readDealerPending({ getItem: () => { throw new Error('blocked storage'); } }, userId), null);
 });
 
-test('real dealer checkout uses the verified payer email, saves only dealer-priced totals, and replays without new pricing', async () => {
+test('real dealer checkout uses the verified payer email, saves only dealer-priced totals, and replays without new pricing or printing', async t => {
   const before = globalThis.Netlify;
-  globalThis.Netlify = { env: { get: name => ({ SUPABASE_URL: 'https://example.supabase.co', SUPABASE_SERVICE_ROLE_KEY: 'test-only', TURNSTILE_SECRET_KEY: 'test-only' })[name] } };
+  globalThis.Netlify = { env: { get: name => ({ SUPABASE_URL: 'https://example.supabase.co', SUPABASE_SERVICE_ROLE_KEY: 'test-only', TURNSTILE_SECRET_KEY: 'test-only', PRINTNODE_API_KEY: 'test-key', PRINTNODE_FULFILLMENT_PRINTER_ID: '42' })[name] } };
+  t.mock.method(globalThis, 'fetch', async () => { assert.fail('dealer checkout must never contact PrintNode'); });
   let saved = null;
-  let prints = 0;
   const db = pricingDb();
   db.from = table => pricingDb({ active: true, percent_off: saved ? 30 : 60, display_name: 'David' }, saved).from(table);
   db.auth = { getUser: async () => ({ data: { user } }) };
@@ -144,7 +144,7 @@ test('real dealer checkout uses the verified payer email, saves only dealer-pric
     if (name === 'enqueue_order_receipt') return { data: { status: 'SENT' } };
     throw new Error(`Unexpected RPC ${name}`);
   };
-  const handler = createOrderHandler({ createClient: () => db, printOrder: async () => { prints++; return { body: { printed: true } }; }, fetchImpl: async () => new Response(JSON.stringify({ success: true })) });
+  const handler = createOrderHandler({ createClient: () => db, fetchImpl: async url => { assert.ok(String(url).includes("siteverify") || String(url).includes("api.resend.com/emails")); return new Response(JSON.stringify({ success: true })); } });
   const body = { ...input, dealerOrder: true, researchAcknowledged: true, paymentMethod: 'zelle', turnstileToken: 'test', customer: { name: 'David', email: 'downstream-customer@example.com', phone: '555-555-5555', address: 'Local pickup', city: 'Phoenix', state: 'AZ', zip: 'N/A' }, dealerTotal: 0.01, percentOff: 99 };
   const request = () => new Request('https://www.tierone.bio/.netlify/functions/create-order', { method: 'POST', headers: { Authorization: 'Bearer test' }, body: JSON.stringify(body) });
   try {
@@ -158,7 +158,6 @@ test('real dealer checkout uses the verified payer email, saves only dealer-pric
     const second = await handler(request());
     assert.equal(second.status, 200);
     assert.equal((await second.json()).dealerSale.percentOff, 60);
-    assert.equal(prints, 2, 'print service receives the stable saved ID and handles its existing idempotency');
     saved.payment_status = 'PAID';
     const paid = await handler(request());
     assert.equal(paid.status, 200);
@@ -169,6 +168,5 @@ test('real dealer checkout uses the verified payer email, saves only dealer-pric
       assert.equal(cancelled.status, 409);
       assert.match((await cancelled.json()).error, /cancelled or refunded/);
     }
-    assert.equal(prints, 3, 'cancelled/refunded recovery must not print or send notifications');
   } finally { globalThis.Netlify = before; }
 });
