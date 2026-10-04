@@ -34,6 +34,9 @@ orders.
 
 Migration `20261004013723_manual_order_lot_assignment.sql` adds the confirmation,
 version and document-lock fields plus service-role-only choice/assignment RPCs.
+The migration is applied to production and a rollback-only production lifecycle
+check verified manual selection, stock transfer, document blocking and locking.
+Supabase security/performance advisors report no warnings or errors.
 No dashboard settings or new environment variables are needed. Release via PR
 and required `verify` check. Validation includes unit tests, the actual React
 assignment/save/unlock journey, and disposable PostgreSQL stock-transfer,
