@@ -1,6 +1,7 @@
 // Authenticated staff order queue. A normal Supabase access token is checked
 // server-side and the user must have app_metadata.role admin/order_manager.
 
+import { loadLotChoices } from "./_shared/lot-assignment.js";
 import { Buffer } from "node:buffer";
 import {
   PAYMENT_RECEIVED_OPTIONS,
@@ -11,7 +12,7 @@ import { jsonResponse, readJsonBody } from "./_shared/http.js";
 
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const MAX_BODY_BYTES = 4 * 1024;
+const MAX_BODY_BYTES = 24 * 1024;
 const METHODS = "GET, PATCH, OPTIONS";
 const ORDER_FIELDS = [
   "id", "order_number", "status", "items", "items_text", "subtotal",
@@ -21,7 +22,7 @@ const ORDER_FIELDS = [
   "payment_status", "fulfillment_status", "fulfillment_method",
   "payment_received_via", "payment_amount_received", "payment_confirmed_at",
   "inventory_accounting_mode", "reservation_expires_at", "backorder_pending", "estimated_ship_date",
-  "dealer_sale",
+  "dealer_sale", "lot_assignment_version", "lots_confirmed_at", "lots_locked_at",
 ].join(",");
 
 export default async function handler(request) {
@@ -82,12 +83,14 @@ async function listOrders(supabase, params) {
   let shipments;
   let notifications;
   let packingSlipPrintRecords;
+  let lotChoices;
   try {
-    [allocations, shipments, notifications, packingSlipPrintRecords] = await Promise.all([
+    [allocations, shipments, notifications, packingSlipPrintRecords, lotChoices] = await Promise.all([
       loadOrderAllocations(supabase, orders.map(order => order.id)),
       loadOrderShipments(supabase, orders.map(order => order.id)),
       loadOrderNotifications(supabase, orders.map(order => order.id)),
       loadPackingSlipPrintRecords(supabase, orders.map(order => order.id)),
+      loadLotChoices(supabase, orders.map(order => order.id)),
     ]);
   } catch (hydrationError) {
     console.error("admin-orders: related records failed:", hydrationError);
@@ -95,6 +98,7 @@ async function listOrders(supabase, params) {
   }
   const hydrated = orders.map(order => ({
     ...order,
+    ...lotChoices.get(order.id),
     allocations: allocations.get(order.id) || [],
     shipment: shipments.get(order.id) || null,
     trackingEmail: notifications.get(`${order.id}:${order.fulfillment_method}`) || null,
@@ -216,6 +220,8 @@ export async function updateOrderWorkflow(supabase, user, request) {
     paymentReceivedVia,
     paymentAmountReceived: parsed.data?.paymentAmountReceived,
     expectedPaymentAmount: parsed.data?.expectedPaymentAmount,
+    assignments: parsed.data?.assignments,
+    expectedLotAssignmentVersion: parsed.data?.expectedLotAssignmentVersion,
     actorUserId: user.id,
   });
   if (!rpc) return fail(400, "Choose a valid order action.");
@@ -232,23 +238,26 @@ export async function updateOrderWorkflow(supabase, user, request) {
   let shipments;
   let notifications;
   let packingSlipPrintRecords;
+  let lotChoices;
   try {
-    [allocations, shipments, notifications, packingSlipPrintRecords] = await Promise.all([
+    [allocations, shipments, notifications, packingSlipPrintRecords, lotChoices] = await Promise.all([
       loadOrderAllocations(supabase, [orderId]),
       loadOrderShipments(supabase, [orderId]),
       loadOrderNotifications(supabase, [orderId]),
       loadPackingSlipPrintRecords(supabase, [orderId]),
+      loadLotChoices(supabase, [orderId]),
     ]);
   } catch (hydrationError) {
     console.error("admin-orders: updated order hydration failed:", hydrationError);
     return jsonResponse(200, {
-      order: updated,
+      order: { ...updated, lot_selection_required: updated.inventory_accounting_mode === "TRACKED" },
       packingSlip,
       warning: "The order was updated, but its related details could not be reloaded. Refresh the page.",
     }, METHODS);
   }
   const order = {
     ...updated,
+    ...lotChoices.get(orderId),
     allocations: allocations.get(orderId) || [],
     shipment: shipments.get(orderId) || null,
     trackingEmail: notifications.get(`${orderId}:${updated.fulfillment_method}`) || null,
@@ -260,6 +269,16 @@ export async function updateOrderWorkflow(supabase, user, request) {
 }
 
 export function workflowRpc(action, input) {
+  if (action === "assign_lots") {
+    if (!Number.isInteger(input.expectedLotAssignmentVersion) || input.expectedLotAssignmentVersion < 0
+        || !Array.isArray(input.assignments) || input.assignments.length < 1 || input.assignments.length > 200
+        || input.assignments.some(row => !UUID_PATTERN.test(row?.lotId) || !Number.isInteger(row?.quantity) || row.quantity < 1 || row.quantity > 100000)
+        || new Set(input.assignments.map(row => row.lotId.toLowerCase())).size !== input.assignments.length) return null;
+    return { name: "assign_order_lots", args: {
+      p_order_id: input.orderId, p_expected_version: input.expectedLotAssignmentVersion,
+      p_assignments: input.assignments, p_actor_user_id: input.actorUserId,
+    } };
+  }
   if (action === "update_fulfillment_method") {
     if (!["SHIP", "LOCAL_HANDOFF"].includes(input.fulfillmentMethod)
         || !["SHIP", "LOCAL_HANDOFF"].includes(input.expectedFulfillmentMethod)
@@ -349,6 +368,12 @@ export function workflowRpc(action, input) {
 
 export function workflowError(error, action) {
   const message = String(error?.message || "");
+  if (message.includes("manual_lot_assignment_required")) return fail(409, "Assign shipment lots in the order details before picking or printing.");
+  if (message.includes("lot_assignment_locked")) return fail(409, "Lots are locked after picking or opening a fulfillment document. Refresh this order to see its current state.");
+  if (message.includes("lot_assignment_insufficient_stock")) return fail(409, "A selected lot no longer has enough stock. Refresh the order and choose available lots.");
+  if (message.includes("lot_assignment_quantity_mismatch")) return fail(400, "Assign the exact ordered quantity of each product.");
+  if (message.includes("invalid_assignment_lot")) return fail(400, "Choose real, unexpired lots for the ordered products.");
+  if (message.includes("invalid_lot_assignment")) return fail(400, "Enter valid lot quantities without duplicate lots.");
   if (message.includes("insufficient_inventory:")) {
     if (action === "allocate_backorder") return fail(409, "This backorder is still waiting for stock. Receive enough inventory for the complete order, then try again.");
     if (action === "reopen_cancelled") {

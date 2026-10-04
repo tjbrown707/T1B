@@ -1,3 +1,4 @@
+import { canAssignOrderLots, initialLotQuantities, validateLotQuantities } from "./src/data/lot-assignment.js";
 import { needsOrderCopy } from "./src/data/packing-slip.js";
 import { useState, useEffect, useRef, useCallback, lazy, Suspense } from "react";
 import { Routes, Route, Navigate, Outlet, Link, useNavigate, useLocation, useParams, useSearchParams } from "react-router-dom";
@@ -5224,6 +5225,8 @@ function AdminOrdersPage() {
           paymentReceivedVia: options.paymentReceivedVia,
           paymentAmountReceived: options.paymentAmountReceived,
           expectedPaymentAmount: options.expectedPaymentAmount,
+          assignments: options.assignments,
+          expectedLotAssignmentVersion: order.lot_assignment_version,
         }),
       });
       const payload = await res.json().catch(() => ({}));
@@ -5233,6 +5236,7 @@ function AdminOrdersPage() {
 
       setOrders(previous => previous.map(item => item.id === order.id ? payload.order : item));
       const messages = {
+        assign_lots: `${payload.order.order_number}: shipment lots saved. Print the packing slip or start picking to continue.`,
         allocate_backorder: `${payload.order.order_number} now has stock allocated. Print its packing slip to continue fulfillment.`,
         confirm_payment: payload.order.backorder_pending ? `${payload.order.order_number} is paid and on backorder until stock is allocated.` : `${payload.order.order_number} is paid${isLocalHandoff(payload.order) ? " for local handoff" : ""}. ${isPrecountedOrder(payload.order) ? "Its inventory was already accounted before the August 10 cutoff, so stock was not changed." : "Inventory was deducted once."}`,
         cancel_unpaid: `${payload.order.order_number} was cancelled and its reserved stock was released.`,
@@ -5290,6 +5294,7 @@ function AdminOrdersPage() {
       if (preview) preview.location.href = url;
       else window.open(url, "_blank", "noopener,noreferrer");
       window.setTimeout(() => URL.revokeObjectURL(url), 60000);
+      if (!needsOrderCopy(order)) await fetchOrders();
     } catch (error) {
       preview?.close();
       setNotice({ type: "error", text: error.message || "The packing slip could not be opened." });
@@ -5477,6 +5482,7 @@ function AdminOrdersPage() {
                     <div style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 17, fontWeight: 800, color: "var(--text-primary)" }}>${Number(order.total || 0).toFixed(2)}</div>
                     <span style={{ display: "inline-block", marginTop: 5, padding: "3px 7px", border: `1px solid ${statusColors.border}`, background: statusColors.background, color: statusColors.color, fontFamily: "'Orbitron', sans-serif", fontSize: 8, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase" }}>{formatStatusLabel(order.status)}</span>
                     {order.backorder_pending && order.payment_status !== "CANCELLED" && <div style={{ color: "#fbbf24", fontFamily: "'Rajdhani', sans-serif", fontSize: 14, marginTop: 5 }}>On Backorder · Est. {formatShipDate(order.estimated_ship_date)}</div>}
+                    {order.lot_selection_required && ["AWAITING_PAYMENT", "PAID"].includes(order.payment_status) && <div style={{ color: "#fbbf24", fontFamily: "'Rajdhani', sans-serif", fontSize: 14, marginTop: 5 }}>Lot assignment needed</div>}
                   </div>
                   <div style={{ display: "flex", gap: 7, alignItems: "center", flexWrap: "wrap" }}>
                     {canConfirmPayment(order) && (
@@ -5508,7 +5514,7 @@ function AdminOrdersPage() {
                   </div>
                 </div>
 
-                <details style={{ borderTop: "1px solid var(--border)" }}>
+                <details open={order.lot_selection_required && order.payment_status === "PAID" ? true : undefined} style={{ borderTop: "1px solid var(--border)" }}>
                   <summary style={{ padding: "10px 18px", cursor: "pointer", color: "var(--text-secondary)", fontFamily: "'Rajdhani', sans-serif", fontSize: 14, fontWeight: 600 }}>View fulfillment details</summary>
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))", gap: 22, padding: "8px 18px 20px" }}>
                     <div>
@@ -5526,7 +5532,8 @@ function AdminOrdersPage() {
                             {order.payment_status === "PAID" && <button disabled={busy} onClick={() => performOrderAction(order, "allocate_backorder")} style={{ display: "block", marginTop: 10, padding: "10px 16px", cursor: busy ? "wait" : "pointer" }}>Allocate stock</button>}
                           </div>
                         )}
-                        <AdminDetailHeading>Allocated lots</AdminDetailHeading>
+                        <AdminDetailHeading>{order.lot_selection_required ? "Choose shipment lots" : "Allocated lots"}</AdminDetailHeading>
+                        {order.lot_selection_required && <p role="status" style={{ color: "#fbbf24", fontFamily: "'Rajdhani', sans-serif", fontSize: 15 }}>This order contains a product with multiple lots. {order.backorder_pending ? "Allocate stock after payment, then assign the lots to send." : order.payment_status === "AWAITING_PAYMENT" ? "Confirm payment, then assign the lots to send." : "Assign the lots to send before picking or printing."}</p>}
                         {(order.allocations || []).map((allocation, index) => (
                           <div key={`${allocation.productId}-${allocation.lot?.id || index}`} style={{ padding: "4px 0", color: allocation.lot?.is_provisional ? "#fbbf24" : "var(--text-secondary)", fontFamily: "'Rajdhani', sans-serif", fontSize: 14 }}>
                             {allocation.productId} ×{allocation.quantity} — <strong>{formatLotLabel(allocation.lot)}</strong>
@@ -5537,6 +5544,7 @@ function AdminOrdersPage() {
                           <div style={{ color: "#fbbf24", fontFamily: "'Rajdhani', sans-serif", fontSize: 14 }}>No lot allocation is recorded yet.</div>
                         )}
                       </div>
+                      <OrderLotAssignmentEditor key={`${order.id}:${order.lot_assignment_version}:${order.lots_locked_at || ""}`} order={order} busy={busy} onSave={performOrderAction} />
                     </div>
                     <div>
                       <AdminDetailHeading>Customer & delivery</AdminDetailHeading>
@@ -5615,6 +5623,8 @@ function AdminOrdersPage() {
                             ? isLocalHandoff(order)
                               ? localHandoffReady ? "The PrintNode packing-slip job is recorded. Preview PDF is now available for reference." : "Use Print Packing Slip first; Preview PDF and Mark Handed Off unlock after PrintNode records the job and queues the email."
                               : "The branded packing slip is ready."
+                            : order.lot_selection_required
+                              ? "Assign shipment lots above before printing."
                             : orderHasProvisionalLots(order)
                               ? "Replace provisional lot IDs in Inventory before printing."
                               : "Confirm payment before printing."}
@@ -5664,6 +5674,42 @@ function AdminOrdersPage() {
     </main>
     </>
   );
+}
+
+function OrderLotAssignmentEditor({ order, busy, onSave }) {
+  const products = order.lot_choices || [];
+  const [editing, setEditing] = useState(false);
+  const [quantities, setQuantities] = useState(() => initialLotQuantities(products, !!order.lots_confirmed_at));
+  const [error, setError] = useState("");
+  if (!canAssignOrderLots(order)) return null;
+  const required = order.lot_selection_required;
+  async function save(event) {
+    event.preventDefault();
+    const result = validateLotQuantities(products, quantities);
+    if (result.error) { setError(result.error); return; }
+    setError("");
+    const saved = await onSave(order, "assign_lots", { assignments: result.assignments, onError: setError });
+    if (saved) setEditing(false);
+  }
+  return <div style={{ marginTop: 14, padding: 12, border: "1px solid var(--border)", fontFamily: "'Rajdhani', sans-serif" }}>
+    <strong style={{ color: required ? "#fbbf24" : "var(--text-primary)" }}>{required ? "Assign shipment lots" : "Shipment lot assignment"}</strong>
+    {required || editing ? <form onSubmit={save}>
+      <p style={{ color: "var(--text-secondary)", fontSize: 14 }}>Enter the vials to send from each lot. You can use one lot or split the quantity. Availability includes stock already allocated to this order. Lots lock when you start picking or open a fulfillment document.</p>
+      {products.map(product => {
+        const item = order.items.find(item => item.id === product.productId);
+        return <fieldset key={product.productId} disabled={busy} style={{ border: "1px solid var(--border)", padding: 10, margin: "12px 0", minWidth: 0 }}>
+          <legend style={{ color: "var(--text-primary)" }}>{item?.name || product.productId} {item?.dose} — {product.quantity} vials needed</legend>
+          {product.lots.map(lot => <label key={lot.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "7px 0", color: "var(--text-secondary)" }}>
+            <span><strong>{lot.lotNumber}</strong> · {lot.capacity} available{lot.assigned ? ` · ${lot.assigned} currently allocated` : ""}{lot.storageLocation ? ` · ${lot.storageLocation}` : ""}{lot.expiresOn ? ` · expires ${lot.expiresOn}` : ""}{lot.isProvisional ? " · real lot ID needed" : ""}</span>
+            <input aria-label={`Vials from lot ${lot.lotNumber} for ${product.productId}`} type="number" min="0" max={lot.capacity} step="1" required disabled={lot.isProvisional} value={quantities[lot.id] ?? "0"} onChange={event => setQuantities(previous => ({ ...previous, [lot.id]: event.target.value }))} style={{ ...AUTH_INPUT_STYLE, width: 76, flexShrink: 0 }} />
+          </label>)}
+        </fieldset>;
+      })}
+      {error && <p role="alert" style={{ color: "#ff6b6b" }}>{error}</p>}
+      <button type="submit" disabled={busy} style={adminPrimaryButton(busy)}>{busy ? "Saving…" : "Save Lot Assignment"}</button>
+      {!required && <button type="button" disabled={busy} onClick={() => setEditing(false)} style={{ ...adminSecondaryButton(busy), marginLeft: 8 }}>Cancel</button>}
+    </form> : <button type="button" disabled={busy} onClick={() => { setQuantities(initialLotQuantities(products, true)); setError(""); setEditing(true); }} style={{ ...adminSecondaryButton(busy), display: "block", marginTop: 10 }}>Change Lots</button>}
+  </div>;
 }
 
 function OrderReopenConfirmation({ order, busy, reopening, onConfirm }) {

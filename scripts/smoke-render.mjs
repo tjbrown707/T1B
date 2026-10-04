@@ -102,6 +102,7 @@ const ROUTES = [
     forbidHead: ["Order Management", "Staff order management"],
   },
   { path: "/admin/orders", expect: "Change Delivery Method", signedIn: true, exerciseFulfillment: true },
+  { path: "/admin/orders", expect: "Save Lot Assignment", signedIn: true, exerciseLotAssignment: true },
   { path: "/admin/inventory", expect: "RECEIVE A NEW LOT", signedIn: true, exerciseInventory: true },
   { path: '/dealer', expect: 'SIGN IN', forbidBody: ['Dealer orders', 'New customer order'] },
   { path: '/dealer', expect: 'New customer order', signedIn: true, exerciseDealer: true, requireBody: ['60% off', 'Still owed to Tier One'] },
@@ -124,6 +125,7 @@ for (const {
   signedIn = false,
   exerciseLogin = false,
   exerciseFulfillment = false,
+  exerciseLotAssignment = false,
   exerciseInventory = false,
   exerciseDealer = false,
   exerciseDealersAdmin = false,
@@ -142,7 +144,7 @@ for (const {
     { url: `https://www.tierone.bio${route}`, runScripts: "outside-only", pretendToBeVisual: true, virtualConsole }
   );
   const { window } = dom;
-  const fixtureUser = { id: "11111111-1111-4111-8111-111111111111", email: "researcher@example.com", role: "authenticated", app_metadata: (exerciseFulfillment || exerciseInventory || exerciseDealersAdmin) ? { role: "admin" } : {}, user_metadata: {}, email_confirmed_at: "2026-01-01T00:00:00Z" };
+  const fixtureUser = { id: "11111111-1111-4111-8111-111111111111", email: "researcher@example.com", role: "authenticated", app_metadata: (exerciseFulfillment || exerciseLotAssignment || exerciseInventory || exerciseDealersAdmin) ? { role: "admin" } : {}, user_metadata: {}, email_confirmed_at: "2026-01-01T00:00:00Z" };
   const fixtureSession = {
     access_token: "smoke-access-token", refresh_token: "smoke-refresh-token", token_type: "bearer",
     expires_at: Math.floor(Date.now() / 1000) + 3600, expires_in: 3600, user: fixtureUser,
@@ -155,6 +157,22 @@ for (const {
     String(url).includes("/product-availability") ? { products: PRODUCTS.map(product => ({ id: product.id, available: product.id === "bpc157-5" ? 0 : 50, estimatedShipDate: product.id === "bpc157-5" ? "2026-10-02" : null })) } : String(url).includes('/dealers') ? { dealer: null, orders: [], summary: {} } : String(url).includes("/token") ? fixtureSession : String(url).includes("/orders") ? [] : {}
   ), { status: 200, headers: { "Content-Type": "application/json" } });
   let fulfillmentRequest;
+  let lotRequest;
+  if (exerciseLotAssignment) {
+    const oldId = "33333333-3333-4333-8333-333333333333", newId = "44444444-4444-4444-8444-444444444444";
+    let order = { id: "22222222-2222-4222-8222-222222222222", order_number: "T1B-LOT-TEST", status: "PAID", payment_status: "PAID", fulfillment_status: "READY_TO_PICK", fulfillment_method: "SHIP", inventory_accounting_mode: "TRACKED", lot_assignment_version: 0, lot_selection_required: true, customer_name: "Test Customer", customer_email: "test@example.com", total: 100, items: [{ id: "glp3rt-10", name: "GLP-3RT", dose: "10 mg", qty: 3 }], allocations: [{ productId: "glp3rt-10", quantity: 3, state: "COMMITTED", lot: { id: newId, lot_number: "NEW-LOT", is_provisional: false } }], lot_choices: [{ productId: "glp3rt-10", quantity: 3, lots: [{ id: oldId, lotNumber: "OLD-LOT", capacity: 10, assigned: 0 }, { id: newId, lotNumber: "NEW-LOT", capacity: 20, assigned: 3 }] }] };
+    window.fetch = async (url, options = {}) => {
+      let payload = {};
+      if (String(url).includes("/admin-orders")) {
+        if (options.method === "PATCH") {
+          lotRequest = JSON.parse(options.body);
+          order = { ...order, lot_assignment_version: 1, lots_confirmed_at: new Date().toISOString(), lot_selection_required: false, allocations: [{ productId: "glp3rt-10", quantity: 3, state: "COMMITTED", lot: { id: oldId, lot_number: "OLD-LOT", is_provisional: false } }] };
+          payload = { order };
+        } else payload = { orders: [order], total: 1 };
+      } else if (String(url).includes("/admin-print")) payload = { packing: { configured: true, available: true } };
+      return new Response(JSON.stringify(payload), { status: 200, headers: { "Content-Type": "application/json" } });
+    };
+  }
   if (exerciseFulfillment) {
     let order = { id: "22222222-2222-4222-8222-222222222222", order_number: "T1B-TEST", status: "PROCESSING", payment_status: "PAID", fulfillment_status: "PACKED", fulfillment_method: "SHIP", customer_name: "Test Customer", customer_email: "test@example.com", total: 100, payment_amount_received: 100, items: [], allocations: [] };
     window.fetch = async (url, options = {}) => {
@@ -388,6 +406,27 @@ for (const {
       if (fulfillmentRequest?.expectedFulfillmentMethod !== "LOCAL_HANDOFF" || fulfillmentRequest?.fulfillmentMethod !== "SHIP") throw new Error("Incorrect reverse fulfillment update");
       if (!root.textContent.includes("changed to shipping")) throw new Error("Saved shipping missing");
     } catch (error) { errors.push(`Fulfillment switch: ${error.message}`); }
+  }
+  if (exerciseLotAssignment) {
+    try {
+      const tick = () => new Promise(resolve => setTimeout(resolve, 80));
+      const button = label => [...window.document.querySelectorAll("button")].find(el => el.textContent === label);
+      if (button("Mark Picked")) throw new Error("Picking available before lot assignment");
+      if (!button("Print Packing Slip")?.disabled) throw new Error("Printing available before lot assignment");
+      const oldInput = window.document.querySelector('input[aria-label="Vials from lot OLD-LOT for glp3rt-10"]');
+      const newInput = window.document.querySelector('input[aria-label="Vials from lot NEW-LOT for glp3rt-10"]');
+      if (!oldInput || oldInput.value !== "0" || newInput?.value !== "0") throw new Error("Multiple lots must require explicit quantities");
+      oldInput.closest("form").dispatchEvent(new window.Event("submit", { bubbles: true, cancelable: true }));
+      await tick();
+      if (lotRequest || !root.textContent.includes("Assign exactly 3 vials")) throw new Error("Incorrect quantity reached server");
+      Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set.call(oldInput, "3");
+      oldInput.dispatchEvent(new window.Event("input", { bubbles: true }));
+      await tick();
+      oldInput.closest("form").dispatchEvent(new window.Event("submit", { bubbles: true, cancelable: true }));
+      await tick();
+      if (lotRequest?.action !== "assign_lots" || lotRequest?.expectedLotAssignmentVersion !== 0 || lotRequest?.assignments.length !== 1 || lotRequest?.assignments[0].quantity !== 3 || lotRequest?.assignments[0].lotId !== "33333333-3333-4333-8333-333333333333") throw new Error("Incorrect lot assignment request");
+      if (!button("Mark Picked") || button("Print Packing Slip")?.disabled || !root.textContent.includes("shipment lots saved")) throw new Error("Lot selection did not unlock fulfillment");
+    } catch (error) { errors.push(`Lot assignment: ${error.message}`); }
   }
   if (exerciseInventory) {
     try {

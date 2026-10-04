@@ -5,6 +5,43 @@ records state that is not obvious from the code or the git log.
 
 ---
 
+## Manual shipment-lot assignment — 2026-10-03
+
+Products with multiple stocked/allocated lots now require a staff choice after
+payment (and after **Allocate stock** for paid backorders) before picking or
+printing a fulfillment packing slip. In **Admin → Orders → View fulfillment
+details → Assign shipment lots**, enter the vial quantity from each lot and click
+**Save Lot Assignment**. Multiple lots can be used for one product; every ordered
+product must have its exact quantity assigned. Single-lot products continue
+automatically. The unpaid/order-arrival copy still prints without claiming lots.
+
+The original allocator prioritizes dated expiration records before undated lots;
+that is why the new GLP-3RT lot was selected over the old lot. Checkout still holds
+stock and payment still commits it. Manual assignment atomically returns the
+previously committed stock and deducts the chosen stock, preserving payment and
+order totals. Other orders' reservations stay unavailable. Immutable ledger and
+`SHIPMENT_LOTS_ASSIGNED` events record the change. Version checks prevent stale
+edits; identical retries do not deduct twice.
+
+**Change Lots** is available on paid, unpicked orders until picking or opening a
+fulfillment PDF/printing locks the assignment. Document generation freezes the
+assignment before reading its allocation snapshot, including single-lot orders,
+so concurrent edits cannot disagree with paperwork. Failed printer jobs retain
+this lock and can be retried. Real, unexpired lot records are required for manual
+selection. Completed, picked, packed, and previously printed orders retain their
+existing allocations; this release does not retroactively correct delivered
+orders.
+
+Migration `20261004013723_manual_order_lot_assignment.sql` adds the confirmation,
+version and document-lock fields plus service-role-only choice/assignment RPCs.
+No dashboard settings or new environment variables are needed. Release via PR
+and required `verify` check. Validation includes unit tests, the actual React
+assignment/save/unlock journey, and disposable PostgreSQL stock-transfer,
+split-lot, stale-edit, retry, cancellation/reopening, paid-backorder, and document
+lock lifecycle tests.
+
+---
+
 ## Dealer Desk — 2026-10-01
 
 The owner authorized David's existing account as a dealer at **60% off** the

@@ -73,6 +73,7 @@ export function isAllocationlessLegacyLocalHandoff(order) {
 
 export function canPrintFulfillment(order) {
   if (needsOrderCopy(order)) return canPrintOrderCopy(order);
+  if (order?.lot_selection_required) return false;
   if (isAllocationlessLegacyLocalHandoff(order)) return true;
   return order?.payment_status === "PAID"
     && Array.isArray(order?.allocations)

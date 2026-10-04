@@ -1,3 +1,4 @@
+import { prepareFulfillmentLots } from "./_shared/lot-assignment.js";
 import { needsOrderCopy } from "../../src/data/packing-slip.js";
 import { authenticateOrderManager } from "./_shared/admin-auth.js";
 import { buildFulfillmentPdf, assertOrderPrintable } from "./_shared/fulfillment-pdf.js";
@@ -6,7 +7,7 @@ import { SITE_ORIGIN, jsonResponse } from "./_shared/http.js";
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const METHODS = "GET, OPTIONS";
 const ORDER_FIELDS = [
-  "dealer_sale",
+  "dealer_sale", "lot_assignment_version", "lots_confirmed_at", "lots_locked_at",
   "backorder_pending", "estimated_ship_date", "id", "order_number", "status", "payment_status", "fulfillment_status", "fulfillment_method",
   "inventory_accounting_mode", "payment_confirmed_at", "items", "subtotal", "discount_amount", "shipping",
   "total", "payment_method", "customer_name", "customer_email", "customer_phone",
@@ -76,6 +77,17 @@ export default async function handler(request) {
       if (!printRecorded || !(deliveryResult.data || []).length) {
         return fail(409, "Use Print Packing Slip first so PrintNode records the job and queues the customer email.");
       }
+    }
+    if (!needsOrderCopy(order)) {
+      const prepared = await prepareFulfillmentLots(auth.supabase, orderId);
+      if (prepared.error) return fail(409, prepared.error);
+      const fresh = await auth.supabase.from("inventory_reservations")
+        .select("product_id,quantity,state,inventory_lots(lot_number,is_provisional,storage_location)")
+        .eq("order_id", orderId).order("created_at", { ascending: true });
+      if (fresh.error) return fail(503, "The assigned lots could not be loaded. Try again.");
+      Object.assign(order, prepared.order, { allocations: (fresh.data || []).map(row => ({
+        productId: row.product_id, quantity: row.quantity, state: row.state, lot: row.inventory_lots || null,
+      })) });
     }
     const bytes = await buildFulfillmentPdf(order);
     console.info(`admin-fulfillment-pdf: staff ${auth.user.id} generated ${order.order_number}`);
