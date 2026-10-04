@@ -35,6 +35,7 @@ export function isAllocationlessLegacyLocalHandoff(order) {
 
 export function assertOrderPrintable(order, { orderCopy = needsOrderCopy(order) } = {}) {
   if (orderCopy) return canPrintOrderCopy(order) ? "" : "This order cannot be printed.";
+  if (order?.lot_selection_required) return "Assign shipment lots before printing.";
   if (order?.payment_status !== "PAID") return "Confirm payment before printing the packing slip.";
   const allocations = Array.isArray(order?.allocations) ? order.allocations : [];
   if (allocations.length === 0) {

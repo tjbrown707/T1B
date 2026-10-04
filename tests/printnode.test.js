@@ -364,6 +364,7 @@ test("an offline packing printer returns 503 after validation but before PDF sub
       };
       calls.push(request);
       if (request.url.includes("/auth/v1/user")) return adminUserResponse();
+      if (request.url.includes("/rest/v1/rpc/prepare_order_lots_for_fulfillment")) return printableOrderResponse();
       if (request.url.includes("/rest/v1/orders")) return printableOrderResponse();
       if (request.url.includes("/rest/v1/inventory_reservations")) {
         return committedAllocationsResponse();
@@ -415,6 +416,7 @@ test("an uncertain readiness lookup fails open and attempts the PrintNode job", 
       };
       calls.push(request);
       if (request.url.includes("/auth/v1/user")) return adminUserResponse();
+      if (request.url.includes("/rest/v1/rpc/prepare_order_lots_for_fulfillment")) return printableOrderResponse();
       if (request.url.includes("/rest/v1/orders")) return printableOrderResponse();
       if (request.url.includes("/rest/v1/inventory_reservations")) {
         return committedAllocationsResponse();

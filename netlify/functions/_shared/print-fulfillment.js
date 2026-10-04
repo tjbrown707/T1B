@@ -1,3 +1,4 @@
+import { prepareFulfillmentLots } from "./lot-assignment.js";
 import { Buffer } from "node:buffer";
 import { assertOrderPrintable, buildFulfillmentPdf } from "./fulfillment-pdf.js";
 import { recordOrderPrintSubmission } from "./order-processed-email.js";
@@ -9,7 +10,7 @@ const ORDER_FIELDS = [
   "backorder_pending", "estimated_ship_date", "id", "order_number", "status", "payment_status", "fulfillment_status", "fulfillment_method",
   "inventory_accounting_mode", "payment_confirmed_at", "items", "subtotal", "discount_amount", "shipping",
   "total", "payment_method", "customer_name", "customer_email", "customer_phone",
-  "ship_address", "ship_city", "ship_state", "ship_zip", "created_at", "dealer_sale",
+  "ship_address", "ship_city", "ship_state", "ship_zip", "created_at", "dealer_sale", "lot_assignment_version", "lots_confirmed_at", "lots_locked_at",
 ].join(",");
 
 export async function printFulfillment(auth, orderId, config, { automatic = false } = {}) {
@@ -65,6 +66,17 @@ export async function printFulfillment(auth, orderId, config, { automatic = fals
   }
 
   try {
+    if (!orderCopy) {
+      const prepared = await prepareFulfillmentLots(auth.supabase, orderId);
+      if (prepared.error) return fail(409, prepared.error);
+      const fresh = await auth.supabase.from("inventory_reservations")
+        .select("product_id,quantity,state,inventory_lots(lot_number,is_provisional,storage_location)")
+        .eq("order_id", orderId).order("created_at", { ascending: true });
+      if (fresh.error) return fail(503, "The assigned lots could not be loaded. Try again.");
+      Object.assign(order, prepared.order, { allocations: (fresh.data || []).map(row => ({
+        productId: row.product_id, quantity: row.quantity, state: row.state, lot: row.inventory_lots || null,
+      })) });
+    }
     const bytes = await buildFulfillmentPdf(order, { orderCopy });
     const jobId = await submitPrintNodeJob({
       printerId: config.fulfillmentPrinterId,

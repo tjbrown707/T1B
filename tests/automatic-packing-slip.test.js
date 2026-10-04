@@ -25,6 +25,8 @@ function fixture(t, options = {}) {
     },
     async rpc(name, args) {
       rpcs.push(name);
+      if (name === "get_order_lot_choices") return { data: [{ order_id: id, lot_selection_required: false, lot_choices: [] }] };
+      if (name === "prepare_order_lots_for_fulfillment") return options.manualLotsRequired ? { error: { message: "manual_lot_assignment_required" } } : { data: order };
       if (name === "confirm_order_payment") { order.payment_status = "PAID"; return { data: order }; }
       if (name === "record_order_print_submission") { events.push({ event_type: "FULFILLMENT_PACKET_PRINTED", details: { printnode_job_id: args.p_printnode_job_id } }); return { data: { readiness: "WAITING_FOR_LABEL" } }; }
       throw new Error(`Unexpected RPC ${name}`);
@@ -63,7 +65,7 @@ test("manual reprint works before payment and after payment retains fulfillment 
   assert.equal(f.jobs[1].headers["X-Idempotency-Key"], undefined);
   f.order.payment_status = "PAID";
   assert.equal((await f.print(false)).body.printed, true);
-  assert.deepEqual(f.rpcs, ["record_order_print_submission"]);
+  assert.deepEqual(f.rpcs, ["prepare_order_lots_for_fulfillment", "record_order_print_submission"]);
 });
 
 test("confirming payment never creates a duplicate print", async t => {
@@ -95,4 +97,13 @@ test("missing print audit retries with the same PrintNode idempotency key", asyn
   await f.print();
   assert.equal(f.jobs.length, 2);
   assert.equal(f.jobs[0].headers["X-Idempotency-Key"], f.jobs[1].headers["X-Idempotency-Key"]);
+});
+
+ test("unassigned multi-lot orders never submit fulfillment PDFs or queue customer email", async t => {
+  const f = fixture(t, { manualLotsRequired: true, order: { payment_status: "PAID" } });
+  const result = await f.print(false);
+  assert.equal(result.status, 409);
+  assert.match(result.body.error, /Assign shipment lots/);
+  assert.equal(f.jobs.length, 0);
+  assert.equal(f.events.length, 0);
 });

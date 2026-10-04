@@ -97,7 +97,7 @@ export function canCompleteLocalHandoff(order) {
 }
 
 export function nextFulfillmentAction(order) {
-  if (order?.payment_status !== "PAID") return null;
+  if (order?.payment_status !== "PAID" || order?.lot_selection_required) return null;
   if (order.fulfillment_method === FULFILLMENT_METHODS.LOCAL_HANDOFF
       && order.fulfillment_status === "READY_TO_PICK"
       && canCompleteLocalHandoff(order)) {
