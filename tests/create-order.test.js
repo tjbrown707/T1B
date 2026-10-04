@@ -159,20 +159,23 @@ test("order creation has a platform rate limit and rejects large bodies before d
   assert.equal(response.status, 413);
 });
 
-test("verified checkout saves once, queues the receipt, and preserves the staff alert", async () => {
+test("verified checkout saves once, queues the receipt, and preserves the staff alert without printing", async t => {
   const previousNetlify = globalThis.Netlify;
   const env = {
     SUPABASE_URL: "https://example.supabase.co",
     SUPABASE_SERVICE_ROLE_KEY: "service-role-test",
     RESEND_API_KEY: "re_test_key",
     TURNSTILE_SECRET_KEY: "turnstile-secret",
+    PRINTNODE_API_KEY: "test-key",
+    PRINTNODE_FULFILLMENT_PRINTER_ID: "42",
   };
   globalThis.Netlify = { env: { get(name) { return env[name]; } } };
+
+  t.mock.method(globalThis, "fetch", async () => { assert.fail("checkout must never contact PrintNode"); });
 
   const orderId = "11111111-1111-4111-8111-111111111111";
   const deliveryId = "22222222-2222-4222-8222-222222222222";
   let createCalls = 0;
-  let printCalls = 0;
   const resendRecipients = [];
   let delivery = null;
   const supabase = {
@@ -235,18 +238,11 @@ test("verified checkout saves once, queues the receipt, and preserves the staff 
   };
   const handler = createOrderHandler({
     createClient: () => supabase,
-    printOrder: async (auth, orderId, config, options) => {
-      assert.equal(createCalls, 1, "order is saved before printing");
-      assert.ok(orderId);
-      printCalls += 1;
-      assert.equal(auth.supabase, supabase);
-      assert.equal(options.automatic, true);
-      throw new Error("Printer unavailable must not fail checkout");
-    },
     fetchImpl: async (url, options) => {
       if (String(url).includes("siteverify")) {
         return new Response(JSON.stringify({ success: true }), { status: 200 });
       }
+      assert.equal(url, "https://api.resend.com/emails", "checkout requests only receipts and staff alerts");
       const message = JSON.parse(options.body);
       resendRecipients.push(message.to[0]);
       return new Response(JSON.stringify({ id: `re_${resendRecipients.length}` }), { status: 200 });
@@ -264,7 +260,6 @@ test("verified checkout saves once, queues the receipt, and preserves the staff 
     assert.equal(payload.receiptSent, true);
     assert.equal(payload.staffNotificationSent, true);
     assert.equal(createCalls, 1);
-    assert.equal(printCalls, 1);
     assert.equal(delivery.status, "SENT");
     assert.deepEqual(resendRecipients.sort(), ["researcher@example.com", "sales@tierone.bio"]);
   } finally {

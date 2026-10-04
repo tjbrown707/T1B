@@ -5,6 +5,36 @@ records state that is not obvious from the code or the git log.
 
 ---
 
+## Packing slips after payment — 2026-10-03
+
+Checkout no longer requests a print job, including dealer orders and order retries.
+**Confirm Payment** now queues the paid packing slip after payment commits. If an
+order needs a manual lot choice, printing waits for **Save Lot Assignment**;
+paid backorders wait for **Allocate stock** and any required lot choice. The
+printed document includes the final shipment lots and freezes them before its
+allocation snapshot is read. Single-lot orders print on payment confirmation.
+
+Printer/configuration failures leave payment, stock allocation, and lot assignment
+saved and show a separate warning. **Print Packing Slip** remains available for
+explicit retries. Existing manual unpaid copies remain optional. Prior unpaid
+order-copy print records do not suppress the paid fulfillment print. Existing
+paid fulfillment print records suppress automatic duplicates; concurrent retries
+use a distinct stable payment-print key. Unrecorded automatic retries expire
+23 hours after the immutable document/picking lock (legacy orders use payment
+time), allowing old paid backorders to print when stock finally arrives.
+The existing fulfillment audit and shipping/local-handoff email rules still apply.
+No migration, environment change, historical print job, or dashboard action is
+required. The September 18 order-arrival printing workflow below is superseded.
+
+Validation covers checkout without printer calls, payment/lot/backorder triggers,
+retry deduplication, expired retries, manual reprints, print-audit failures and
+payment preservation when printers are unavailable, plus the actual React
+lot-save/print-lock interaction. Full `npm run verify` passes with zero lint
+problems, 236 tests, 88 route scenarios, build, secret scan and site integrity.
+Release uses a pull request with the required GitHub verify check.
+
+---
+
 ## Manual shipment-lot assignment — 2026-10-03
 
 Products with multiple stocked/allocated lots now require a staff choice after
@@ -13,7 +43,7 @@ printing a fulfillment packing slip. In **Admin → Orders → View fulfillment
 details → Assign shipment lots**, enter the vial quantity from each lot and click
 **Save Lot Assignment**. Multiple lots can be used for one product; every ordered
 product must have its exact quantity assigned. Single-lot products continue
-automatically. The unpaid/order-arrival copy still prints without claiming lots.
+automatically. Unpaid copies remain available only through manual printing.
 
 The original allocator prioritizes dated expiration records before undated lots;
 that is why the new GLP-3RT lot was selected over the old lot. Checkout still holds
@@ -83,7 +113,7 @@ a payment retry and direct the dealer to start a new order.
 
 The verified dealer email is always the order-notification recipient, including
 direct customer shipments. Downstream customers are not emailed dealer invoices.
-Dealer packing slips omit all prices, including automatically printed order
+Dealer packing slips omit all prices, including optional unpaid order
 copies. The dealer rate is applied per vial and rounded to cents before summing;
 the server checks the displayed quote and rejects stale prices before insertion.
 
@@ -126,7 +156,7 @@ checks, and disposable PostgreSQL lifecycle tests including email and postage.
 
 ---
 
-## Packing slips on order arrival — 2026-09-18
+## Packing slips on order arrival — 2026-09-18 (superseded)
 
 New checkout orders automatically request an order-copy packing slip before payment,
 including backorders. Payment confirmation no longer prints. Unpaid/backorder

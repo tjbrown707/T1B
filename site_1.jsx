@@ -5236,8 +5236,8 @@ function AdminOrdersPage() {
 
       setOrders(previous => previous.map(item => item.id === order.id ? payload.order : item));
       const messages = {
-        assign_lots: `${payload.order.order_number}: shipment lots saved. Print the packing slip or start picking to continue.`,
-        allocate_backorder: `${payload.order.order_number} now has stock allocated. Print its packing slip to continue fulfillment.`,
+        assign_lots: `${payload.order.order_number}: shipment lots saved.`,
+        allocate_backorder: `${payload.order.order_number} now has stock allocated.`,
         confirm_payment: payload.order.backorder_pending ? `${payload.order.order_number} is paid and on backorder until stock is allocated.` : `${payload.order.order_number} is paid${isLocalHandoff(payload.order) ? " for local handoff" : ""}. ${isPrecountedOrder(payload.order) ? "Its inventory was already accounted before the August 10 cutoff, so stock was not changed." : "Inventory was deducted once."}`,
         cancel_unpaid: `${payload.order.order_number} was cancelled and its reserved stock was released.`,
         reopen_cancelled: payload.order.backorder_pending ? `${payload.order.order_number} was reopened on backorder with a fresh 24-hour payment window.` : isPrecountedOrder(payload.order)
@@ -5252,14 +5252,19 @@ function AdminOrdersPage() {
       let text = messages[action] || `${payload.order.order_number} was updated.`;
       let type = "success";
       if (payload.packingSlip) {
-        if (payload.packingSlip?.printed) {
+        if (payload.packingSlip.deferred) {
+          text += payload.packingSlip.reason === "lots"
+            ? " Save the shipment lot assignment to queue the packing slip automatically."
+            : " The packing slip will queue automatically after stock is allocated and any shipment lots are assigned.";
+        } else if (payload.packingSlip?.printed) {
           text += payload.packingSlip.alreadyPrinted
             ? " The packing slip was already queued in PrintNode."
             : " The packing slip was automatically queued in PrintNode.";
           text += orderEmailNotice(payload.packingSlip.notification);
-          type = orderEmailNoticeType(payload.packingSlip.notification);
+          type = payload.packingSlip.warning ? "error" : orderEmailNoticeType(payload.packingSlip.notification);
+          if (payload.packingSlip.warning) text += ` ${payload.packingSlip.warning}`;
         } else {
-          text += ` Payment is saved. ${payload.packingSlip?.error || "Printing could not be confirmed. Check the printer queue before using Print Packing Slip."}`;
+          text += ` The order update is saved. ${payload.packingSlip?.error || "Printing could not be confirmed. Check the printer queue before using Print Packing Slip."}`;
           type = "error";
         }
       }
@@ -5613,7 +5618,7 @@ function AdminOrdersPage() {
                     <div>
                       <AdminDetailHeading>Fulfillment documents</AdminDetailHeading>
                       <div style={{ color: "var(--text-dim)", fontFamily: "'Rajdhani', sans-serif", fontSize: 14 }}>
-                        {needsOrderCopy(order) ? (order.orderCopyPrintRecorded ? "Order-copy packing slip queued in PrintNode. You can print another copy below." : "No order-copy print is recorded. Check the printer queue, then use Print Packing Slip if needed.") : isPrecountedOrder(order) && (order.allocations || []).length === 0
+                        {needsOrderCopy(order) ? (order.orderCopyPrintRecorded ? "Order-copy packing slip queued in PrintNode. You can print another copy below." : "Packing slips print automatically after payment and shipment lots are ready. You can print an unpaid order copy manually if needed.") : isPrecountedOrder(order) && (order.allocations || []).length === 0
                           ? isLocalHandoff(order) && printReady
                             ? localHandoffReady
                               ? "Pre-counted cutoff order — the PrintNode packing-slip job is recorded. Preview PDF is now available for reference."
@@ -5694,7 +5699,7 @@ function OrderLotAssignmentEditor({ order, busy, onSave }) {
   return <div style={{ marginTop: 14, padding: 12, border: "1px solid var(--border)", fontFamily: "'Rajdhani', sans-serif" }}>
     <strong style={{ color: required ? "#fbbf24" : "var(--text-primary)" }}>{required ? "Assign shipment lots" : "Shipment lot assignment"}</strong>
     {required || editing ? <form onSubmit={save}>
-      <p style={{ color: "var(--text-secondary)", fontSize: 14 }}>Enter the vials to send from each lot. You can use one lot or split the quantity. Availability includes stock already allocated to this order. Lots lock when you start picking or open a fulfillment document.</p>
+      <p style={{ color: "var(--text-secondary)", fontSize: 14 }}>Enter the vials to send from each lot. You can use one lot or split the quantity. Availability includes stock already allocated to this order. Saving queues the packing slip automatically and locks the lots when the document is prepared.</p>
       {products.map(product => {
         const item = order.items.find(item => item.id === product.productId);
         return <fieldset key={product.productId} disabled={busy} style={{ border: "1px solid var(--border)", padding: 10, margin: "12px 0", minWidth: 0 }}>
@@ -5890,7 +5895,7 @@ function OrderPaymentConfirmation({ order, busy, confirming, onConfirm }) {
                 </div>
               )}
             </div>
-            <p style={{ color: "var(--text-secondary)", fontFamily: "'Rajdhani', sans-serif", fontSize: 14 }}>{order.backorder_pending ? "This payment will be recorded while the order stays on backorder. After receiving stock, use Allocate stock and then Print Packing Slip." : "Packing slips print automatically when orders are placed. Confirming payment will not print a duplicate. Use Print Packing Slip for an updated copy; local handoff requires that paid-order print before completion."}</p>
+            <p style={{ color: "var(--text-secondary)", fontFamily: "'Rajdhani', sans-serif", fontSize: 14 }}>{order.backorder_pending ? "This payment will be recorded while the order stays on backorder. After receiving stock, use Allocate stock. The packing slip queues automatically once stock and shipment lots are ready." : "Confirming payment queues the packing slip automatically. For multiple lots, printing waits until you save your shipment lot assignment after confirming payment. Printing problems do not undo payment; Print Packing Slip remains available for retries."}</p>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 9, marginTop: 20 }}>
               <button type="button" disabled={busy} onClick={() => setOpen(false)} style={adminSecondaryButton(busy)}>Cancel</button>
               <button type="button" disabled={busy || !paymentAmountValid} onClick={confirm} style={adminPrimaryButton(busy || !paymentAmountValid)}>{confirming ? "Confirming…" : "Confirm Payment"}</button>

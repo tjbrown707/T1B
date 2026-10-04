@@ -166,8 +166,8 @@ for (const {
       if (String(url).includes("/admin-orders")) {
         if (options.method === "PATCH") {
           lotRequest = JSON.parse(options.body);
-          order = { ...order, lot_assignment_version: 1, lots_confirmed_at: new Date().toISOString(), lot_selection_required: false, allocations: [{ productId: "glp3rt-10", quantity: 3, state: "COMMITTED", lot: { id: oldId, lot_number: "OLD-LOT", is_provisional: false } }] };
-          payload = { order };
+          order = { ...order, lot_assignment_version: 1, lots_confirmed_at: new Date().toISOString(), lots_locked_at: new Date().toISOString(), lot_choices: [], packingSlipPrintRecorded: true, lot_selection_required: false, allocations: [{ productId: "glp3rt-10", quantity: 3, state: "COMMITTED", lot: { id: oldId, lot_number: "OLD-LOT", is_provisional: false } }] };
+          payload = { order, packingSlip: { printed: true, jobId: 123 } };
         } else payload = { orders: [order], total: 1 };
       } else if (String(url).includes("/admin-print")) payload = { packing: { configured: true, available: true } };
       return new Response(JSON.stringify(payload), { status: 200, headers: { "Content-Type": "application/json" } });
@@ -425,7 +425,8 @@ for (const {
       oldInput.closest("form").dispatchEvent(new window.Event("submit", { bubbles: true, cancelable: true }));
       await tick();
       if (lotRequest?.action !== "assign_lots" || lotRequest?.expectedLotAssignmentVersion !== 0 || lotRequest?.assignments.length !== 1 || lotRequest?.assignments[0].quantity !== 3 || lotRequest?.assignments[0].lotId !== "33333333-3333-4333-8333-333333333333") throw new Error("Incorrect lot assignment request");
-      if (!button("Mark Picked") || button("Print Packing Slip")?.disabled || !root.textContent.includes("shipment lots saved")) throw new Error("Lot selection did not unlock fulfillment");
+      if (!button("Mark Picked") || button("Print Packing Slip")?.disabled || !root.textContent.includes("shipment lots saved") || !root.textContent.includes("automatically queued in PrintNode")) throw new Error("Lot selection did not queue printing and unlock picking");
+      if (button("Change Lots") || button("Save Lot Assignment")) throw new Error("Lots remained editable after automatic print lock");
     } catch (error) { errors.push(`Lot assignment: ${error.message}`); }
   }
   if (exerciseInventory) {

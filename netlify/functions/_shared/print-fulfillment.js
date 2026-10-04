@@ -37,20 +37,17 @@ export async function printFulfillment(auth, orderId, config, { automatic = fals
       lot: allocation.inventory_lots || null,
     })),
   };
-  const orderCopy = automatic || needsOrderCopy(order);
+  const orderCopy = needsOrderCopy(order);
+  if (automatic && order.payment_status !== "PAID") return fail(409, "Confirm payment before automatic printing.");
+  if (automatic && order.backorder_pending) return { status: 200, body: { printed: false, deferred: true, reason: "backorder" } };
   if (automatic) {
     const { data: events, error } = await auth.supabase.from("order_events")
-      .select("details").eq("order_id", orderId).eq("event_type", "ORDER_PACKING_SLIP_PRINTED");
+      .select("details").eq("order_id", orderId).eq("event_type", "FULFILLMENT_PACKET_PRINTED");
     if (error) return fail(503, "The previous print status could not be checked. Check the printer before using Print Packing Slip.");
     const previous = (events || []).find(event => Number.isInteger(Number(event?.details?.printnode_job_id))
       && Number(event.details.printnode_job_id) > 0);
     if (previous) return { status: 200, body: { printed: true, alreadyPrinted: true, jobId: Number(previous.details.printnode_job_id) } };
-    // PrintNode retains idempotency keys for 24 hours. Old checkout retries
-    // must use the explicit reprint action rather than risk a second automatic job.
-    const createdAt = new Date(order.created_at).getTime();
-    if (!Number.isFinite(createdAt) || Date.now() - createdAt >= 23 * 60 * 60 * 1000) {
-      return fail(409, "Automatic printing has expired for this order. Check the printer, then use Print Packing Slip if needed.");
-    }
+    if (order.fulfillment_status !== "READY_TO_PICK") return fail(409, "Automatic printing is only available before picking. Use Print Packing Slip if a copy is needed.");
   }
   const blocked = assertOrderPrintable(order, { orderCopy });
   if (blocked) return fail(409, blocked);
@@ -68,7 +65,10 @@ export async function printFulfillment(auth, orderId, config, { automatic = fals
   try {
     if (!orderCopy) {
       const prepared = await prepareFulfillmentLots(auth.supabase, orderId);
-      if (prepared.error) return fail(409, prepared.error);
+      if (prepared.error) {
+        if (automatic && prepared.error.includes("Assign shipment lots")) return { status: 200, body: { printed: false, deferred: true, reason: "lots" } };
+        return fail(409, prepared.error);
+      }
       const fresh = await auth.supabase.from("inventory_reservations")
         .select("product_id,quantity,state,inventory_lots(lot_number,is_provisional,storage_location)")
         .eq("order_id", orderId).order("created_at", { ascending: true });
@@ -77,13 +77,21 @@ export async function printFulfillment(auth, orderId, config, { automatic = fals
         productId: row.product_id, quantity: row.quantity, state: row.state, lot: row.inventory_lots || null,
       })) });
     }
+    if (automatic) {
+      // The first document/picking lock is immutable across retries. Starting
+      // the window here also permits paid backorders to print after replenishment.
+      const anchor = new Date(order.lots_locked_at || order.payment_confirmed_at).getTime();
+      if (!Number.isFinite(anchor) || Date.now() - anchor >= 23 * 60 * 60 * 1000) {
+        return fail(409, "Automatic printing has expired. Check the printer queue, then use Print Packing Slip if needed.");
+      }
+    }
     const bytes = await buildFulfillmentPdf(order, { orderCopy });
     const jobId = await submitPrintNodeJob({
       printerId: config.fulfillmentPrinterId,
       title: `${order.order_number} - packing slip`,
       contentType: "pdf_base64",
       content: Buffer.from(bytes).toString("base64"),
-      ...(automatic ? { idempotencyKey: `order-packing-slip/${orderId}` } : {}),
+      ...(automatic ? { idempotencyKey: `payment-packing-slip/${orderId}` } : {}),
     });
     if (orderCopy) {
       const { error } = await auth.supabase.from("order_events").insert({
