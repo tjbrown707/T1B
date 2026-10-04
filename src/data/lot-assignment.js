@@ -18,7 +18,7 @@ export function validateLotQuantities(products, quantities) {
   for (const product of products) {
     let total = 0;
     for (const lot of product.lots) {
-      const raw = String(quantities[lot.id] ?? "").trim();
+      const raw = String(quantities[lot.id] ?? "0").trim();
       const quantity = Number(raw);
       if (!/^\d+$/.test(raw) || !Number.isSafeInteger(quantity) || quantity < 0) {
         return { error: "Enter a whole number of vials for each lot." };

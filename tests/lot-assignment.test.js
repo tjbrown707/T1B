@@ -21,6 +21,7 @@ test("multi-lot selection starts blank, with no implicit confirmation of checkou
 test("lot picker accepts one lot or splits but requires exactly the ordered quantity", () => {
   assert.deepEqual(validateLotQuantities(products, { [old]: "3", [newer]: "0" }).assignments, [{ lotId: old, quantity: 3 }]);
   assert.deepEqual(validateLotQuantities(products, { [old]: "1", [newer]: "2" }).assignments, [{ lotId: old, quantity: 1 }, { lotId: newer, quantity: 2 }]);
+  assert.deepEqual(validateLotQuantities(products, { [old]: "3" }).assignments, [{ lotId: old, quantity: 3 }], "A newly received lot displayed as zero must not require retyping zero after refresh");
   for (const q of [{ [old]: "2", [newer]: "0" }, { [old]: "11", [newer]: "0" }, { [old]: "1.5", [newer]: "1.5" }, { [old]: "-1", [newer]: "4" }, { [old]: "", [newer]: "3" }]) assert.ok(validateLotQuantities(products, q).error);
   const bad = structuredClone(products); bad[0].lots[0].isProvisional = true;
   assert.ok(validateLotQuantities(bad, { [old]: "3", [newer]: "0" }).error);
