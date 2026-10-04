@@ -11,6 +11,7 @@ import {
 } from "../../src/data/order-management.js";
 import { authenticateOrderManager } from "./_shared/admin-auth.js";
 import { jsonResponse, readJsonBody } from "./_shared/http.js";
+import { sendStaffPaymentReceivedEmail } from "./_shared/payment-received-email.js";
 
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -232,6 +233,20 @@ export async function updateOrderWorkflow(supabase, user, request) {
   if (error) return workflowError(error, action);
   const updated = Array.isArray(data) ? data[0] : data;
   if (!updated) return fail(404, "Order not found.");
+
+  // Payment is already durable. A staff inbox notice must never roll it back.
+  if (action === "confirm_payment" || action === "update_payment_amount") {
+    try {
+      await sendStaffPaymentReceivedEmail(updated, {
+        kind: action === "confirm_payment" ? "confirmed" : "updated",
+        previousAmount: action === "update_payment_amount"
+          ? parsePaymentAmount(parsed.data?.expectedPaymentAmount)
+          : undefined,
+      });
+    } catch (emailError) {
+      console.error("admin-orders: payment-received staff email failed", emailError);
+    }
+  }
 
   // Payment is already durable. Printing failure is separate from payment,
   // allocation and assignment success. Retries share one fulfillment print key.

@@ -8,8 +8,8 @@ const lotId = "33333333-3333-4333-8333-333333333333";
 const user = { id: "22222222-2222-4222-8222-222222222222" };
 const config = { fulfillmentConfigured: true, fulfillmentPrinterId: 42, apiKey: "test-key" };
 function fixture(t, options = {}) {
-  const order = { id, order_number: "T1B-260918-123456", payment_status: "AWAITING_PAYMENT", fulfillment_status: "ON_HOLD", inventory_accounting_mode: "TRACKED", created_at: "2020-01-01", fulfillment_method: "SHIP", items: [{ id: "test", name: "Test product", qty: 1 }], customer_name: "Test Customer", ...options.order };
-  const events = options.events || [], jobs = [], rpcs = [];
+  const order = { id, order_number: "T1B-260918-123456", payment_status: "AWAITING_PAYMENT", fulfillment_status: "ON_HOLD", inventory_accounting_mode: "TRACKED", created_at: "2020-01-01", fulfillment_method: "SHIP", items: [{ id: "test", name: "Test product", qty: 1 }], customer_name: "Test Customer", customer_email: "test@example.com", total: 30, payment_amount_received: null, ...options.order };
+  const events = options.events || [], jobs = [], emails = [], rpcs = [];
   let lotsRequired = options.manualLotsRequired === true;
   const supabase = {
     from(table) {
@@ -40,11 +40,16 @@ function fixture(t, options = {}) {
         order.payment_status = "PAID";
         order.fulfillment_status = order.backorder_pending ? "ON_HOLD" : "READY_TO_PICK";
         order.payment_confirmed_at ||= new Date().toISOString();
+        order.payment_amount_received = args.p_payment_amount_received;
+        order.payment_received_via = args.p_payment_received_via;
         return { data: { ...order } };
       }
       if (name === "assign_order_lots") { lotsRequired = false; order.lots_confirmed_at = new Date().toISOString(); return { data: { ...order } }; }
       if (name === "allocate_backorder") { order.backorder_pending = false; order.fulfillment_status = "READY_TO_PICK"; return { data: { ...order } }; }
-      if (name === "update_order_payment_amount") return { data: { ...order } };
+      if (name === "update_order_payment_amount") {
+        order.payment_amount_received = args.p_payment_amount_received;
+        return { data: { ...order } };
+      }
       if (name === "record_order_print_submission") {
         if (options.auditError) return { error: new Error("audit offline") };
         events.push({ order_id: id, event_type: "FULFILLMENT_PACKET_PRINTED", details: { printnode_job_id: args.p_printnode_job_id, automatic: args.p_automatic } });
@@ -54,9 +59,18 @@ function fixture(t, options = {}) {
     },
   };
   const previous = globalThis.Netlify;
-  globalThis.Netlify = { env: { get: key => options.unconfigured ? undefined : ({ PRINTNODE_API_KEY: "test-key", PRINTNODE_FULFILLMENT_PRINTER_ID: "42" })[key] } };
+  globalThis.Netlify = { env: { get: key => ({
+    PRINTNODE_API_KEY: options.unconfigured ? undefined : "test-key",
+    PRINTNODE_FULFILLMENT_PRINTER_ID: options.unconfigured ? undefined : "42",
+    RESEND_API_KEY: options.emailKey === false ? undefined : "test-resend-key",
+  })[key] } };
   t.after(() => { globalThis.Netlify = previous; });
   t.mock.method(globalThis, "fetch", async (url, request) => {
+    if (url === "https://api.resend.com/emails") {
+      emails.push(request);
+      if (options.emailError) throw new Error("email unavailable");
+      return new Response(JSON.stringify({ id: "email-id" }), { status: 200 });
+    }
     if (url.endsWith("/printers/42")) return Response.json([{ id: 42, state: options.offline ? "offline" : "online", computer: { state: "connected" } }]);
     assert.equal(url, "https://api.printnode.com/printjobs");
     jobs.push(request);
@@ -68,7 +82,7 @@ function fixture(t, options = {}) {
     const response = await updateOrderWorkflow(supabase, user, new Request("https://test/admin-orders", { method: "PATCH", body: JSON.stringify({ orderId: id, action, expectedPaymentStatus: action === "confirm_payment" ? "AWAITING_PAYMENT" : "PAID", paymentAmountReceived: 30, expectedPaymentAmount: 30, expectedLotAssignmentVersion: 0, assignments: [{ lotId, quantity: 1 }], ...input }) }));
     return { status: response.status, ...await response.json() };
   };
-  return { print, workflow, jobs, events, rpcs, order, supabase };
+  return { print, workflow, jobs, emails, events, rpcs, order, supabase };
 }
 
 test("confirm payment prints the paid fulfillment slip once, even for an old unpaid order", async t => {
@@ -79,6 +93,8 @@ test("confirm payment prints the paid fulfillment slip once, even for an old unp
   assert.equal(result.packingSlip.printed, true);
   assert.equal(result.order.lots_locked_at, f.order.lots_locked_at);
   assert.equal(f.jobs.length, 1);
+  assert.equal(f.emails.length, 1);
+  assert.match(JSON.parse(f.emails[0].body).subject, /marked paid - \$30\.00 received \(total \$30\.00\)/);
   assert.equal(f.jobs[0].headers["X-Idempotency-Key"], `payment-packing-slip/${id}`);
   assert.equal(f.events[0].event_type, "FULFILLMENT_PACKET_PRINTED");
   assert.equal(f.events[0].details.automatic, true);
@@ -139,6 +155,21 @@ for (const [name, options] of Object.entries({ offline: { offline: true }, faile
   assert.equal(result.packingSlip.printed, false);
   assert.ok(result.packingSlip.error);
   assert.equal(f.events.length, 0);
+});
+
+test("a staff payment email outage still prints the paid packing slip", async t => {
+  const previousError = console.error;
+  console.error = () => {};
+  try {
+    const f = fixture(t, { emailError: true });
+    const result = await f.workflow();
+    assert.equal(result.status, 200);
+    assert.equal(result.order.payment_status, "PAID");
+    assert.equal(result.packingSlip.printed, true);
+    assert.equal(f.jobs.length, 1);
+  } finally {
+    console.error = previousError;
+  }
 });
 
 test("payment conflicts and payment-amount corrections never print", async t => {

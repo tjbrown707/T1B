@@ -5,9 +5,10 @@ import { getEnv } from "./http.js";
 
 const RESEND_ENDPOINT = "https://api.resend.com/emails";
 const RESEND_TIMEOUT_MS = 8000;
-const STAFF_NOTIFICATION_EMAIL = "sales@tierone.bio";
-const SENDER = "Tier One BioSystems <noreply@tierone.bio>";
-const STAFF_ADMIN_URL = "https://www.tierone.bio/admin/orders";
+export const STAFF_NOTIFICATION_EMAIL = "sales@tierone.bio";
+export const STAFF_EMAIL_SENDER = "Tier One BioSystems <noreply@tierone.bio>";
+export const STAFF_ADMIN_URL = "https://www.tierone.bio/admin/orders";
+const SENDER = STAFF_EMAIL_SENDER;
 
 let cachedReceiptTemplate = null;
 
