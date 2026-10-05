@@ -5,6 +5,45 @@ records state that is not obvious from the code or the git log.
 
 ---
 
+## Staff payment detail emails — 2026-10-04
+
+Confirm Payment and real changes through Edit Amount Received now queue a staff
+notice to sales@tierone.bio in the same transaction as the immutable payment
+audit. Each audit event has one saved notice and its own Resend key, so a
+$72 → $64 → $72 correction sends all three notices. No-op edits and payment
+retries produce no additional notices. Historical payments are not backfilled.
+The notice shows the saved amount, original total, short/overpayment difference,
+method, customer, timestamp and previous amount for corrections.
+
+The exact provider payload is saved before sending and preserved across retries,
+amount/fulfillment changes and deployments. The existing five-minute email
+worker retries transient failures with backoff; expired leases recover interrupted
+sends. Eight attempts or a 23-hour retry window stop automatic sends to avoid
+reusing an expired provider key. Permanent failures become NEEDS_REVIEW.
+Admin → Orders → View fulfillment details → Payment & totals shows each staff
+email as sent, queued for retry or needing attention. A failed send returns a
+separate warning while payment and packing-slip progress remain saved. Sent means
+accepted by Resend, not proof of inbox delivery. Exhausted/expired notices need
+operator investigation; there is no unsafe automatic resend after key expiry.
+
+Migration `20261005010811_staff_payment_email_outbox.sql` is applied to production.
+It adds a service-role-only RLS outbox, immutable snapshots/payloads, a trigger
+on new PAYMENT_CONFIRMED/PAYMENT_AMOUNT_CORRECTED audits, and protected claim,
+prepare, complete and fail RPCs. No new environment variables, email templates,
+customer email changes or dashboard actions are required.
+
+Validation: npm run verify passes with 253 tests and 89 smoke scenarios,
+including the actual amount editor closing after a saved payment with an email
+warning. Disposable PostgreSQL lifecycle checks cover atomic rollback, no-op
+and repeated-value changes, frozen payloads, lease/backoff/token behavior,
+permanent failures, retry limits, expiry and customer access denial. The same
+payment-email lifecycle check passed in production and rolled back all test
+records; read-back found zero test orders/notices. Supabase advisors report no
+warnings/errors; remaining notices are informational, including intentional
+server-only RLS tables. Release uses PR #31 and the required verify check.
+
+---
+
 ## Packing slips after payment — 2026-10-03
 
 Checkout no longer requests a print job, including dealer orders and order retries.

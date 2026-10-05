@@ -102,6 +102,7 @@ const ROUTES = [
     forbidHead: ["Order Management", "Staff order management"],
   },
   { path: "/admin/orders", expect: "Change Delivery Method", signedIn: true, exerciseFulfillment: true },
+  { path: "/admin/orders", expect: "Edit Amount Received", signedIn: true, exercisePaymentEmail: true },
   { path: "/admin/orders", expect: "Save Lot Assignment", signedIn: true, exerciseLotAssignment: true },
   { path: "/admin/inventory", expect: "RECEIVE A NEW LOT", signedIn: true, exerciseInventory: true },
   { path: '/dealer', expect: 'SIGN IN', forbidBody: ['Dealer orders', 'New customer order'] },
@@ -126,6 +127,7 @@ for (const {
   exerciseLogin = false,
   exerciseFulfillment = false,
   exerciseLotAssignment = false,
+  exercisePaymentEmail = false,
   exerciseInventory = false,
   exerciseDealer = false,
   exerciseDealersAdmin = false,
@@ -144,7 +146,7 @@ for (const {
     { url: `https://www.tierone.bio${route}`, runScripts: "outside-only", pretendToBeVisual: true, virtualConsole }
   );
   const { window } = dom;
-  const fixtureUser = { id: "11111111-1111-4111-8111-111111111111", email: "researcher@example.com", role: "authenticated", app_metadata: (exerciseFulfillment || exerciseLotAssignment || exerciseInventory || exerciseDealersAdmin) ? { role: "admin" } : {}, user_metadata: {}, email_confirmed_at: "2026-01-01T00:00:00Z" };
+  const fixtureUser = { id: "11111111-1111-4111-8111-111111111111", email: "researcher@example.com", role: "authenticated", app_metadata: (exerciseFulfillment || exerciseLotAssignment || exercisePaymentEmail || exerciseInventory || exerciseDealersAdmin) ? { role: "admin" } : {}, user_metadata: {}, email_confirmed_at: "2026-01-01T00:00:00Z" };
   const fixtureSession = {
     access_token: "smoke-access-token", refresh_token: "smoke-refresh-token", token_type: "bearer",
     expires_at: Math.floor(Date.now() / 1000) + 3600, expires_in: 3600, user: fixtureUser,
@@ -182,6 +184,21 @@ for (const {
           fulfillmentRequest = JSON.parse(options.body);
           order = { ...order, fulfillment_method: fulfillmentRequest.fulfillmentMethod, fulfillment_status: "READY_TO_PICK" };
           payload = { order };
+        } else payload = { orders: [order], total: 1 };
+      } else if (String(url).includes("/admin-print")) payload = { packing: { configured: true, available: true } };
+      return new Response(JSON.stringify(payload), { status: 200, headers: { "Content-Type": "application/json" } });
+    };
+  }
+  let paymentRequest;
+  if (exercisePaymentEmail) {
+    let order = { id: "22222222-2222-4222-8222-222222222222", order_number: "T1B-PAYMENT-TEST", status: "PAID", payment_status: "PAID", fulfillment_status: "ON_HOLD", backorder_pending: true, fulfillment_method: "SHIP", customer_name: "Test Customer", customer_email: "test@example.com", total: 180, payment_amount_received: 72, items: [], allocations: [], paymentEmails: [{ id: "old", payment_amount_received: 72, status: "SENT" }] };
+    window.fetch = async (url, options = {}) => {
+      let payload = {};
+      if (String(url).includes("/admin-orders")) {
+        if (options.method === "PATCH") {
+          paymentRequest = JSON.parse(options.body);
+          order = { ...order, payment_amount_received: Number(paymentRequest.paymentAmountReceived), paymentEmails: [...order.paymentEmails, { id: "new", payment_amount_received: Number(paymentRequest.paymentAmountReceived), status: "ERROR" }] };
+          payload = { order, paymentEmail: { state: "QUEUED", sent: false, warning: "Payment is saved. The staff payment email is queued for automatic retry." } };
         } else payload = { orders: [order], total: 1 };
       } else if (String(url).includes("/admin-print")) payload = { packing: { configured: true, available: true } };
       return new Response(JSON.stringify(payload), { status: 200, headers: { "Content-Type": "application/json" } });
@@ -380,6 +397,26 @@ for (const {
         writeFileSync(`${process.env.DEALER_PREVIEW_DIR}/admin-dealers.html`, window.document.documentElement.outerHTML.replace('<head>', '<head><meta charset="utf-8">'));
       }
     } catch (error) { errors.push(error.message); }
+  }
+  if (exercisePaymentEmail) {
+    try {
+      const button = label => [...window.document.querySelectorAll("button")].find(el => el.textContent === label);
+      const tick = () => new Promise(resolve => setTimeout(resolve, 80));
+      if (!root.textContent.includes("Sent to sales@tierone.bio")) throw new Error("Sent payment email state is missing");
+      button("Edit Amount Received").click();
+      await tick();
+      const input = window.document.querySelector('input[aria-label="Actual amount received"]');
+      Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set.call(input, "64");
+      input.dispatchEvent(new window.Event("input", { bubbles: true }));
+      input.dispatchEvent(new window.Event("change", { bubbles: true }));
+      await tick();
+      button("Save Amount").click();
+      await tick();
+      if (paymentRequest?.action !== "update_payment_amount" || paymentRequest?.expectedPaymentAmount !== 72 || Number(paymentRequest?.paymentAmountReceived) !== 64) throw new Error("Incorrect amount correction request");
+      if (!root.textContent.includes("Payment is saved. The staff payment email is queued for automatic retry.")) throw new Error("Saved-payment email warning is missing");
+      if (!root.textContent.includes("Queued for automatic retry")) throw new Error("Persistent email retry status is missing");
+      if (window.document.querySelector('[aria-label="Actual amount received"]')) throw new Error("Email failure kept the saved-payment dialog open");
+    } catch (error) { errors.push(`Payment email UI: ${error.message}`); }
   }
   if (exerciseFulfillment) {
     try {

@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { getEnv } from "./_shared/http.js";
 import { drainOrderProcessedEmailQueue } from "./_shared/order-processed-email.js";
+import { drainStaffPaymentEmailQueue } from "./_shared/staff-payment-email-queue.js";
 import { drainOrderReceiptQueue } from "./_shared/order-receipt.js";
 
 export default async function handler() {
@@ -16,11 +17,13 @@ export default async function handler() {
   });
   const results = await drainOrderProcessedEmailQueue({ supabase, limit: 2 });
   const receipts = await drainOrderReceiptQueue({ supabase, limit: 2 });
+  const paymentEmails = await drainStaffPaymentEmailQueue({ supabase, limit: 2 });
+  const paymentEmailsSent = paymentEmails.filter(result => result.sent).length;
   const sent = results.filter(result => result.sent).length;
   const receiptsSent = receipts.filter(result => result.ok).length;
   const attention = results.filter(result => result.state === "NEEDS_REVIEW").length;
   console.info(
-    `retry-order-processed-emails: processed ${results.length}, sent ${sent}, needs review ${attention}; receipts processed ${receipts.length}, sent ${receiptsSent}`,
+    `retry-order-processed-emails: processed ${results.length}, sent ${sent}, needs review ${attention}; receipts processed ${receipts.length}, sent ${receiptsSent}; payment emails processed ${paymentEmails.length}, sent ${paymentEmailsSent}`,
   );
   return new Response(null, { status: 204 });
 }

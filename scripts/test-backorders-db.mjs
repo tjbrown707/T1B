@@ -24,6 +24,7 @@ try {
   sql += '\n' + readFileSync('tests/sql/automatic-lot-numbers.sql', 'utf8');
   sql += '\n' + readFileSync('tests/sql/dealers.sql', 'utf8');
   sql += '\n' + readFileSync('tests/sql/manual-lot-assignment.sql', 'utf8');
+  sql += '\n' + readFileSync('tests/sql/staff-payment-email.sql', 'utf8');
   execFileSync('docker', ['exec', '-i', name, 'psql', '-U', 'postgres', '-v', 'ON_ERROR_STOP=1'], {
     input: sql, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'],
   });
