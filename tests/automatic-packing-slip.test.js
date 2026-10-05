@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { updateOrderWorkflow } from "../netlify/functions/admin-orders.js";
+import { paymentQueueFixture } from "./helpers/staff-payment-email.js";
 import { printFulfillment } from "../netlify/functions/_shared/print-fulfillment.js";
 
 const id = "11111111-1111-4111-8111-111111111111";
@@ -10,6 +11,7 @@ const config = { fulfillmentConfigured: true, fulfillmentPrinterId: 42, apiKey: 
 function fixture(t, options = {}) {
   const order = { id, order_number: "T1B-260918-123456", payment_status: "AWAITING_PAYMENT", fulfillment_status: "ON_HOLD", inventory_accounting_mode: "TRACKED", created_at: "2020-01-01", fulfillment_method: "SHIP", items: [{ id: "test", name: "Test product", qty: 1 }], customer_name: "Test Customer", customer_email: "test@example.com", total: 30, payment_amount_received: null, ...options.order };
   const events = options.events || [], jobs = [], emails = [], rpcs = [];
+  const queue = paymentQueueFixture();
   let lotsRequired = options.manualLotsRequired === true;
   const supabase = {
     from(table) {
@@ -21,13 +23,14 @@ function fixture(t, options = {}) {
         then(resolve, reject) {
           if (insert) { events.push(insert); return Promise.resolve({ error: null }).then(resolve, reject); }
           if (table === "orders" && order.lots_locked_at && options.hydrationError) return Promise.resolve({ error: new Error("reload unavailable") }).then(resolve, reject);
-          const data = table === "orders" ? { ...order } : table === "order_events" ? events.filter(e => !eventType || e.event_type === eventType) : table === "inventory_reservations" ? [{ product_id: "test", state: "COMMITTED", quantity: 1, inventory_lots: { lot_number: "LOT-1", is_provisional: options.provisional === true } }] : [];
+          const data = table === "staff_payment_email_outbox" ? queue.rows : table === "orders" ? { ...order } : table === "order_events" ? events.filter(e => !eventType || e.event_type === eventType) : table === "inventory_reservations" ? [{ product_id: "test", state: "COMMITTED", quantity: 1, inventory_lots: { lot_number: "LOT-1", is_provisional: options.provisional === true } }] : [];
           return Promise.resolve({ data }).then(resolve, reject);
         },
       };
     },
     async rpc(name, args) {
       rpcs.push({ name, args });
+      if (name.includes("staff_payment_email")) return queue.rpc(name, args);
       if (name === "get_order_lot_choices" && options.choicesError) return { error: new Error("choices unavailable") };
       if (name === "get_order_lot_choices") return { data: [{ order_id: id, lot_selection_required: lotsRequired, lot_choices: [] }] };
       if (name === "prepare_order_lots_for_fulfillment") {
@@ -37,17 +40,21 @@ function fixture(t, options = {}) {
       }
       if (name === "confirm_order_payment") {
         if (options.paymentError) return { error: { message: "status_conflict" } };
+        const wasPaid = order.payment_status === "PAID";
         order.payment_status = "PAID";
         order.fulfillment_status = order.backorder_pending ? "ON_HOLD" : "READY_TO_PICK";
         order.payment_confirmed_at ||= new Date().toISOString();
         order.payment_amount_received = args.p_payment_amount_received;
         order.payment_received_via = args.p_payment_received_via;
+        if (!wasPaid) queue.enqueue(order);
         return { data: { ...order } };
       }
       if (name === "assign_order_lots") { lotsRequired = false; order.lots_confirmed_at = new Date().toISOString(); return { data: { ...order } }; }
       if (name === "allocate_backorder") { order.backorder_pending = false; order.fulfillment_status = "READY_TO_PICK"; return { data: { ...order } }; }
       if (name === "update_order_payment_amount") {
+        const previousAmount = order.payment_amount_received;
         order.payment_amount_received = args.p_payment_amount_received;
+        if (previousAmount !== order.payment_amount_received) queue.enqueue(order, "updated", previousAmount);
         return { data: { ...order } };
       }
       if (name === "record_order_print_submission") {
@@ -82,7 +89,7 @@ function fixture(t, options = {}) {
     const response = await updateOrderWorkflow(supabase, user, new Request("https://test/admin-orders", { method: "PATCH", body: JSON.stringify({ orderId: id, action, expectedPaymentStatus: action === "confirm_payment" ? "AWAITING_PAYMENT" : "PAID", paymentAmountReceived: 30, expectedPaymentAmount: 30, expectedLotAssignmentVersion: 0, assignments: [{ lotId, quantity: 1 }], ...input }) }));
     return { status: response.status, ...await response.json() };
   };
-  return { print, workflow, jobs, emails, events, rpcs, order, supabase };
+  return { print, workflow, jobs, emails, events, rpcs, order, supabase, queue };
 }
 
 test("confirm payment prints the paid fulfillment slip once, even for an old unpaid order", async t => {

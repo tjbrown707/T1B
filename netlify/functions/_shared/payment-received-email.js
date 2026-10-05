@@ -1,14 +1,9 @@
-import { getEnv } from "./http.js";
 import {
   escapeHtml,
   STAFF_ADMIN_URL,
-  STAFF_EMAIL_SENDER,
-  STAFF_NOTIFICATION_EMAIL,
 } from "./order-created-email.js";
 
-const RESEND_ENDPOINT = "https://api.resend.com/emails";
-const RESEND_TIMEOUT_MS = 8000;
-const IDEMPOTENCY_PREFIX = "order-staff-payment-received-v1";
+const IDEMPOTENCY_PREFIX = "staff-payment/v1";
 
 const KIND_COPY = {
   confirmed: {
@@ -77,15 +72,14 @@ export function paymentReceivedKind(kind) {
   return kind === "updated" ? "updated" : "confirmed";
 }
 
-export function paymentReceivedIdempotencyKey(order) {
-  const cents = paymentAmountCents(order?.payment_amount_received);
-  if (!order?.id || cents === null) {
-    throw new Error("Payment email is missing an order id or amount received.");
+export function paymentReceivedIdempotencyKey(noticeId) {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(noticeId || "")) {
+    throw new Error("Payment email is missing its saved notice id.");
   }
-  return `${IDEMPOTENCY_PREFIX}/${order.id}/${cents}`;
+  return `${IDEMPOTENCY_PREFIX}/${noticeId}`;
 }
 
-export function paymentReceivedEmailValues(order, { kind, previousAmount } = {}) {
+export function paymentReceivedEmailValues(order, { kind, previousAmount, noticeId } = {}) {
   const copy = KIND_COPY[paymentReceivedKind(kind)];
   const received = formatMoney(order.payment_amount_received);
   const total = formatMoney(order.total);
@@ -114,7 +108,7 @@ export function paymentReceivedEmailValues(order, { kind, previousAmount } = {})
     varianceKind: variance.kind,
     recordedAt,
     subject: `Order ${order.order_number || ""} ${copy.subjectVerb} - ${received} received (total ${total})`,
-    idempotencyKey: paymentReceivedIdempotencyKey(order),
+    idempotencyKey: paymentReceivedIdempotencyKey(noticeId),
   };
 }
 
@@ -249,56 +243,4 @@ export function renderStaffPaymentReceivedNotification(order, options = {}) {
 </body>
 </html>`;
   return { html, text, subject: values.subject, idempotencyKey: values.idempotencyKey, values };
-}
-
-async function deliver(message, { apiKey, fetchImpl }) {
-  try {
-    const response = await fetchImpl(RESEND_ENDPOINT, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-        "Idempotency-Key": message.idempotencyKey,
-      },
-      body: JSON.stringify(message.payload),
-      signal: AbortSignal.timeout(RESEND_TIMEOUT_MS),
-    });
-    if (response.ok) return true;
-    const detail = (await response.text().catch(() => "")).slice(0, 300);
-    console.error(`admin-orders: Resend rejected ${message.label} (${response.status}): ${detail}`);
-  } catch (error) {
-    console.error(`admin-orders: ${message.label} delivery failed:`, error);
-  }
-  return false;
-}
-
-export async function sendStaffPaymentReceivedEmail(order, {
-  kind,
-  previousAmount,
-  apiKey = getEnv("RESEND_API_KEY") || "",
-  fetchImpl = globalThis.fetch,
-} = {}) {
-  try {
-    if (!apiKey || typeof fetchImpl !== "function") {
-      console.error("admin-orders: RESEND_API_KEY or email transport is unavailable");
-      return false;
-    }
-
-    const rendered = renderStaffPaymentReceivedNotification(order, { kind, previousAmount });
-    return await deliver({
-      label: "staff payment-received notification",
-      idempotencyKey: rendered.idempotencyKey,
-      payload: {
-        from: getEnv("RESEND_FROM_ADDRESS") || STAFF_EMAIL_SENDER,
-        to: [STAFF_NOTIFICATION_EMAIL],
-        reply_to: order.customer_email,
-        subject: rendered.subject,
-        html: rendered.html,
-        text: rendered.text,
-      },
-    }, { apiKey, fetchImpl });
-  } catch (error) {
-    console.error("admin-orders: staff payment-received notification failed:", error);
-    return false;
-  }
 }

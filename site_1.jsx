@@ -5268,6 +5268,8 @@ function AdminOrdersPage() {
           type = "error";
         }
       }
+      if (payload.paymentEmail?.sent) text += " The payment detail email was sent to sales@tierone.bio.";
+      if (payload.paymentEmail?.warning) { text += ` ${payload.paymentEmail.warning}`; type = "error"; }
       if (payload.warning) { text += ` ${payload.warning}`; type = "error"; }
       setNotice({ type, text });
       return true;
@@ -5564,6 +5566,10 @@ function AdminOrdersPage() {
                     <div>
                       <AdminDetailHeading>Payment & totals</AdminDetailHeading>
                       {order.dealer_sale && <DealerOrderBreakdown sale={order.dealer_sale} />}
+                      {(order.paymentEmails || []).map(email => (
+                        <AdminDetailLine key={email.id} label={`Staff email · $${Number(email.payment_amount_received).toFixed(2)}`}
+                          value={email.status === "SENT" ? "Sent to sales@tierone.bio" : email.status === "NEEDS_REVIEW" ? "Needs attention — check email configuration and function logs" : "Queued for automatic retry"} />
+                      ))}
                       <AdminDetailLine label="Requested method" value={order.payment_method} />
                       {order.payment_received_via && <AdminDetailLine label="Received via" value={order.payment_received_via} />}
                       {order.payment_amount_received !== null && order.payment_amount_received !== undefined && (

@@ -11,7 +11,7 @@ import {
 } from "../../src/data/order-management.js";
 import { authenticateOrderManager } from "./_shared/admin-auth.js";
 import { jsonResponse, readJsonBody } from "./_shared/http.js";
-import { sendStaffPaymentReceivedEmail } from "./_shared/payment-received-email.js";
+import { drainStaffPaymentEmailQueue, loadStaffPaymentEmails } from "./_shared/staff-payment-email-queue.js";
 
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -85,13 +85,15 @@ async function listOrders(supabase, params) {
   let allocations;
   let shipments;
   let notifications;
+  let paymentEmails;
   let packingSlipPrintRecords;
   let lotChoices;
   try {
-    [allocations, shipments, notifications, packingSlipPrintRecords, lotChoices] = await Promise.all([
+    [allocations, shipments, notifications, paymentEmails, packingSlipPrintRecords, lotChoices] = await Promise.all([
       loadOrderAllocations(supabase, orders.map(order => order.id)),
       loadOrderShipments(supabase, orders.map(order => order.id)),
       loadOrderNotifications(supabase, orders.map(order => order.id)),
+      loadStaffPaymentEmails(supabase, orders.map(order => order.id)),
       loadPackingSlipPrintRecords(supabase, orders.map(order => order.id)),
       loadLotChoices(supabase, orders.map(order => order.id)),
     ]);
@@ -105,6 +107,7 @@ async function listOrders(supabase, params) {
     allocations: allocations.get(order.id) || [],
     shipment: shipments.get(order.id) || null,
     trackingEmail: notifications.get(`${order.id}:${order.fulfillment_method}`) || null,
+    paymentEmails: paymentEmails.get(order.id) || [],
     packingSlipPrintRecorded: packingSlipPrintRecords.has(order.id),
     orderCopyPrintRecorded: packingSlipPrintRecords.orderCopies.has(order.id),
   }));
@@ -234,17 +237,16 @@ export async function updateOrderWorkflow(supabase, user, request) {
   const updated = Array.isArray(data) ? data[0] : data;
   if (!updated) return fail(404, "Order not found.");
 
-  // Payment is already durable. A staff inbox notice must never roll it back.
+  // The payment audit queued this notice in the same transaction. Sending
+  // failures never undo payment; the scheduled worker recovers the saved row.
+  let paymentEmail = null;
   if (action === "confirm_payment" || action === "update_payment_amount") {
     try {
-      await sendStaffPaymentReceivedEmail(updated, {
-        kind: action === "confirm_payment" ? "confirmed" : "updated",
-        previousAmount: action === "update_payment_amount"
-          ? parsePaymentAmount(parsed.data?.expectedPaymentAmount)
-          : undefined,
-      });
+      const results = await drainStaffPaymentEmailQueue({ supabase, orderId, limit: 2 });
+      paymentEmail = results.find(result => result.warning) || results.at(-1) || null;
     } catch (emailError) {
-      console.error("admin-orders: payment-received staff email failed", emailError);
+      console.error("admin-orders: payment email failed", emailError);
+      paymentEmail = { state: "QUEUED", sent: false, warning: "Payment is saved. The staff payment email is queued for automatic retry." };
     }
   }
 
@@ -268,14 +270,16 @@ export async function updateOrderWorkflow(supabase, user, request) {
   let allocations;
   let shipments;
   let notifications;
+  let paymentEmails;
   let packingSlipPrintRecords;
   let lotChoices;
   let freshOrder;
   try {
-    [allocations, shipments, notifications, packingSlipPrintRecords, lotChoices, freshOrder] = await Promise.all([
+    [allocations, shipments, notifications, paymentEmails, packingSlipPrintRecords, lotChoices, freshOrder] = await Promise.all([
       loadOrderAllocations(supabase, [orderId]),
       loadOrderShipments(supabase, [orderId]),
       loadOrderNotifications(supabase, [orderId]),
+      loadStaffPaymentEmails(supabase, [orderId]),
       loadPackingSlipPrintRecords(supabase, [orderId]),
       loadLotChoices(supabase, [orderId]),
       packingSlip ? supabase.from("orders").select(ORDER_FIELDS).eq("id", orderId).maybeSingle() : Promise.resolve({ data: updated }),
@@ -286,8 +290,18 @@ export async function updateOrderWorkflow(supabase, user, request) {
     return jsonResponse(200, {
       order: { ...updated, lot_selection_required: updated.inventory_accounting_mode === "TRACKED" },
       packingSlip,
+      paymentEmail,
       warning: "The order was updated, but its related details could not be reloaded. Refresh the page.",
     }, METHODS);
+  }
+  if (action === "confirm_payment" || action === "update_payment_amount") {
+    const pending = (paymentEmails.get(orderId) || []).filter(email => email.status !== "SENT");
+    if (pending.length) {
+      const needsReview = pending.some(email => email.status === "NEEDS_REVIEW");
+      paymentEmail = { state: needsReview ? "NEEDS_REVIEW" : "QUEUED", sent: false,
+        warning: needsReview ? "Payment is saved. A staff payment email needs attention; check the email configuration and function logs."
+          : "Payment is saved. A staff payment email is queued for automatic retry." };
+    }
   }
   const order = {
     ...updated,
@@ -296,11 +310,12 @@ export async function updateOrderWorkflow(supabase, user, request) {
     allocations: allocations.get(orderId) || [],
     shipment: shipments.get(orderId) || null,
     trackingEmail: notifications.get(`${orderId}:${updated.fulfillment_method}`) || null,
+    paymentEmails: paymentEmails.get(orderId) || [],
     packingSlipPrintRecorded: packingSlipPrintRecords.has(orderId),
     orderCopyPrintRecorded: packingSlipPrintRecords.orderCopies.has(orderId),
   };
   console.info(`admin-orders: staff ${user.id} performed ${action} on ${order.order_number}`);
-  return jsonResponse(200, { order, packingSlip }, METHODS);
+  return jsonResponse(200, { order, packingSlip, paymentEmail }, METHODS);
 }
 
 export function workflowRpc(action, input) {
