@@ -106,7 +106,7 @@ const ROUTES = [
   { path: "/admin/orders", expect: "Save Lot Assignment", signedIn: true, exerciseLotAssignment: true },
   { path: "/admin/inventory", expect: "RECEIVE A NEW LOT", signedIn: true, exerciseInventory: true },
   { path: '/dealer', expect: 'SIGN IN', forbidBody: ['Dealer orders', 'New customer order'] },
-  { path: '/dealer', expect: 'New customer order', signedIn: true, exerciseDealer: true, requireBody: ['60% off', 'Still owed to Tier One'] },
+  { path: '/dealer', expect: 'New customer order', signedIn: true, exerciseDealer: true, requireBody: ['You keep 60%', 'Still owed to Tier One', 'Discount code'] },
   { path: '/dealer', expect: 'Dealer access has not been enabled', signedIn: true },
   { path: '/admin/dealers', expect: 'Sign', expectHeadTitle: SITE_NAME, expectHeadRobots: 'noindex, nofollow', forbidHead: ['Dealer Management'] },
   { path: '/admin/dealers', expect: 'does not have staff access', signedIn: true },
@@ -220,7 +220,15 @@ for (const {
   const fixtureDealer = { user_id: fixtureUser.id, display_name: 'David', percent_off: 60, active: true };
   if (exerciseDealer || exerciseDealersAdmin) {
     window.localStorage.setItem('tierone-analytics-consent', 'denied');
-    window.fetch = async url => {
+    window.fetch = async (url, options = {}) => {
+      if (String(url).includes('/validate-discount')) {
+        const { code } = JSON.parse(options.body);
+        const value = code === 'SAVE10' ? { valid: true, code, type: 'percent', value: 10, label: '10% off' }
+          : code === 'FIX5' ? { valid: true, code, type: 'fixed', value: 5, label: '$5 off' }
+          : code === 'SHIP4FREE' ? { valid: true, code, type: 'percent', value: 100, label: 'Free shipping' }
+          : { valid: false, error: 'Invalid discount code.' };
+        return new Response(JSON.stringify(value), { headers: { 'Content-Type': 'application/json' } });
+      }
       const payload = String(url).includes('/dealers') ? String(url).includes('staff=1')
         ? { dealers: [fixtureDealer], customer: { id: fixtureUser.id, email: fixtureUser.email, full_name: 'David' } }
         : { dealer: fixtureDealer, orders: [], summary: { orders: 0, owed: 0 }, nextOffset: null }
@@ -377,6 +385,30 @@ for (const {
       deliverySelect.value = 'SHIP_TO_CUSTOMER';
       deliverySelect.dispatchEvent(new window.Event('change', { bubbles: true }));
       await new Promise(resolve => setTimeout(resolve, 80));
+      const tick = () => new Promise(resolve => setTimeout(resolve, 80));
+      const button = label => [...window.document.querySelectorAll('button')].find(element => element.textContent === label);
+      const applyCode = async code => {
+        const input = window.document.querySelector('input[aria-label="Dealer discount code"]');
+        Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set.call(input, code);
+        input.dispatchEvent(new window.Event('input', { bubbles: true }));
+        await tick(); button('Apply code').click(); await tick();
+      };
+      await applyCode('INVALID');
+      if (!root.textContent.includes('Invalid discount code.')) throw new Error('Invalid dealer code has no error');
+      await applyCode('SAVE10');
+      const discounted = dealerQuote([{ id: PRODUCTS[0].id, qty: 1 }], 60, 'SHIP_TO_CUSTOMER', { discount: { type: 'percent', value: 10 } });
+      for (const amount of [discounted.customerTotal, discounted.dealerTotal, discounted.retained]) {
+        if (!root.textContent.includes(`$${amount.toFixed(2)}`)) throw new Error('Discounted dealer quote is incorrect');
+      }
+      await applyCode('SHIP4FREE');
+      if (!root.textContent.includes('Shipping: $0.00')) throw new Error('Dealer shipping code did not waive shipping');
+      button('Remove code SAVE10').click(); await tick();
+      await applyCode('FIX5');
+      const fixed = dealerQuote([{ id: PRODUCTS[0].id, qty: 1 }], 60, 'SHIP_TO_CUSTOMER', { discount: { type: 'fixed', value: 5 }, freeShipping: true });
+      for (const amount of [fixed.customerTotal, fixed.dealerTotal, fixed.retained]) {
+        if (!root.textContent.includes(`$${amount.toFixed(2)}`)) throw new Error('Fixed dealer quote is incorrect');
+      }
+      button('Remove code FIX5').click(); button('Remove code SHIP4FREE').click(); await tick();
       if (!root.textContent.includes('Recipient name')) throw new Error('Direct shipping form is missing');
       deliverySelect.value = 'LOCAL_HANDOFF';
       deliverySelect.dispatchEvent(new window.Event('change', { bubbles: true }));

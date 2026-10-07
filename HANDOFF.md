@@ -5,6 +5,31 @@ records state that is not obvious from the code or the git log.
 
 ---
 
+## Dealer Desk discount codes — release approved 2026-10-07
+
+The owner requested normal discount-code entry in Dealer Desk. Codes reduce the
+customer's product total first, then David retains 60% and pays Tier One 40%.
+Shipping passes through separately. The change includes server verification,
+fixed/percentage/free-shipping codes, single-use personal-code redemption,
+immutable retry pricing, and the discounted totals on both dealer dashboards.
+
+The owner authorized merging PR #32. Production migration
+`20261007190000_allow_dealer_discount_codes.sql` is applied and verified.
+Read `DEALER_DISCOUNT_CODES_ROLLOUT.md` for pricing, rounding and release steps.
+Do not run a blind `supabase db push`. Historical snapshots are retained; the
+separate owner-authorized corrections to David's orders are recorded below.
+Validation: `npm run verify` passed with zero lint issues, 258 tests and 89
+render scenarios, including applying/removing percent, fixed and shipping codes.
+The disposable PostgreSQL suite passed with discounted dashboard accounting,
+single-use redemption, rollback on failed redemption, retries and reopening.
+The branch includes the payment-record-removal safeguards, and both combined
+suites pass. A rollback-only production check verified 25% off a $165 product:
+customer $123.75, David keeps $74.25, Tier One $49.50, one reservation on retry,
+and payment confirmation. No test order, payment email, or stock movement was
+left committed. Production security advisors report no warnings/errors.
+
+---
+
 ## David dealer history and payment correction — 2026-10-07
 
 Owner-authorized live corrections are saved with immutable before/after audits:
