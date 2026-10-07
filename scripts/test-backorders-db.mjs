@@ -6,7 +6,9 @@ const docker = (...args) => execFileSync('docker', args, { encoding: 'utf8', std
 try {
   docker('run', '--name', name, '-e', 'POSTGRES_PASSWORD=local-test-only', '-d', 'postgres:17');
   for (let attempt = 0; attempt < 30; attempt++) {
-    try { docker('exec', name, 'pg_isready', '-U', 'postgres'); break; }
+    // Initialization briefly starts a socket-only server. Wait for the final
+    // TCP listener so psql cannot race its shutdown, including in CI.
+    try { docker('exec', name, 'pg_isready', '-U', 'postgres', '-h', '127.0.0.1'); break; }
     catch { await new Promise(resolve => setTimeout(resolve, 1000)); }
   }
   let sql = `create role anon; create role authenticated; create role service_role bypassrls;

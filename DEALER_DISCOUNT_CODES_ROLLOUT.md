@@ -49,8 +49,8 @@ history records the change.
 
 Run `npm run verify` and `node scripts/test-backorders-db.mjs` before release.
 The latter runs a disposable PostgreSQL database, including the dealer code
-tests; it never uses production. In the prepared cloud workspace, use the scoped
-Docker readiness helper described in its startup instructions when needed.
+tests; it never uses production. The runner waits for PostgreSQL's final TCP
+listener before executing SQL, avoiding its temporary initialization server.
 
 After the database migration succeeds, merge through the repository's required
 verification process. Netlify builds and deploys the release branch automatically.
