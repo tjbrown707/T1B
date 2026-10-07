@@ -33,6 +33,34 @@ test('shipping passes through equally and the free-shipping threshold uses the d
   for (const rate of [0, 100, -1, NaN, Infinity]) assert.throws(() => dealerQuote(items, rate));
 });
 
+test('codes adjust the customer basket before the dealer retains their share, with exact cent reconciliation', () => {
+  for (const product of PRODUCTS) for (const qty of [1, 5, 99]) for (const rate of [60, 33.33, 99.99]) {
+    for (const discount of [{ type: 'percent', value: 10 }, { type: 'fixed', value: 5 }, { type: 'fixed', value: 100000 }, { type: 'percent', value: 100 }]) {
+      const quote = dealerQuote([{ id: product.id, qty }], rate, 'LOCAL_HANDOFF', { discount });
+      const before = Math.round(lineUnitPrice({ id: product.id, qty }) * qty * 100);
+      const reduction = Math.round(Math.min(before, discount.type === 'percent' ? before * discount.value / 100 : discount.value * 100));
+      assert.equal(Math.round(quote.customerTotal * 100), before - reduction);
+      assert.equal(Math.round(quote.retained * 100), Math.round((before - reduction) * rate / 100));
+      assert.equal(Math.round((quote.dealerTotal + quote.retained) * 100), before - reduction);
+      assert.ok(quote.dealerDiscountAmount >= 0);
+      assert.equal(Math.round(quote.dealerItems.reduce((sum, line) => sum + line.lineTotal, 0) * 100), Math.round(quote.dealerSubtotal * 100));
+      assert.equal(Math.round((quote.dealerSubtotal - quote.dealerDiscountAmount) * 100), Math.round(quote.dealerTotal * 100));
+    }
+  }
+  const mixed = dealerQuote([{ id: PRODUCTS[0].id, qty: 5 }, { id: PRODUCTS[1].id, qty: 3 }], 60, 'SHIP_TO_CUSTOMER', { discount: { type: 'fixed', value: 50 } });
+  assert.equal(mixed.retained, Math.round(mixed.customerSubtotalAfterDiscount * 60) / 100);
+  assert.equal(mixed.shipping, 10);
+  assert.equal(Math.round((mixed.customerTotal - mixed.dealerTotal) * 100), Math.round(mixed.retained * 100));
+  const free = dealerQuote(items, 60, 'SHIP_TO_CUSTOMER', { discount: { type: 'percent', value: 10 }, freeShipping: true });
+  assert.equal(free.shipping, 0);
+  const above = dealerQuote([{ id: PRODUCTS[0].id, qty: 10 }], 60, 'SHIP_TO_DEALER');
+  const below = dealerQuote([{ id: PRODUCTS[0].id, qty: 10 }], 60, 'SHIP_TO_DEALER', { discount: { type: 'percent', value: 10 } });
+  // A code can move the discounted dealer merchandise below free shipping.
+  assert.equal(above.shipping, above.dealerSubtotal >= 200 ? 0 : 10);
+  assert.equal(below.shipping, below.dealerSubtotalAfterDiscount >= 200 ? 0 : 10);
+  for (const discount of [{ type: 'percent', value: 101 }, { type: 'fixed', value: -1 }, { type: 'percent', value: NaN }]) assert.throws(() => dealerQuote(items, 60, 'LOCAL_HANDOFF', { discount }));
+});
+
 test('balances exclude cancelled/refunded orders and account for payment corrections without claiming customer payment was verified', () => {
   const dealer_sale = dealerQuote(items, 60);
   const total = dealer_sale.dealerTotal;
@@ -60,14 +88,14 @@ test('dealer orders require an active server-managed account and current quote; 
   await assert.rejects(priceDealerOrder(pricingDb(null), input, user), /active dealer/);
   await assert.rejects(priceDealerOrder(pricingDb({ active: false }), input, user), /active dealer/);
   await assert.rejects(priceDealerOrder(pricingDb(), { ...input, quotedDealerTotal: 0 }, user), /Pricing changed/);
-  await assert.rejects(priceDealerOrder(pricingDb(), { ...input, discountCodes: ['WELCOME10'] }, user), /combined/);
+  await assert.rejects(priceDealerOrder(pricingDb(), { ...input, discountCodes: ['WELCOME10'] }, user), /verified/);
 });
 
 test('lost-response retries preserve original dealer economics and reject different owners, items, customers or deliveries', async () => {
   const sale = await priceDealerOrder(pricingDb(), input, user);
   const saved = { user_id: userId, items: sale.dealerItems, dealer_sale: sale };
   assert.deepEqual(await priceDealerOrder(pricingDb(null, saved), input, user), sale);
-  for (const change of [{ customerReference: 'Other' }, { dealerDelivery: 'SHIP_TO_CUSTOMER' }, { items: [{ id: PRODUCTS[0].id, qty: 2 }] }]) {
+  for (const change of [{ customerReference: 'Other' }, { dealerDelivery: 'SHIP_TO_CUSTOMER' }, { items: [{ id: PRODUCTS[0].id, qty: 2 }] }, { discountCodes: ['OTHER'] }]) {
     await assert.rejects(priceDealerOrder(pricingDb(null, saved), { ...input, ...change }, user), /already in use/);
   }
   await assert.rejects(priceDealerOrder(pricingDb(null, saved), input, { ...user, id: 'another-user' }), /already in use/);
@@ -127,7 +155,7 @@ test('refresh recovery rejects malformed storage and retains a valid immutable s
   const payload = { ...input, customer, dealerOrder: true, paymentMethod: 'zelle' };
   const storage = value => ({ getItem: key => { assert.equal(key, `t1b-dealer-pending-${userId}`); return value; } });
   assert.deepEqual(readDealerPending(storage(JSON.stringify(payload)), userId), payload);
-  for (const value of ['broken-json', '{}', '[]', JSON.stringify({ ...payload, items: [null] }), JSON.stringify({ ...payload, customer: null }), JSON.stringify({ ...payload, quotedDealerTotal: 'free' })]) assert.equal(readDealerPending(storage(value), userId), null);
+  for (const value of ['broken-json', '{}', '[]', JSON.stringify({ ...payload, items: [null] }), JSON.stringify({ ...payload, customer: null }), JSON.stringify({ ...payload, quotedDealerTotal: 'free' }), JSON.stringify({ ...payload, discountCodes: 'WELCOME10' }), JSON.stringify({ ...payload, discountCodes: ['<script>'] })]) assert.equal(readDealerPending(storage(value), userId), null);
   assert.equal(readDealerPending({ getItem: () => { throw new Error('blocked storage'); } }, userId), null);
 });
 
@@ -168,5 +196,88 @@ test('real dealer checkout uses the verified payer email, saves only dealer-pric
       assert.equal(cancelled.status, 409);
       assert.match((await cancelled.json()).error, /cancelled or refunded/);
     }
+  } finally { globalThis.Netlify = before; }
+});
+
+test('dealer checkout validates codes server-side, snapshots the adjusted split, and recovers without revalidating changed codes', async t => {
+  const before = globalThis.Netlify;
+  let codes = { SAVE10: { type: 'percent', value: 10 }, FIX5: { type: 'fixed', value: 5 }, SHIP4FREE: { type: 'percent', value: 100 } };
+  let saved = null;
+  let personal = null;
+  let writes = 0;
+  let personalLookups = 0;
+  const redemptions = [];
+  globalThis.Netlify = { env: { get: name => ({ SUPABASE_URL: 'https://example.supabase.co', SUPABASE_SERVICE_ROLE_KEY: 'test-only', TURNSTILE_SECRET_KEY: 'test-only', DISCOUNT_CODES: JSON.stringify(codes) })[name] } };
+  const db = {
+    auth: { getUser: async () => ({ data: { user } }) },
+    from(table) {
+      return {
+        select() { return this; }, eq() { return this; },
+        async maybeSingle() {
+          if (table === 'discount_codes') { personalLookups++; return { data: personal }; }
+          return { data: table === 'orders' ? saved : { active: true, percent_off: saved ? 30 : 60, display_name: 'David' } };
+        },
+      };
+    },
+    async rpc(name, args) {
+      if (name === 'create_order_transaction') {
+        writes++;
+        if (!saved) { saved = { id: 'order-id', ...args.order_payload }; redemptions.push(args.personal_discount_code); }
+        return { data: saved };
+      }
+      if (name === 'enqueue_order_receipt') return { data: { status: 'SENT' } };
+      throw new Error(`Unexpected RPC ${name}`);
+    },
+  };
+  const handler = createOrderHandler({ createClient: () => db, fetchImpl: async () => new Response(JSON.stringify({ success: true })) });
+  const submit = (discountCodes, discount, extra = {}) => {
+    const quote = dealerQuote(items, 60, 'SHIP_TO_CUSTOMER', { discount, freeShipping: discountCodes.includes('SHIP4FREE') });
+    const body = { ...input, dealerOrder: true, dealerDelivery: 'SHIP_TO_CUSTOMER', discountCodes, quotedDealerTotal: quote.dealerTotal, quotedCustomerTotal: quote.customerTotal, researchAcknowledged: true, paymentMethod: 'zelle', turnstileToken: 'test', customer: { name: 'Customer', email: 'customer@example.com', phone: '555', address: '123 Test St', city: 'Phoenix', state: 'AZ', zip: '85001' }, percentOff: 99, discount: { type: 'percent', value: 100 }, ...extra };
+    return handler(new Request('https://www.tierone.bio/.netlify/functions/create-order', { method: 'POST', headers: { Authorization: 'Bearer test' }, body: JSON.stringify(body) }));
+  };
+  try {
+    await t.test('percent plus free shipping updates both parties and freezes the original code on replay', async () => {
+      const discount = { type: 'percent', value: 10 };
+      const quote = dealerQuote(items, 60, 'SHIP_TO_CUSTOMER', { discount, freeShipping: true });
+      const response = await submit(['SAVE10', 'SHIP4FREE'], discount);
+      assert.equal(response.status, 200);
+      assert.equal(saved.dealer_sale.customerTotal, quote.customerTotal);
+      assert.equal(saved.dealer_sale.retained, quote.retained);
+      assert.equal(saved.total, quote.dealerTotal);
+      assert.equal(saved.discount_amount, quote.dealerDiscountAmount);
+      assert.equal(saved.discount_code, 'SAVE10, SHIP4FREE');
+      assert.equal(saved.customer_email, user.email);
+      assert.equal(saved.shipping, 0);
+      assert.deepEqual(redemptions, [null]);
+      const original = structuredClone(saved);
+      codes = {};
+      assert.equal((await submit(['SAVE10', 'SHIP4FREE'], discount)).status, 200);
+      assert.deepEqual(saved, original);
+      assert.equal((await submit(['FIX5'], discount)).status, 409);
+    });
+    await t.test('fixed codes, invalid codes, conflicting codes and forged quotes', async () => {
+      saved = null; codes = { FIX5: { type: 'fixed', value: 5 }, SAVE10: { type: 'percent', value: 10 } };
+      const beforeWrites = writes;
+      assert.equal((await submit(['UNKNOWN'], null)).status, 400);
+      assert.equal((await submit(['FIX5', 'SAVE10'], { type: 'fixed', value: 5 })).status, 400);
+      assert.equal((await submit(['SAVE10'], { type: 'percent', value: 10 }, { quotedDealerTotal: 0.01 })).status, 409);
+      assert.equal(writes, beforeWrites);
+      assert.equal((await submit(['FIX5'], { type: 'fixed', value: 5 })).status, 200);
+      assert.equal(saved.dealer_sale.customerDiscountAmount, 5);
+      assert.equal(saved.dealer_sale.retained, Math.round(saved.dealer_sale.customerSubtotalAfterDiscount * 60) / 100);
+    });
+    await t.test('personal codes are bound to the dealer, forwarded for atomic redemption and skipped on replay', async () => {
+      saved = null; codes = {};
+      personal = { type: 'percent', value: 10, expires_at: '2000-01-01' };
+      assert.equal((await submit(['WELCOME'], { type: 'percent', value: 10 })).status, 400);
+      personal = { type: 'percent', value: 10, expires_at: '2099-01-01' };
+      assert.equal((await submit(['WELCOME'], { type: 'percent', value: 10 })).status, 200);
+      assert.equal(redemptions.at(-1), 'WELCOME');
+      assert.equal(saved.dealer_sale.personalDiscountCode, 'WELCOME');
+      personal = null;
+      const lookups = personalLookups;
+      assert.equal((await submit(['WELCOME'], { type: 'percent', value: 10 })).status, 200);
+      assert.equal(personalLookups, lookups);
+    });
   } finally { globalThis.Netlify = before; }
 });

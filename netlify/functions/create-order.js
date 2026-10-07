@@ -89,33 +89,40 @@ export function createOrderHandler({
   let discount = null;
   let personalDiscountCode = null;
   let freeShipping = false;
-  for (const code of input.discountCodes) {
-    const resolved = await resolveDiscount(supabase, code, userId, input.orderNumber);
-    if (!resolved) return fail(400, `Discount code ${code} is not valid.`);
-    if (resolved.type === "shipping") {
-      freeShipping = true;
-    } else {
-      if (discount) return fail(400, "Only one discount code can be applied to an order.");
-      discount = resolved;
-      if (resolved.source === "personal") personalDiscountCode = code;
+  const resolveDiscounts = async () => {
+    for (const code of input.discountCodes) {
+      const resolved = await resolveDiscount(supabase, code, userId, input.orderNumber);
+      if (!resolved) throw Object.assign(new Error(`Discount code ${code} is not valid.`), { status: 400 });
+      if (resolved.type === "shipping") {
+        freeShipping = true;
+      } else {
+        if (discount) throw Object.assign(new Error("Only one discount code can be applied to an order."), { status: 400 });
+        discount = resolved;
+        if (resolved.source === "personal") personalDiscountCode = code;
+      }
     }
-  }
+    return { discount, freeShipping, personalDiscountCode };
+  };
 
   let dealerSale = null;
   if (input.dealerOrder) {
-    try { dealerSale = await priceDealerOrder(supabase, input, verifiedUser); }
-    catch (error) { return fail(409, error.message); }
+    try { dealerSale = await priceDealerOrder(supabase, input, verifiedUser, resolveDiscounts); }
+    catch (error) { return fail(error.status || 409, error.message); }
+    personalDiscountCode = dealerSale.personalDiscountCode || null;
     // The dealer is the buyer/payer. Receipts and shipment messages go only
     // to their verified account, never to a downstream customer with margins.
     input.customer.email = verifiedUser.email;
+  } else {
+    try { await resolveDiscounts(); }
+    catch (error) { return fail(error.status || 400, error.message); }
   }
   const totals = dealerSale ? {
-    subtotal: dealerSale.dealerSubtotal, discountAmount: 0,
+    subtotal: dealerSale.dealerSubtotal, discountAmount: dealerSale.dealerDiscountAmount || 0,
     shipping: dealerSale.shipping, total: dealerSale.dealerTotal,
   } : orderTotals(input.items, { discount, freeShipping });
   const lineItems = dealerSale ? dealerSale.dealerItems : orderLineItems(input.items);
   const itemsText = lineItems
-    .map(line => `${line.name} ${line.dose} x${line.qty} @ $${line.unitPrice.toFixed(2)}${line.bulk ? " (bulk)" : ""} = $${line.lineTotal.toFixed(2)}`)
+    .map(line => `${line.name} ${line.dose} x${line.qty}${dealerSale?.discount ? ' (before code)' : ` @ $${line.unitPrice.toFixed(2)}`}${line.bulk ? " (bulk)" : ""} = $${line.lineTotal.toFixed(2)}`)
     .join("\n") + (dealerSale ? `\n\nDealer: ${dealerSale.dealerName}\nCustomer reference: ${dealerSale.customerReference}\nCollect from customer: $${dealerSale.customerTotal.toFixed(2)}\nPay Tier One: $${dealerSale.dealerTotal.toFixed(2)}\nDealer keeps: $${dealerSale.retained.toFixed(2)} before expenses\nDelivery: ${dealerSale.delivery === 'LOCAL_HANDOFF' ? 'Dealer pickup and hand-delivery' : dealerSale.delivery === 'SHIP_TO_DEALER' ? 'Ship to dealer' : 'Ship to customer'}` : '');
 
   const row = {

@@ -6559,10 +6559,14 @@ function DealerOrderBreakdown({ sale }) {
   return <div style={{ padding: 16, border: '1px solid var(--red-primary)', marginBottom: 16 }}>
     <strong>Dealer order · {sale.dealerName}</strong>
     <p style={{ margin: '6px 0' }}>Customer reference: {sale.customerReference}</p>
+    {!!sale.discountCodes?.length && <>
+      <p style={{ margin: '6px 0' }}>Codes: <strong>{sale.discountCodes.join(', ')}</strong></p>
+      {!!sale.discount && <p style={{ margin: '6px 0' }}>Customer product total: {money(sale.retailSubtotal)} − {money(sale.customerDiscountAmount)} = <strong>{money(sale.customerSubtotalAfterDiscount)}</strong></p>}
+    </>}
     <p style={{ margin: '6px 0' }}>Collect from customer: <strong>{money(sale.customerTotal)}</strong></p>
     <p style={{ margin: '6px 0' }}>Pay Tier One: <strong>{money(sale.dealerTotal)}</strong></p>
     <p style={{ margin: '6px 0', color: '#69b34c' }}>Dealer keeps: <strong>{money(sale.retained)}</strong></p>
-    <small>{sale.percentOff}% dealer discount · Original delivery: {DEALER_DELIVERY_LABELS[sale.delivery]} · Before dealer expenses</small>
+    <small>{sale.percentOff}% retained from the {sale.discount ? 'discounted ' : ''}product total · Shipping passes through · Original delivery: {DEALER_DELIVERY_LABELS[sale.delivery]} · Before dealer expenses</small>
   </div>;
 }
 
@@ -6584,7 +6588,7 @@ function DealerOrders({ orders, staff = false }) {
       {order.payment_status === 'PAID' && <p>Tier One received: {money(order.payment_amount_received ?? order.total)} · Remaining owed: {money(Math.max(0, Number(order.total) - Number(order.payment_amount_received ?? order.total)))}</p>}
       {order.estimated_ship_date && <p>Estimated ship date: {formatShipDate(order.estimated_ship_date)}</p>}
       <DealerOrderBreakdown sale={order.dealer_sale} />
-      {order.dealer_sale.retailItems.map((line, index) => <div key={line.id} style={{ padding: '6px 0' }}>{line.name} {line.dose} ×{line.qty} · Customer {money(line.lineTotal)} · Dealer {money(order.dealer_sale.dealerItems[index].lineTotal)}</div>)}
+      {order.dealer_sale.retailItems.map((line, index) => <div key={line.id} style={{ padding: '6px 0' }}>{line.name} {line.dose} ×{line.qty} · Customer {money(line.lineTotal)} · Dealer {money(order.dealer_sale.dealerItems[index].lineTotal)}{order.dealer_sale.discount ? ' before code' : ''}</div>)}
       {!staff && order.payment_status === 'AWAITING_PAYMENT' && <DealerPaymentInstructions method={Object.keys(CHECKOUT_PAYMENT_METHODS).find(key => CHECKOUT_PAYMENT_METHODS[key] === order.payment_method) || 'zelle'} total={order.total} orderNumber={order.order_number} />}
       {staff && <button style={DEALER_BUTTON_STYLE} onClick={() => navigate(`/admin/orders?q=${encodeURIComponent(order.order_number)}`)}>Open order to confirm payment / fulfill</button>}
     </details>)}
@@ -6610,6 +6614,11 @@ function DealerDeskPage() {
   const [turnstileReset, setTurnstileReset] = useState(0);
   const [busy, setBusy] = useState(false);
   const [confirmed, setConfirmed] = useState(null);
+  const [discountInput, setDiscountInput] = useState('');
+  const [appliedDiscount, setAppliedDiscount] = useState(null);
+  const [appliedShipping, setAppliedShipping] = useState(null);
+  const [discountError, setDiscountError] = useState('');
+  const [discountLoading, setDiscountLoading] = useState(false);
   const [pending, setPending] = useState(() => readDealerPending(sessionStorage, user?.id));
   const submitting = useRef(false);
   const availability = useProductAvailability();
@@ -6625,8 +6634,32 @@ function DealerDeskPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (token) load();
   }, [token, load]);
-  const quote = desk?.dealer?.active ? dealerQuote(items, desk.dealer.percent_off, delivery) : null;
+  const quote = desk?.dealer?.active ? dealerQuote(items, desk.dealer.percent_off, delivery, { discount: appliedDiscount, freeShipping: !!appliedShipping }) : null;
   const backorder = items.some(item => availability?.some(stock => stock.id === item.id && stock.available < item.qty));
+
+  async function applyDealerCode() {
+    const code = discountInput.trim().toUpperCase();
+    if (!code) { setDiscountError('Enter a discount code.'); return; }
+    if (discountLoading || pending) return;
+    if (code === appliedDiscount?.code || code === appliedShipping?.code) { setDiscountError('That code is already applied.'); return; }
+    setDiscountLoading(true); setDiscountError('');
+    try {
+      const response = await fetch('/.netlify/functions/validate-discount', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ code }),
+      });
+      const data = await response.json().catch(() => ({ valid: false, error: 'Could not reach discount service. Try again.' }));
+      if (!response.ok || !data.valid) throw new Error(data.error || 'Invalid discount code.');
+      if (isShippingDiscountCode(data.code)) {
+        if (appliedShipping) throw new Error('A free-shipping code is already applied. Remove it before adding another.');
+        setAppliedShipping(data);
+      } else {
+        if (appliedDiscount) throw new Error('A discount code is already applied. Remove it before adding another.');
+        setAppliedDiscount(data);
+      }
+      setDiscountInput('');
+    } catch (err) { setDiscountError(err.message || 'Could not reach discount service. Try again.'); }
+    finally { setDiscountLoading(false); }
+  }
 
   function addItem() {
     const count = Number(qty);
@@ -6640,7 +6673,7 @@ function DealerDeskPage() {
 
   async function placeOrder(event) {
     event.preventDefault();
-    if (submitting.current || !turnstileToken || !acknowledged) return;
+    if (submitting.current || discountLoading || !turnstileToken || !acknowledged) return;
     submitting.current = true; setBusy(true); setError('');
     let payload = pending;
     try {
@@ -6657,7 +6690,7 @@ function DealerDeskPage() {
           zip: profile?.zip || (delivery === 'LOCAL_HANDOFF' ? 'N/A' : ''),
         };
         if (Object.values(customer).some(value => !String(value).trim())) throw new Error('Complete your account phone and shipping details, or enter the customer delivery details.');
-        payload = { orderNumber: `T1B-${date}-${100000 + random[0] % 900000}`, items, customer, paymentMethod: method, discountCodes: [], dealerOrder: true, dealerDelivery: delivery, customerReference: reference, quotedDealerTotal: quote.dealerTotal, quotedCustomerTotal: quote.customerTotal };
+        payload = { orderNumber: `T1B-${date}-${100000 + random[0] % 900000}`, items, customer, paymentMethod: method, discountCodes: [appliedDiscount?.code, appliedShipping?.code].filter(Boolean), dealerOrder: true, dealerDelivery: delivery, customerReference: reference, quotedDealerTotal: quote.dealerTotal, quotedCustomerTotal: quote.customerTotal };
         // Persist before sending. Refresh/network retries reuse the same order
         // reference and immutable input rather than placing another order.
         sessionStorage.setItem(`t1b-dealer-pending-${user.id}`, JSON.stringify(payload));
@@ -6675,6 +6708,7 @@ function DealerDeskPage() {
       setConfirmed({ ...result, paymentMethod: payload.paymentMethod });
       try { sessionStorage.removeItem(`t1b-dealer-pending-${user.id}`); } catch { /* saved order stays visible below */ }
       setPending(null); setItems([]); setReference(''); setAcknowledged(false);
+      setAppliedDiscount(null); setAppliedShipping(null); setDiscountInput(''); setDiscountError('');
       await load();
     } catch (err) { setError(err.message); }
     finally { submitting.current = false; setBusy(false); setTurnstileToken(''); setTurnstileReset(value => value + 1); }
@@ -6686,7 +6720,7 @@ function DealerDeskPage() {
     {!desk && <button style={DEALER_BUTTON_STYLE} onClick={() => load()}>Load dealer details</button>}
     {desk && !desk.dealer && <p>Dealer access has not been enabled for this account. Contact Tier One to set it up.</p>}
     {desk?.dealer && <>
-      <p>{desk.dealer.display_name} · {desk.dealer.percent_off}% off current product prices, including quantity pricing and any active sale. You collect customer payment and pay Tier One your dealer total. Shipping passes through without a dealer discount.</p>
+      <p>{desk.dealer.display_name} · You keep {desk.dealer.percent_off}% of the product total after any discount code. You collect customer payment and pay Tier One the remaining product amount plus shipping. Quantity pricing and any active sale are included.</p>
       <DealerStats summary={desk.summary} />
       <button style={{ ...DEALER_BUTTON_STYLE, marginBottom: 16 }} onClick={() => load()}>Refresh orders and balance</button>
       {!desk.dealer.active && <p>Dealer ordering is paused. Your previous orders remain available.</p>}
@@ -6699,8 +6733,8 @@ function DealerDeskPage() {
       {(desk.dealer.active || pending) && !confirmed && <form onSubmit={placeOrder} style={DEALER_PANEL_STYLE}>
         <h2 style={{ marginTop: 0 }}>New customer order</h2>
         <p>Use this desk for dealer orders. The regular storefront checkout keeps its regular prices.</p>
-        {pending && <div><p>A previous submission needs a retry: {pending.orderNumber}. Retry with the original saved details to recover it safely.</p><p>Customer: {pending.customerReference} · Collect {money(pending.quotedCustomerTotal)} · Pay Tier One {money(pending.quotedDealerTotal)} · {DEALER_DELIVERY_LABELS[pending.dealerDelivery]}</p>{pending.items.map(item => <p key={item.id}>{PRODUCTS.find(product => product.id === item.id)?.name || item.id} ×{item.qty}</p>)}</div>}
-        <fieldset disabled={busy || !!pending} style={{ border: 0, padding: 0, margin: 0 }}>
+        {pending && <div><p>A previous submission needs a retry: {pending.orderNumber}. Retry with the original saved details to recover it safely.</p><p>Customer: {pending.customerReference} · Collect {money(pending.quotedCustomerTotal)} · Pay Tier One {money(pending.quotedDealerTotal)} · {DEALER_DELIVERY_LABELS[pending.dealerDelivery]}</p>{!!pending.discountCodes.length && <p>Codes: {pending.discountCodes.join(', ')}</p>}{pending.items.map(item => <p key={item.id}>{PRODUCTS.find(product => product.id === item.id)?.name || item.id} ×{item.qty}</p>)}</div>}
+        <fieldset disabled={busy || discountLoading || !!pending} style={{ border: 0, padding: 0, margin: 0 }}>
           <label style={AUTH_LABEL_STYLE}>Customer name / reference<input required maxLength={120} value={reference} onChange={event => setReference(event.target.value)} style={AUTH_INPUT_STYLE} placeholder="e.g. Jordan — October order" /></label>
           <label style={AUTH_LABEL_STYLE}>Delivery<select value={delivery} onChange={event => setDelivery(event.target.value)} style={AUTH_INPUT_STYLE}>
             <option value="LOCAL_HANDOFF">I pick up and hand-deliver — no shipping charge</option><option value="SHIP_TO_DEALER">Ship to me — use my account address</option><option value="SHIP_TO_CUSTOMER">Ship directly to my customer</option>
@@ -6712,10 +6746,17 @@ function DealerDeskPage() {
             <button type="button" onClick={addItem} style={DEALER_BUTTON_STYLE}>Add product</button>
           </div>
           {quote?.retailItems.map((line, index) => <div key={line.id} style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', gap: 12, borderTop: '1px solid var(--border)', padding: '14px 0' }}>
-            <div><strong>{line.name} {line.dose} ×{line.qty}</strong><div>Per vial: charge {money(line.unitPrice)} · pay Tier One {money(quote.dealerItems[index].unitPrice)} · keep {money(line.unitPrice - quote.dealerItems[index].unitPrice)}</div><div>Line total: customer {money(line.lineTotal)} · dealer {money(quote.dealerItems[index].lineTotal)}</div></div>
+            <div><strong>{line.name} {line.dose} ×{line.qty}</strong>{!appliedDiscount && <div>Per vial: charge {money(line.unitPrice)} · pay Tier One {money(quote.dealerItems[index].unitPrice)} · keep {money(line.unitPrice - quote.dealerItems[index].unitPrice)}</div>}<div>Line total{appliedDiscount ? ' before code' : ''}: customer {money(line.lineTotal)} · dealer {money(quote.dealerItems[index].lineTotal)}</div></div>
             <button type="button" onClick={() => setItems(previous => previous.filter(item => item.id !== line.id))} style={DEALER_BUTTON_STYLE}>Remove</button>
           </div>)}
-          {quote && <DealerOrderBreakdown sale={{ ...quote, dealerName: desk.dealer.display_name, customerReference: reference || 'New customer', delivery }} />}
+          <div style={{ margin: '20px 0' }}>
+            <label style={AUTH_LABEL_STYLE}>Discount code<input aria-label="Dealer discount code" maxLength={64} value={discountInput} onChange={event => setDiscountInput(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); applyDealerCode(); } }} style={AUTH_INPUT_STYLE} /></label>
+            <button type="button" onClick={applyDealerCode} disabled={isSaleActive()} style={DEALER_BUTTON_STYLE}>{discountLoading ? 'Checking code…' : 'Apply code'}</button>
+            {[appliedDiscount, appliedShipping].filter(Boolean).map(applied => <p key={applied.code}>{applied.code} · {isShippingDiscountCode(applied.code) ? 'Free shipping' : applied.label}<button type="button" onClick={() => { if (isShippingDiscountCode(applied.code)) setAppliedShipping(null); else setAppliedDiscount(null); setDiscountError(''); }} style={{ ...DEALER_BUTTON_STYLE, marginLeft: 12 }}>Remove code {applied.code}</button></p>)}
+            {isSaleActive() && <p>Discount codes are unavailable during the current sitewide sale.</p>}
+            {discountError && <p role="alert" style={{ color: '#ff9e9e' }}>{discountError}</p>}
+          </div>
+          {quote && <DealerOrderBreakdown sale={{ ...quote, dealerName: desk.dealer.display_name, customerReference: reference || 'New customer', delivery, discount: appliedDiscount, discountCodes: [appliedDiscount?.code, appliedShipping?.code].filter(Boolean) }} />}
           {backorder && <p style={{ color: '#fbbf24' }}>This order includes backordered stock. Estimated availability: {formatShipDate(estimatedBackorderDate())}. The full order waits until all items are available.</p>}
           <p>Shipping: {money(quote?.shipping)}. You keep the displayed difference if you collect the quoted customer total. Any price reduction or payment-app fee you absorb reduces your earnings.</p>
           {delivery === 'SHIP_TO_CUSTOMER' ? <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 12 }}>{Object.keys(recipient).map(field => <label key={field} style={AUTH_LABEL_STYLE}>{field === 'name' ? 'Recipient name' : field}<input required maxLength={field === 'address' ? 200 : field === 'name' ? 120 : field === 'phone' ? 40 : field === 'zip' ? 20 : 100} value={recipient[field]} onChange={event => setRecipient(previous => ({ ...previous, [field]: event.target.value }))} style={AUTH_INPUT_STYLE} /></label>)}</div> : !profile?.phone && <label style={AUTH_LABEL_STYLE}>Your phone<input required value={recipient.phone} onChange={event => setRecipient(previous => ({ ...previous, phone: event.target.value }))} style={AUTH_INPUT_STYLE} /></label>}
@@ -6723,7 +6764,7 @@ function DealerDeskPage() {
         </fieldset>
         <label style={{ display: 'block', margin: '20px 0' }}><input type="checkbox" required checked={acknowledged} onChange={event => setAcknowledged(event.target.checked)} /> I understand all products are for research and laboratory use only, not for human consumption.</label>
         <TurnstileField onToken={setTurnstileToken} resetKey={turnstileReset} />
-        <button type="submit" disabled={busy || !acknowledged || !turnstileToken || (!pending && !items.length)} style={{ ...DEALER_BUTTON_STYLE, opacity: busy || !acknowledged || !turnstileToken ? 0.5 : 1 }}>{busy ? 'Saving order…' : pending ? 'Retry saved order' : `Place dealer order · Pay ${money(quote?.dealerTotal)}`}</button>
+        <button type="submit" disabled={busy || discountLoading || !acknowledged || !turnstileToken || (!pending && !items.length)} style={{ ...DEALER_BUTTON_STYLE, opacity: busy || discountLoading || !acknowledged || !turnstileToken ? 0.5 : 1 }}>{busy ? 'Saving order…' : pending ? 'Retry saved order' : `Place dealer order · Pay ${money(quote?.dealerTotal)}`}</button>
       </form>}
       <DealerOrders orders={desk.orders} />
       {desk.nextOffset !== null && desk.nextOffset !== undefined && <button style={DEALER_BUTTON_STYLE} onClick={() => load(desk.nextOffset)}>Load older orders</button>}

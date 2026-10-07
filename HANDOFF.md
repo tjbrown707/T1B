@@ -5,6 +5,25 @@ records state that is not obvious from the code or the git log.
 
 ---
 
+## Dealer Desk discount codes — prepared 2026-10-07
+
+The owner requested normal discount-code entry in Dealer Desk. Codes reduce the
+customer's product total first, then David retains 60% and pays Tier One 40%.
+Shipping passes through separately. The change includes server verification,
+fixed/percentage/free-shipping codes, single-use personal-code redemption,
+immutable retry pricing, and the discounted totals on both dealer dashboards.
+
+**Not deployed; production migration not applied.** Apply only
+`20261007190000_allow_dealer_discount_codes.sql` before deploying the application.
+Read `DEALER_DISCOUNT_CODES_ROLLOUT.md` for pricing, rounding and release steps.
+Do not run a blind `supabase db push`. Existing ordinary orders are not converted.
+Validation: `npm run verify` passed with zero lint issues, 258 tests and 89
+render scenarios, including applying/removing percent, fixed and shipping codes.
+The disposable PostgreSQL suite passed with discounted dashboard accounting,
+single-use redemption, rollback on failed redemption, retries and reopening.
+
+---
+
 ## Staff payment detail emails — 2026-10-04
 
 Confirm Payment and real changes through Edit Amount Received now queue a staff
