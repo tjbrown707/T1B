@@ -1,6 +1,7 @@
 # Dealer Desk discount codes
 
-Status: prepared for review; not deployed and the production migration is not applied.
+Status: production migration applied and verified on 2026-10-07. The owner
+authorized release through PR #32 after its required verification passes.
 
 Dealer Desk accepts the same validated merchandise and free-shipping codes as
 regular checkout. A merchandise code reduces the customer's product total first.
@@ -24,20 +25,18 @@ estimates; the code reduction appears separately. Orders without merchandise
 codes retain the established per-vial calculation. Historical snapshots never
 change.
 
-## Before merging or deploying
+## Database prerequisite — applied
 
-The existing database function rejects dealer discount codes. Apply only
-`supabase/migrations/20261007190000_allow_dealer_discount_codes.sql` to the Tier One
-Supabase project before deploying this application change. Do not run a blind
+`supabase/migrations/20261007190000_allow_dealer_discount_codes.sql` has been applied
+through the connected Supabase migration tool to the Tier One production project.
+The wrapper now accepts validated dealer codes. Do not run a blind
 `supabase db push`: production migration versions differ from some repository
 filenames.
 
-If using the Supabase dashboard:
-
-1. Open Supabase and select the Tier One project.
-2. Open **SQL Editor**, then **New query**.
-3. Paste the complete new migration file above and click **Run** once.
-4. Confirm the query succeeds before merging the website pull request.
+No owner dashboard action is required. A rollback-only production check verified
+the discounted 60/40 split, order retry without double reservation, and payment
+confirmation; all test records were rolled back. The updated branch also passes
+the combined payment-removal and discount-code database lifecycle tests.
 
 The migration replaces only the dealer order transaction wrapper, keeps it
 server-only, and supports legacy no-code application payloads. It creates no
