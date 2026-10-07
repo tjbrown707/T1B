@@ -5,6 +5,40 @@ records state that is not obvious from the code or the git log.
 
 ---
 
+## David dealer history and payment correction — 2026-10-07
+
+Owner-authorized live corrections are saved with immutable before/after audits:
+`T1B-261007-765050` (Ray west) now quotes $337.50 to the customer after 25% off,
+$202.50 retained by David, and $135 owed to Tier One. It remains unpaid.
+`T1B-261001-915174` (two KLOW, legacy order) is now in David's dealer history:
+the existing 25% customer discount gives $247.50, David retains $148.50, and
+Tier One is owed $99. The owner explicitly removed its erroneous $100 Zelle
+payment record. It is AWAITING_PAYMENT / ON_HOLD, with a fresh 24-hour hold and
+its original two vials RESERVED. Total dealer balance is $234 at correction time.
+
+Migration `20261007220751_remove_order_payment_record.sql` is applied to production.
+The server-only `remove_order_payment_record` RPC records an immutable reversal,
+returns committed stock and reserves the same vials atomically, and clears the
+current payment fields. It refuses picked/completed orders, purchased/in-flight
+postage, unresolved email jobs, stale amounts, and unreconciled stock. No physical
+refund is performed. Existing printed lot locks, documents, emails, and historical
+payment audits are preserved. After the new payment, manually use **Print Packing
+Slip** for the imported order: the original printed document remains historical
+and suppresses automatic duplicate printing. No corrected email was sent.
+
+Confirm Payment uses a new immutable sale key after each audited payment removal;
+its paid retries still deduct nothing. Cancellation/reopening accepts a reversed
+sale only when its immutable stock ledger balances to zero. Permissions remain
+service-role only. No new website UI, environment setting, or owner dashboard
+configuration is required. Full verify and isolated PostgreSQL reversal,
+reconfirmation, repeated-reversal, retry, cancellation/reopening and access tests
+pass. A production rollback-only rehearsal also confirmed the imported $99 order
+can be paid through the actual RPC without double deduction or duplicate retries.
+Production read-back confirmed one import/reversal audit, reserved stock, zero
+recorded payment, and the $234 balance. Security advisors report no warnings/errors.
+
+---
+
 ## Staff payment detail emails — 2026-10-04
 
 Confirm Payment and real changes through Edit Amount Received now queue a staff
