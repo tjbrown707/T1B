@@ -65,7 +65,7 @@ test("the sitemap keeps public pages and excludes gated products and resources",
   for (const product of PRODUCTS) {
     assert.ok(!listed.has(`/product/${product.id}`), `${product.id} must require sign-in`);
   }
-  for (const path of ["/products", "/lab-results", "/calculator", "/cart", "/research"]) {
+  for (const path of ["/products", "/lab-results", "/cart", "/research"]) {
     assert.equal(routeMeta(path).loginRequired, true);
     assert.ok(!listed.has(path));
   }

@@ -1084,7 +1084,6 @@ const PRIMARY_NAV_ITEMS = [
   "Products",
   ...(RESEARCH_LIBRARY_ENABLED ? ["Research"] : []),
   "Lab Results",
-  "Calculator",
   "Contact",
 ];
 
@@ -1105,7 +1104,6 @@ function Header({ cartCount = 0 }) {
     Products: "/products",
     Research: "/research",
     "Lab Results": "/lab-results",
-    Calculator: "/calculator",
     Contact: "/contact",
   };
   const isActiveNav = (item) => {
@@ -1121,7 +1119,6 @@ function Header({ cartCount = 0 }) {
     setMenuOpen(false);
     if (dest === "Products") navigate("/products");
     else if (dest === "Lab Results") navigate("/lab-results");
-    else if (dest === "Calculator") navigate("/calculator");
     else if (dest === "Research") navigate("/research");
     else if (dest === "Contact") navigate("/contact");
     else if (dest === "Cart") navigate("/cart");
@@ -2291,7 +2288,6 @@ function Footer() {
           <FooterLink to="/products">All Products</FooterLink>
           {RESEARCH_LIBRARY_ENABLED && <FooterLink to="/research">Research</FooterLink>}
           <FooterLink to="/lab-results">Lab Results</FooterLink>
-          <FooterLink to="/calculator">Reconstitution Calculator</FooterLink>
         </div>
 
         <div>
@@ -2358,264 +2354,6 @@ function Footer() {
         }}>© 2026 Tier One BioSystems. All rights reserved.</div>
       </div>
     </footer>
-  );
-}
-
-// ─── Syringe Diagram ─────────────────────────────────────────────────────────
-
-// SyringeDiagram was removed with the calculator's reframing. A rendered
-// insulin syringe reads as a dosing instruction whatever the caption says,
-// and the microlitre figure already gives a laboratory the volume it needs.
-
-// ─── Peptide Calculator ───────────────────────────────────────────────────────
-
-function PeptideCalculator() {
-  useRouteMeta("/calculator");
-  const [vialMg, setVialMg] = useState("");
-  const [waterMl, setWaterMl] = useState("");
-  const [doseValue, setDoseValue] = useState("");
-  const [doseUnit, setDoseUnit] = useState("mcg");
-
-  const doseMcg = doseValue ? (doseUnit === "mg" ? parseFloat(doseValue) * 1000 : parseFloat(doseValue)) : null;
-  function fmt(n) {
-    if (!n) return "—";
-    const one = parseFloat(n.toFixed(1));
-    return one > 0 ? n.toFixed(1) : parseFloat(n.toPrecision(2)).toString();
-  }
-
-  const concentration = vialMg && waterMl ? parseFloat(vialMg) / parseFloat(waterMl) : null;
-  const volumeMl = concentration && doseMcg ? (doseMcg / 1000) / concentration : null;
-
-  const inputStyle = {
-    width: "100%",
-    padding: "12px 16px",
-    background: "rgba(17,17,17,0.8)",
-    border: "1px solid var(--border)",
-    color: "var(--text-primary)",
-    fontFamily: "'Rajdhani', sans-serif",
-    fontSize: 16,
-    fontWeight: 500,
-    outline: "none",
-    boxSizing: "border-box",
-  };
-
-  const labelStyle = {
-    fontFamily: "'Orbitron', sans-serif",
-    fontSize: 13,
-    fontWeight: 600,
-    letterSpacing: "0.15em",
-    color: "var(--text-secondary)",
-    textTransform: "uppercase",
-    marginBottom: 8,
-    display: "block",
-  };
-
-  return (
-    <div style={{ maxWidth: 800, margin: "0 auto", padding: "120px 24px 80px" }}>
-      <div style={{ textAlign: "center", marginBottom: 48 }}>
-        <div style={{
-          fontFamily: "'Orbitron', sans-serif",
-          fontSize: 11,
-          fontWeight: 600,
-          letterSpacing: "0.2em",
-          color: "var(--red-primary)",
-          textTransform: "uppercase",
-          marginBottom: 16,
-        }}>Research Tools</div>
-        <h2 style={{
-          fontFamily: "'Orbitron', sans-serif",
-          fontWeight: 800,
-          fontSize: "clamp(24px, 5vw, 42px)",
-          color: "var(--text-primary)",
-          letterSpacing: "0.03em",
-          marginBottom: 16,
-          textTransform: "uppercase",
-        }}>Laboratory Concentration<br />Calculator</h2>
-        <p style={{
-          fontFamily: "'Rajdhani', sans-serif",
-          fontSize: 17,
-          color: "var(--text-secondary)",
-          maxWidth: 520,
-          margin: "0 auto",
-          lineHeight: 1.7,
-        }}>Enter the vial content, the diluent volume, and the mass required per aliquot to obtain the resulting concentration and the volume to withdraw.</p>
-      </div>
-
-      {/* Inputs */}
-      <div style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-        gap: 24,
-        marginBottom: 40,
-      }}>
-        <div>
-          <label style={labelStyle}>Vial Content (mg)</label>
-          <input
-            type="number"
-            min="0"
-            placeholder="e.g. 5"
-            value={vialMg}
-            onChange={e => setVialMg(e.target.value)}
-            style={inputStyle}
-            onFocus={e => e.target.style.borderColor = "var(--red-primary)"}
-            onBlur={e => e.target.style.borderColor = "var(--border)"}
-          />
-        </div>
-        <div>
-          <label style={labelStyle}>Diluent Volume (mL)</label>
-          <input
-            type="number"
-            min="0"
-            placeholder="e.g. 2"
-            value={waterMl}
-            onChange={e => setWaterMl(e.target.value)}
-            style={inputStyle}
-            onFocus={e => e.target.style.borderColor = "var(--red-primary)"}
-            onBlur={e => e.target.style.borderColor = "var(--border)"}
-          />
-        </div>
-        <div>
-          <label style={labelStyle}>Target Aliquot</label>
-          <div style={{ display: "flex", gap: 0 }}>
-            <input
-              type="number"
-              min="0"
-              placeholder={doseUnit === "mcg" ? "e.g. 250" : "e.g. 0.25"}
-              value={doseValue}
-              onChange={e => setDoseValue(e.target.value)}
-              style={{ ...inputStyle, flex: 1 }}
-              onFocus={e => e.target.style.borderColor = "var(--red-primary)"}
-              onBlur={e => e.target.style.borderColor = "var(--border)"}
-            />
-            {["mcg", "mg"].map(unit => (
-              <button
-                key={unit}
-                onClick={() => setDoseUnit(unit)}
-                style={{
-                  padding: "0 16px",
-                  background: doseUnit === unit ? "var(--red-primary)" : "rgba(17,17,17,0.8)",
-                  border: "1px solid var(--border)",
-                  borderLeft: "none",
-                  color: doseUnit === unit ? "#fff" : "var(--text-secondary)",
-                  fontFamily: "'Orbitron', sans-serif",
-                  fontSize: 11,
-                  fontWeight: 700,
-                  cursor: "pointer",
-                  letterSpacing: "0.05em",
-                  transition: "all 0.2s",
-                }}
-              >{unit}</button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Results */}
-      <div style={{
-        border: "1px solid rgba(196,30,42,0.3)",
-        background: "rgba(17,17,17,0.6)",
-        padding: "32px",
-        marginBottom: 16,
-      }}>
-        <div style={{
-          fontFamily: "'Orbitron', sans-serif",
-          fontSize: 13,
-          fontWeight: 700,
-          letterSpacing: "0.2em",
-          color: "var(--red-primary)",
-          textTransform: "uppercase",
-          marginBottom: 24,
-        }}>Results</div>
-
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 24 }}>
-          {[
-            {
-              label: "Concentration",
-              value: concentration ? `${fmt(concentration)} mg/mL` : "—",
-              sub: "after reconstitution",
-            },
-            {
-              label: "Aliquot Volume",
-              value: volumeMl ? `${fmt(volumeMl * 1000)} µL` : "—",
-              sub: "to withdraw per aliquot",
-            },
-          ].map((r, i) => (
-            <div key={i} style={{
-              borderLeft: "2px solid rgba(196,30,42,0.4)",
-              paddingLeft: 16,
-            }}>
-              <div style={{
-                fontFamily: "'Orbitron', sans-serif",
-                fontSize: 13,
-                letterSpacing: "0.1em",
-                color: "var(--text-secondary)",
-                textTransform: "uppercase",
-                marginBottom: 8,
-              }}>{r.label}</div>
-              <div style={{
-                fontFamily: "'Orbitron', sans-serif",
-                fontSize: 26,
-                fontWeight: 700,
-                color: concentration ? "var(--text-primary)" : "var(--text-secondary)",
-                marginBottom: 4,
-              }}>{r.value}</div>
-              <div style={{
-                fontFamily: "'Rajdhani', sans-serif",
-                fontSize: 16,
-                color: "var(--text-secondary)",
-              }}>{r.sub}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* The syringe graduation diagram was removed rather than relabelled. A
-          picture of a filled insulin syringe reads as a dosing instruction no
-          matter what the caption says, and the µL figure above already gives
-          the volume a laboratory needs. */}
-
-      {/* How it works */}
-      <div style={{
-        border: "1px solid var(--border)",
-        background: "rgba(17,17,17,0.4)",
-        padding: "28px 32px",
-      }}>
-        <div style={{
-          fontFamily: "'Orbitron', sans-serif",
-          fontSize: 13,
-          fontWeight: 700,
-          letterSpacing: "0.15em",
-          color: "var(--red-primary)",
-          textTransform: "uppercase",
-          marginBottom: 16,
-        }}>How to Use</div>
-        <ol style={{
-          fontFamily: "'Rajdhani', sans-serif",
-          fontSize: 18,
-          color: "var(--text-secondary)",
-          lineHeight: 2,
-          paddingLeft: 20,
-          margin: 0,
-        }}>
-          <li>Enter the labeled material quantity in milligrams.</li>
-          <li>Enter the total laboratory diluent volume in millilitres.</li>
-          <li>Enter the target aliquot in micrograms or milligrams.</li>
-          <li>Dispense diluent down the inside wall of the vial and swirl gently until dissolved — do not shake.</li>
-          <li>Use the calculated concentration and microlitre volume in accordance with your validated laboratory protocol.</li>
-          <li>Verify all calculations independently and follow the stability documentation for the specific lot.</li>
-        </ol>
-      </div>
-
-      <div style={{
-        marginTop: 24,
-        fontFamily: "'Rajdhani', sans-serif",
-        fontSize: 15,
-        color: "var(--text-secondary)",
-        textAlign: "center",
-        lineHeight: 1.6,
-        opacity: 0.7,
-      }}>For in-vitro laboratory research only. This tool does not provide human or veterinary dosing instructions. Always verify calculations independently.</div>
-    </div>
   );
 }
 
@@ -8443,7 +8181,6 @@ export default function App() {
         <Route element={<RequireLogin />}>
         <Route path="/products" element={<ProductsPage searchQuery={searchQuery} setSearchQuery={setSearchQuery} onAddToCart={addToCart} onSelectProduct={setSelectedProduct} />} />
         <Route path="/product/:id" element={<ProductPage onAddToCart={addToCart} />} />
-        <Route path="/calculator" element={<PeptideCalculator />} />
         {RESEARCH_LIBRARY_ENABLED && <Route path="/research" element={<ResearchPage />} />}
         {RESEARCH_LIBRARY_ENABLED && <Route path="/research/:slug" element={<ArticlePage />} />}
         <Route path="/lab-results" element={<LabResultsPage />} />

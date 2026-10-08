@@ -76,7 +76,6 @@ const NAV = [
   ["/products", "Products"],
   ["/lab-results", "Lab results"],
   ...(RESEARCH_LIBRARY_ENABLED ? [["/research", "Research"]] : []),
-  ["/calculator", "Reconstitution calculator"],
   ["/testing-standards", "Testing standards"],
   ["/about", "About"],
   ["/faq", "FAQ"],

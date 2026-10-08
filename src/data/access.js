@@ -1,7 +1,7 @@
 // Shared by route rendering and the static build. Research remains disabled
 // separately; if the owner restores it, these URLs still require sign-in.
 export function requiresLogin(path) {
-  return /^\/(?:products|product|research|lab-results|calculator|cart|checkout|dealer)(?:\/|$)/.test(path);
+  return /^\/(?:products|product|research|lab-results|cart|checkout|dealer)(?:\/|$)/.test(path);
 }
 
 export function safeReturnPath(value, fallback = "/account") {
