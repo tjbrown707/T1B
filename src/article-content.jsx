@@ -221,7 +221,7 @@ export const ARTICLE_CONTENT = {
       <h2>Calculating Concentration</h2>
       <p>Concentration depends entirely on the amount of BAC water added. The formula is straightforward:</p>
       <p><strong>Concentration (mg/mL) = Peptide amount (mg) ÷ BAC water added (mL)</strong></p>
-      <p>For example, reconstituting a 10 mg peptide vial with 2 mL of BAC water yields a concentration of 5 mg/mL. Most peptide dosing calculators (including the one at <a href="/calculator">tierone.bio/calculator</a>) handle these conversions automatically.</p>
+      <p>For example, reconstituting a 10 mg peptide vial with 2 mL of BAC water yields a concentration of 5 mg/mL.</p>
 
       <h2>Storage Best Practices</h2>
 

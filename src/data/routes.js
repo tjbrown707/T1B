@@ -136,13 +136,6 @@ export const STATIC_ROUTES = [
     hidden: !RESEARCH_LIBRARY_ENABLED,
   },
   {
-    path: "/calculator",
-    title: "Laboratory Peptide Concentration Calculator",
-    description: "Calculate laboratory peptide concentration and aliquot volume from labeled material quantity and diluent volume. For in-vitro research use; not a dosing tool.",
-    h1: "Laboratory concentration calculator",
-    priority: "0.8", changefreq: "monthly",
-  },
-  {
     path: "/testing-standards",
     title: "Testing Standards",
     description: "How Tier One BioSystems verifies research peptide purity, identity, and safety. HPLC, ESI-MS, AAA, peptide content, and endotoxin testing explained.",

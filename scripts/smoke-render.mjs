@@ -51,11 +51,11 @@ const ROUTES = [
     forbidBody: [...PRODUCT_REFERENCE_LABELS, ...(product.id === "bpc157-5" ? [] : ["On Backorder", "BACKORDER NOW"])],
     signedIn: true,
   })),
-  ...["/products", ...PRODUCTS.map(p => `/product/${p.id}`), "/lab-results", "/cart", "/calculator", "/checkout"].map(path => ({
+  ...["/products", ...PRODUCTS.map(p => `/product/${p.id}`), "/lab-results", "/cart", "/checkout"].map(path => ({
     path,
     expect: "SIGN IN",
     exerciseLogin: path === "/product/bpc157-10",
-    forbidBody: ["RESEARCH PROFILE", "ADD TO CART", "CERTIFICATES OF ANALYSIS", "Aliquot", "Continue as guest", ...PRODUCTS.map(p => p.name)],
+    forbidBody: ["RESEARCH PROFILE", "ADD TO CART", "CERTIFICATES OF ANALYSIS", "Continue as guest", ...PRODUCTS.map(p => p.name)],
   })),
   {
     path: "/research",
@@ -69,9 +69,15 @@ const ROUTES = [
     expectHeadRobots: "noindex, follow",
     forbidHead: ["BPC-157: Mechanism of Action"],
   },
+  ...[false, true].map(signedIn => ({
+    path: "/calculator",
+    expect: "PAGE NOT FOUND",
+    expectHeadRobots: "noindex, follow",
+    forbidBody: ["Calculator", "Aliquot"],
+    signedIn,
+  })),
   { path: "/lab-results", expect: "CERTIFICATES OF ANALYSIS", signedIn: true },
   { path: "/cart", expect: "Your cart is empty", signedIn: true },
-  { path: "/calculator", expect: "Aliquot", signedIn: true },
   { path: "/signup?redirect=%2Fproducts", expect: "CREATE ACCOUNT" },
   { path: "/reset-password", expect: "SET NEW PASSWORD" },
   { path: "/contact", expect: "Contact Us" },

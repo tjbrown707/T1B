@@ -5,6 +5,20 @@ records state that is not obvious from the code or the git log.
 
 ---
 
+## Calculator deleted — 2026-10-08
+
+The owner requested complete removal. The calculator component and calculation
+logic, client route, route metadata, login-gate entry, desktop/mobile navigation,
+footer link, prerender navigation and retained article link are deleted.
+`/calculator` now uses the normal 404 page for signed-in and signed-out visitors;
+no calculator HTML is generated. The existing smoke checks cover both states.
+No database migration, environment change or dashboard action is required.
+Validation: `npm run verify` passed with zero lint issues, 258 tests, 89 render
+scenarios, production build, secret scan and site integrity. A scan of the
+complete production HTML/JavaScript/XML found no calculator content or links.
+
+---
+
 ## Dealer Desk discount codes — release approved 2026-10-07
 
 The owner requested normal discount-code entry in Dealer Desk. Codes reduce the

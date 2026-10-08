@@ -12,7 +12,7 @@ test("return destinations preserve local queries and reject off-site paths and a
 });
 
 test("catalog and resources require login while public information and auth remain available", () => {
-  for (const path of ["/products", "/product/bpc157-10", "/research", "/research/example", "/cart", "/checkout", "/lab-results", "/calculator"]) {
+  for (const path of ["/products", "/product/bpc157-10", "/research", "/research/example", "/cart", "/checkout", "/lab-results"]) {
     assert.equal(requiresLogin(path), true, path);
   }
   for (const path of ["/", "/about", "/contact", "/privacy", "/terms", "/login", "/signup", "/reset-password"]) {
